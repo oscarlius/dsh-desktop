@@ -20,7 +20,9 @@ export const DESKTOP_RELEASE_IDENTITIES = Object.freeze({
     // Test builds remain Beta-compatible only for existing profile metadata;
     // their executable, AppUserModelId, user data and DSH home are isolated.
     releaseChannel: 'beta' as const,
-    packageName: 'dsh-plugin-desktop-companytest',
+    // The flavor changes app/data identity, while npm self-references must
+    // retain the actual installed package.json name and exports.
+    packageName: 'dsh-plugin-desktop-beta',
     productName: 'P7 DSH Company Test',
     appId: 'ai.deepseek.dsh.desktop.companytest',
     homeDirectoryName: '.p7-dsh-companytest',

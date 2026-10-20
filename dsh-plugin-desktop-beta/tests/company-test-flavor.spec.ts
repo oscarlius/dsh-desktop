@@ -27,6 +27,15 @@ describe('company test product flavor', () => {
     })
   })
 
+  it('keeps the installed npm package identity for launcher-owned plugins', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    const identity = desktopProductIdentityForManifest(JSON.stringify({ ...manifest, dshDesktopFlavor: 'companytest' }))
+    expect(identity.packageName).toBe(manifest.name)
+    for (const subpath of ['./webserver', './windows-pwsh-sandbox']) {
+      expect(manifest.exports[subpath]).toBeDefined()
+    }
+  })
+
   it('rejects invalid product metadata instead of falling back to Beta', () => {
     for (const text of ['{not json', 'null', '[]', '{"dshDesktopFlavor":"typo"}']) {
       expect(() => desktopProductIdentityForManifest(text)).toThrow()

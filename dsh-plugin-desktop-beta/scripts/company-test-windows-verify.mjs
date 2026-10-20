@@ -27,7 +27,7 @@ function signature(path) {
 
 function verifyPackagedRuntime() {
   const program = [
-    "import { readdirSync } from 'node:fs'",
+    "import { readFileSync, readdirSync } from 'node:fs'",
     "import { join } from 'node:path'",
     "import { pathToFileURL } from 'node:url'",
     "const app = join(process.resourcesPath, 'app')",
@@ -35,8 +35,8 @@ function verifyPackagedRuntime() {
     "if (identityName === undefined) throw new Error('missing bundled product identity module')",
     "const identity = await import(pathToFileURL(join(app, 'lib', identityName)).href)",
     "const p7 = await import(pathToFileURL(join(app, 'node_modules', 'dsh-plugin-p7-company-models', 'lib', 'index.js')).href)",
-    "const value = { productName: identity.a, appId: identity.t, homeDirectoryName: identity.i.homeDirectoryName, updatesEnabled: identity.c, bundledP7: typeof p7.CompanyHost === 'function' }",
-    "if (value.productName !== 'P7 DSH Company Test' || value.appId !== 'ai.deepseek.dsh.desktop.companytest' || value.homeDirectoryName !== '.p7-dsh-companytest' || value.updatesEnabled !== false || !value.bundledP7) process.exitCode = 1",
+    "const value = { packageName: identity.i.packageName, productName: identity.a, appId: identity.t, homeDirectoryName: identity.i.homeDirectoryName, updatesEnabled: identity.c, bundledP7: typeof p7.CompanyHost === 'function' }",
+    "if (value.packageName !== JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).name || value.productName !== 'P7 DSH Company Test' || value.appId !== 'ai.deepseek.dsh.desktop.companytest' || value.homeDirectoryName !== '.p7-dsh-companytest' || value.updatesEnabled !== false || !value.bundledP7) process.exitCode = 1",
     'console.log(JSON.stringify(value))',
   ].join('; ')
   const result = spawnSync(application, ['--input-type=module', '-e', program], {

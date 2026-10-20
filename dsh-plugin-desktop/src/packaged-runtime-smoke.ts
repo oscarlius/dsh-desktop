@@ -19,6 +19,7 @@ import { rgPath } from '@vscode/ripgrep'
 import AdmZip from 'adm-zip'
 import { exportDiagnosticsZip } from './diagnostic-export.ts'
 import { installProfilePackageResolver } from './module-resolution.ts'
+import { DESKTOP_PACKAGE_NAME } from './product-identity.ts'
 
 const OK_MARKER = 'DSH_PACKAGED_RUNTIME_OK'
 
@@ -188,6 +189,17 @@ try {
 
   const releaseResolver = installProfilePackageResolver(pathToFileURL(profileManifestPath).href)
   try {
+    // Loader resolves launcher-owned plugins from the active Profile. Checking
+    // the real bare specifiers catches flavor/package-name mismatches that an
+    // identity-only or relative-file import smoke cannot detect.
+    const launcherProbe = join(profileDir, 'launcher-plugins.mjs')
+    writeFileSync(launcherProbe, [
+      `export { default as webServer } from '${DESKTOP_PACKAGE_NAME}/webserver'`,
+      `export { default as shell } from '${DESKTOP_PACKAGE_NAME}/windows-pwsh-sandbox'`,
+    ].join('\n'))
+    const launcher = await import(pathToFileURL(launcherProbe).href) as { webServer?: unknown; shell?: unknown }
+    assert(typeof launcher.webServer === 'function', 'did not resolve the launcher WebServer from the active Profile')
+    assert(typeof launcher.shell === 'function', 'did not resolve the launcher PowerShell sandbox from the active Profile')
     const profileRequire = createRequire(profileManifestPath)
     const installRequire = createRequire(installAnchor)
     const consumer = profileRequire('dsh-packaged-cjs-consumer') as {
