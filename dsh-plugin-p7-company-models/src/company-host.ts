@@ -228,4 +228,3 @@ export class CompanyHost {
   }
   async dispose(): Promise<void> { this.closed = true; this.controller?.stop(); await this.command; await this.application }
 }
-

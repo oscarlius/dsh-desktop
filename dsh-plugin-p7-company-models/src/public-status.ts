@@ -11,4 +11,3 @@ export interface CompanyStatus {
   }[]
   message: string | null
 }
-

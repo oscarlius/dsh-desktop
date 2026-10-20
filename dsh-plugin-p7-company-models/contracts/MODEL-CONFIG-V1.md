@@ -105,4 +105,3 @@ DSH 不执行服务端下发的代码、包管理或 arbitrary URL。
 - model-config-v1.example.json：两个合成测试模型，显示名称使用用户示例；容量、alias、revision 和能力均为测试数据，禁止直接发布到生产。
 - 两边需增加：单模型、空集合、disabled、非法默认、重复 alias、未知 api、未知 schemaVersion、非法容量、304、401、403、超时、连接切换迟到响应。
 - 完成标准：真实调用的请求 model 等于下发 alias，供应商原始 key 从未下发；服务端撤权直接调用同样拒绝。
-

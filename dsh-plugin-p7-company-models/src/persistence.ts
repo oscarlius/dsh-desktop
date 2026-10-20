@@ -36,4 +36,3 @@ export class CompanyPersistence {
     await writeFileAtomic(this.path, JSON.stringify(state), { mode: 0o600, dirMode: 0o700 })
   }
 }
-
