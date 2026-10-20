@@ -96,12 +96,12 @@ describe('published package surface', () => {
 
   it('runs all desktop editions and community market typechecks from the root command', () => {
     expect(workspaceManifest.scripts?.typecheck)
-      .toBe('yarn workspace dsh-plugin-desktop typecheck && yarn workspace dsh-plugin-desktop-beta typecheck && yarn workspace dsh-community-market typecheck && yarn workspace dsh-desktop-next typecheck')
+      .toBe('yarn workspace dsh-plugin-p7-company-models typecheck && yarn workspace dsh-plugin-desktop typecheck && yarn workspace dsh-plugin-desktop-beta typecheck && yarn workspace dsh-community-market typecheck && yarn workspace dsh-desktop-next typecheck')
   })
 
   it('runs all desktop editions and community market tests from the root command', () => {
     expect(workspaceManifest.scripts?.test)
-      .toBe('yarn workspace dsh-plugin-desktop test && yarn workspace dsh-plugin-desktop-beta test && yarn workspace dsh-community-market test && yarn workspace dsh-desktop-next test')
+      .toBe('yarn workspace dsh-plugin-p7-company-models test && yarn workspace dsh-plugin-desktop test && yarn workspace dsh-plugin-desktop-beta test && yarn workspace dsh-community-market test && yarn workspace dsh-desktop-next test')
   })
 
   it('registers both npm launcher names', () => {
@@ -119,7 +119,10 @@ describe('published package surface', () => {
     expect(productIdentity).toContain("packageName: 'dsh-plugin-desktop'")
     expect(productIdentity).toContain("productName: 'DSH Desktop Beta'")
     expect(productIdentity).toContain("appId: 'ai.deepseek.dsh.desktop.beta'")
-    expect(productIdentity).toContain('DESKTOP_PRODUCT_IDENTITY = DESKTOP_RELEASE_IDENTITIES.beta')
+    expect(productIdentity).toContain("productName: 'P7 DSH Company Test'")
+    expect(productIdentity).toContain("appId: 'ai.deepseek.dsh.desktop.companytest'")
+    expect(productIdentity).toContain("homeDirectoryName: '.p7-dsh-companytest'")
+    expect(productIdentity).toContain('DESKTOP_PRODUCT_IDENTITY = desktopProductIdentityForManifest(packagedManifestText())')
     expect(productIdentity).toContain('OTHER_DESKTOP_PRODUCT_IDENTITY = DESKTOP_RELEASE_IDENTITIES.stable')
     expect(main).toContain('app.setAppUserModelId(DESKTOP_APP_ID)')
     const setName = main.indexOf('app.setName(PRODUCT_NAME)')

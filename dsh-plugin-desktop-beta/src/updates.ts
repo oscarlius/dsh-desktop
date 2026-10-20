@@ -8,6 +8,7 @@ import { DESKTOP_UPDATE_CHECK_PATH } from './desktop-settings-contract.ts'
 import { handleDesktopUpdateCheckRequest } from './desktop-settings-route.ts'
 import type {} from './runtime.ts'
 import { startDesktopUpdateLifecycle } from './update-lifecycle.ts'
+import { DESKTOP_UPDATES_ENABLED } from './product-identity.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'desktop-updates'
@@ -31,7 +32,7 @@ export interface Config {
 
 /** Validated scheduled update policy. */
 export const Config: z<Config> = z.object({
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().default(DESKTOP_UPDATES_ENABLED),
   initialDelayMs: z.number().step(1).min(0).max(MAX_TIMER_DELAY_MS).default(60_000),
   intervalMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(6 * 60 * 60 * 1000),
   requestTimeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(15_000),
@@ -43,6 +44,7 @@ export const Config: z<Config> = z.object({
  * @param config - validated polling and timeout values.
  */
 export function apply(ctx: Context, config: Config): void {
+  if (!DESKTOP_UPDATES_ENABLED) return
   ctx.effect(() => {
     const lifecycle = startDesktopUpdateLifecycle({
       adapter: ctx.desktopRuntime.updates,

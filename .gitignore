@@ -6,6 +6,7 @@
 !.yarn/sdks
 !.yarn/versions
 node_modules/
+dsh-plugin-p7-company-models/lib/
 *.tsbuildinfo
 .build/
 

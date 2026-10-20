@@ -6,6 +6,8 @@
   disabled: false
 
 - insert:
+    - id: p7-company-models
+      name: dsh-plugin-p7-company-models
     - id: desktop-shell
       name: dsh-plugin-desktop
       config:

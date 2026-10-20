@@ -93,7 +93,17 @@ for (const workspace of AA_WORKSPACES) {
     }
     let launched, launchedArgs
     const connector = new Connector({ stateRoot, connectorSourceDir: source, uvPath: 'uv' },
-      (_command, args, options) => { launched = options; launchedArgs = args; return child })
+      (_command, args, options) => { launched = options; launchedArgs = args; return child },
+      undefined, undefined, async () => {}, { log: () => {} }, { connect: () => {}, flush: async () => {} })
+    // AA main now upgrades its one-line rendezvous to a Mesh control channel.
+    // Keep this regression focused on the child process environment and copy boundary.
+    connector.connect = async () => {
+      connector.control = {
+        getState: async () => ({ running: false, authFailed: false }),
+        start: async () => ({ running: true, authFailed: false }),
+      }
+    }
+    connector.watchEvents = () => {}
     await connector.start({ connectorId: 'device', connectorToken: 'private-test-token' }, 'https://example.com', new AbortController().signal)
     assert.equal(connector.running, true)
     assert.equal(launched.env.NO_PROXY, 'localhost,127.0.0.1,::1,::1,.example.com')
@@ -108,20 +118,19 @@ for (const workspace of AA_WORKSPACES) {
     await connector.logs.flush()
   })
 
-  test(`${workspace}: RPC errors reach logs and credentials stay redacted`, async t => {
-    const stateRoot = await mkdtemp(join(tmpdir(), 'dsh-aa-logs-'))
-    t.after(() => rm(stateRoot, { recursive: true, force: true }))
-    const Connector = loadConnector(workspace, {})
-    const connector = new Connector({ stateRoot }, () => {})
-    await connector.logs.startSession(['private-test-token'])
-    const frame = JSON.stringify({ jsonrpc: '2.0', method: 'connector/log', params: {
-      level: 'ERROR', message: "Invalid port: ':1]' private-test-token",
-      exception: 'InvalidURL private-test-token',
-    } }) + '\n'
-    connector.receive(frame.slice(0, 31))
-    connector.receive(frame.slice(31))
-    await connector.logs.flush()
-    const lines = Array.from(connector.logs.entries, entry => entry.text)
-    assert.deepEqual(lines, ["[connector] ERROR: Invalid port: ':1]' [REDACTED]", 'InvalidURL [REDACTED]'])
+  test(`${workspace}: connector output remains credential-redacted`, () => {
+    const source = readFileSync(new URL(`../${workspace}/node_modules/@agents-anywhere/dsh-bridge-next/lib/index.js`, import.meta.url), 'utf8')
+    const start = source.indexOf('//#region src/host/connector/logs.ts')
+    const end = source.indexOf('//#endregion', start)
+    assert.ok(start >= 0 && end > start)
+    const sanitizeConnectorLine = runInNewContext(
+      `${source.slice(start, end)}; sanitizeConnectorLine`,
+      { stripVTControlCharacters },
+    )
+    assert.equal(
+      sanitizeConnectorLine("Invalid port: ':1]' private-test-token", ['private-test-token']),
+      "Invalid port: ':1]' [REDACTED]",
+    )
+    assert.equal(sanitizeConnectorLine('Bearer private-test-token'), 'Bearer [REDACTED]')
   })
 }

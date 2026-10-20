@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "revision": "synthetic-example-r1",
+  "enabled": true,
+  "defaultModel": "qwen38-flash",
+  "models": [
+    {
+      "id": "qwen38-flash",
+      "displayName": "Qwen3.8 Flash",
+      "api": "openai-completions",
+      "contextWindow": 65536,
+      "maxOutputTokens": 8192,
+      "inputModalities": [
+        "text"
+      ],
+      "streaming": true,
+      "tools": true
+    },
+    {
+      "id": "gemini38",
+      "displayName": "Gemini 3.8",
+      "api": "openai-completions",
+      "contextWindow": 65536,
+      "maxOutputTokens": 8192,
+      "inputModalities": [
+        "text"
+      ],
+      "streaming": true,
+      "tools": true
+    }
+  ]
+}
+
