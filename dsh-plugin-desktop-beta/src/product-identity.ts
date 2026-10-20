@@ -53,16 +53,21 @@ export function desktopProductIdentityForManifest(manifestText: string | undefin
 }
 
 function packagedManifestText(): string | undefined {
-  const fs = process.getBuiltinModule?.('node:fs')
+  // Keep the Node lookup dynamic so this Host-owned branch stays out of Vite's client globals.
+  const nodeProcess = Reflect.get(globalThis, 'process') as {
+    getBuiltinModule?: (name: string) => { readFileSync(path: string | URL, encoding: string): string } | undefined
+    resourcesPath?: string
+  } | undefined
+  const fs = nodeProcess?.getBuiltinModule?.('node:fs')
   if (fs === undefined) return undefined // Browser client; product identity is Host-owned.
-  const resourcesPath = process.resourcesPath
+  const resourcesPath = nodeProcess?.resourcesPath
   if (resourcesPath !== undefined) {
     // A packaged application must never become Beta after a metadata read failure.
     return fs.readFileSync(`${resourcesPath}/app/package.json`, 'utf8')
   }
   // Utility processes and standalone Node have no Electron resourcesPath.
   // Both source and bundled Host modules live one level below their manifest.
-  return fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+  return fs.readFileSync(new URL(['..', 'package.json'].join('/'), import.meta.url), 'utf8')
 }
 
 /** Beta is the normal identity; the internal test identity is sealed by electron-builder metadata. */
