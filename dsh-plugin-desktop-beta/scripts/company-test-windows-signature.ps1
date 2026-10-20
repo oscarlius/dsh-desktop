@@ -1,4 +1,6 @@
 param([Parameter(Mandatory = $true)][string]$Path)
+
+$ErrorActionPreference = 'Stop'
 $signature = Get-AuthenticodeSignature -LiteralPath $Path
 [pscustomobject]@{
   status = [string]$signature.Status

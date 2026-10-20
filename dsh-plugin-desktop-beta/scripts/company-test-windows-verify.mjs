@@ -20,9 +20,34 @@ function assertPortableExecutable(path, label) {
 
 function signature(path) {
   const script = fileURLToPath(new URL('./company-test-windows-signature.ps1', import.meta.url))
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Path', path], { encoding: 'utf8' })
+  const result = spawnSync('pwsh.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Path', path], { encoding: 'utf8' })
   if (result.error !== undefined || result.status !== 0) throw result.error ?? new Error(result.stderr || 'Get-AuthenticodeSignature failed')
   return JSON.parse(result.stdout)
+}
+
+function verifyPackagedRuntime() {
+  const program = [
+    "import { readdirSync } from 'node:fs'",
+    "import { join } from 'node:path'",
+    "import { pathToFileURL } from 'node:url'",
+    "const app = join(process.resourcesPath, 'app')",
+    "const identityName = readdirSync(join(app, 'lib')).find(name => /^product-identity-.*\\.js$/u.test(name))",
+    "if (identityName === undefined) throw new Error('missing bundled product identity module')",
+    "const identity = await import(pathToFileURL(join(app, 'lib', identityName)).href)",
+    "const p7 = await import(pathToFileURL(join(app, 'node_modules', 'dsh-plugin-p7-company-models', 'lib', 'index.js')).href)",
+    "const value = { productName: identity.a, appId: identity.t, homeDirectoryName: identity.i.homeDirectoryName, updatesEnabled: identity.c, bundledP7: typeof p7.CompanyHost === 'function' }",
+    "if (value.productName !== 'P7 DSH Company Test' || value.appId !== 'ai.deepseek.dsh.desktop.companytest' || value.homeDirectoryName !== '.p7-dsh-companytest' || value.updatesEnabled !== false || !value.bundledP7) process.exitCode = 1",
+    'console.log(JSON.stringify(value))',
+  ].join('; ')
+  const result = spawnSync(application, ['--input-type=module', '-e', program], {
+    cwd: dirname(application),
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    encoding: 'utf8',
+  })
+  if (result.error !== undefined || result.status !== 0) {
+    throw result.error ?? new Error(result.stderr || result.stdout || 'packaged Electron runtime smoke failed')
+  }
+  console.log(`Company test Electron runtime smoke: ${result.stdout.trim()}`)
 }
 
 for (const [path, label] of [[installer, 'Company test NSIS installer'], [application, 'Company test application']]) {
@@ -33,4 +58,6 @@ for (const [path, label] of [[installer, 'Company test NSIS installer'], [applic
 }
 const packaged = JSON.parse(readFileSync(manifest, 'utf8'))
 if (packaged.dshDesktopFlavor !== 'companytest') throw new Error('packaged runtime does not carry the companytest flavor marker')
+if (packaged.dependencies?.['dsh-plugin-p7-company-models'] !== 'workspace:*') throw new Error('packaged runtime does not declare the bundled P7 dependency')
 console.log(`Company test packaged runtime verified: ${manifest}`)
+verifyPackagedRuntime()
