@@ -1,3 +1,4 @@
+import { simulateSymbolicFile } from './helpers/symbolic-link-lstat.ts'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
@@ -340,7 +341,12 @@ describe('Desktop Setup Wizard state', () => {
       mode: 0o700,
     })
     writeFileSync(outside, 'outside\n', { mode: 0o600 })
-    symlinkSync(outside, statePath)
+    if (process.platform === 'win32') {
+      writeFileSync(statePath, 'linked\n', { mode: 0o600 })
+      simulateSymbolicFile(statePath)
+    } else {
+      symlinkSync(outside, statePath)
+    }
 
     expect(() => readDesktopSetupWizardState(userData, profile)).toThrow('regular file')
     await expect(recordSetup(userData, profile, 'completed')).rejects.toThrow('regular file')

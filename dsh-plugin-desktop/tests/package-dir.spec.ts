@@ -1,4 +1,5 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -99,7 +100,9 @@ describe('packaged filesystem smoke', () => {
       const preset = join(app, 'node_modules', '@deepseek-ai', 'dsh-agent-preset')
       mkdirSync(preset, { recursive: true })
       const require = createRequire(import.meta.url)
-      cpSync(join(dirname(require.resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills'),
+      // cpSync aborts this Windows Node runtime on the Unicode workspace path.
+      // Keep the real shipped skills and filesystem checks using async copying.
+      await cp(join(dirname(require.resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills'),
         join(preset, 'skills'), { recursive: true })
       await expect(verifyBundledSkills(app)).resolves.toBeUndefined()
       rmSync(join(preset, 'skills', 'cordis-plugin-development'), { recursive: true })

@@ -1,10 +1,34 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { verifyLinuxArtifacts } from '../scripts/verify-linux-artifacts.ts'
 
+const fixtureModes = vi.hoisted(() => new Map<string, number>())
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    statSync(path: import('node:fs').PathLike) {
+      const stat = actual.statSync(path)
+      const mode = fixtureModes.get(String(path))
+      // Windows chmod cannot represent POSIX execute bits. Only emulate those
+      // bits for our generated fixtures; file type, size, and bytes remain real.
+      if (process.platform === 'win32' && mode !== undefined) {
+        stat.mode = (stat.mode & ~0o777) | mode
+      }
+      return stat
+    },
+  }
+})
+
 const temporaryRoots: string[] = []
+
+function setFixtureMode(path: string, mode: number): void {
+  chmodSync(path, mode)
+  fixtureModes.set(path, mode)
+}
 
 function appImage(): Buffer {
   const image = Buffer.alloc(4096)
@@ -36,14 +60,15 @@ function fixture(version = '2.0.0'): {
   const debPath = join(dist, `DSH-Desktop-${version}-amd64.deb`)
   const application = join(unpacked, 'dsh-desktop')
   writeFileSync(appImagePath, appImage(), { mode: 0o755 })
-  chmodSync(appImagePath, 0o755)
+  setFixtureMode(appImagePath, 0o755)
   writeFileSync(debPath, debArchive())
   writeFileSync(application, appImage().subarray(0, 512), { mode: 0o755 })
-  chmodSync(application, 0o755)
+  setFixtureMode(application, 0o755)
   return { root, appImage: appImagePath, deb: debPath, application }
 }
 
 afterEach(() => {
+  fixtureModes.clear()
   for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
@@ -87,7 +112,7 @@ describe('Linux artifact verification', () => {
 
   it('rejects an AppImage that lost its executable bit', () => {
     const value = fixture()
-    chmodSync(value.appImage, 0o644)
+    setFixtureMode(value.appImage, 0o644)
 
     expect(() => verifyLinuxArtifacts({ desktopRoot: value.root, version: '2.0.0' }))
       .toThrow('is not executable')

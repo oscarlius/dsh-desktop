@@ -1,3 +1,4 @@
+import { simulateSymbolicFile } from './helpers/symbolic-link-lstat.ts'
 import {
   chmodSync,
   existsSync,
@@ -477,7 +478,12 @@ describe('desktop direct bundle management', () => {
     rmSync(options.statePath)
     const target = join(root, 'real-state.json')
     writeFileSync(target, JSON.stringify({ version: 1, profiles: [] }))
-    symlinkSync(target, options.statePath)
+    if (process.platform === 'win32') {
+      writeFileSync(options.statePath, JSON.stringify({ version: 1, profiles: [] }))
+      simulateSymbolicFile(options.statePath)
+    } else {
+      symlinkSync(target, options.statePath)
+    }
     expect(() => readDesktopDisabledBundles(options.statePath, 'desktop')).toThrow('regular file')
 
     rmSync(options.statePath)

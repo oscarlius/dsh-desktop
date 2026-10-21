@@ -153,6 +153,12 @@ describe('pre-Host recovery plugin uninstall command', () => {
       environment: {
         PATH: systemBin,
         PNPM_SELECTION_MARKER: selectedMarker,
+        // Keep only Windows' command-discovery prerequisites. PATH remains
+        // pinned to systemBin so this still proves the packaged pnpm wins.
+        ...(process.platform === 'win32' ? {
+          ComSpec: process.env.ComSpec,
+          PATHEXT: process.env.PATHEXT,
+        } : {}),
       },
     })).resolves.toMatchObject({ exitCode: 0 })
 

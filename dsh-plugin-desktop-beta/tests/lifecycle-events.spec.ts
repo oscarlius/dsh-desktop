@@ -1,3 +1,4 @@
+import { simulateSymbolicFile } from './helpers/symbolic-link-lstat.ts'
 import {
   existsSync,
   linkSync,
@@ -356,7 +357,12 @@ describe('desktop lifecycle events', () => {
     const linkedFileTarget = join(linkedFileDir, 'target.jsonl')
     mkdirSync(join(linkedFileDir, 'lifecycle-events'))
     writeFileSync(linkedFileTarget, '')
-    symlinkSync(linkedFileTarget, desktopLifecycleEvidencePath(linkedFileDir), 'file')
+    if (process.platform === 'win32') {
+      writeFileSync(desktopLifecycleEvidencePath(linkedFileDir), '')
+      simulateSymbolicFile(desktopLifecycleEvidencePath(linkedFileDir))
+    } else {
+      symlinkSync(linkedFileTarget, desktopLifecycleEvidencePath(linkedFileDir), 'file')
+    }
     const linkedFileLogger = createLogger()
     const linkedFile = createDesktopLifecycleRecorder({
       userDataDir: linkedFileDir,
