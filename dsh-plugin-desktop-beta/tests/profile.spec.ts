@@ -11,7 +11,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   composeEntries,
   initProfile,
@@ -101,6 +101,23 @@ function writeDesktopShellPreferences(home: string, preferences: readonly string
 afterEach(() => {
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
 })
+
+async function withCompanyProfileModule<T>(run: (profile: typeof import('../src/profile.ts')) => Promise<T> | T): Promise<T> {
+  const resources = mkdtempSync(join(tmpdir(), 'dsh-company-resources-'))
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
+  mkdirSync(join(resources, 'app'), { recursive: true })
+  writeFileSync(join(resources, 'app', 'package.json'), JSON.stringify({ dshDesktopFlavor: 'companytest' }))
+  Object.defineProperty(process, 'resourcesPath', { configurable: true, value: resources })
+  await vi.resetModules()
+  try {
+    return await run(await import('../src/profile.ts'))
+  } finally {
+    await vi.resetModules()
+    if (descriptor === undefined) Reflect.deleteProperty(process, 'resourcesPath')
+    else Object.defineProperty(process, 'resourcesPath', descriptor)
+    rmSync(resources, { recursive: true, force: true })
+  }
+}
 
 describe('desktop profile composition', {
   timeout: process.platform === 'win32' ? 10_000 : 5_000,
@@ -419,6 +436,45 @@ virtualStoreDirMaxLength: 60
     expect(rows.find(row => row.id === 'desktop-profiles')).toEqual(expect.objectContaining({
       name: 'dsh-plugin-desktop-beta/profiles',
     }))
+  })
+
+  it('selects P7 on the real web seam for Company profiles without replacing explicit provider choices', async () => {
+    const oldProvider = process.env.DSH_WEB_SEARCH_PROVIDER
+    try {
+      delete process.env.DSH_WEB_SEARCH_PROVIDER
+      await withCompanyProfileModule(profile => {
+        const home = temporaryHome()
+        const defaultRows = composeEntries([profile.prepareDesktopProfile(undefined, home, 'win32').patches])
+        expect(defaultRows.find(row => row.id === 'web')).toEqual(expect.objectContaining({
+          name: '@deepseek-ai/dsh-web',
+          config: expect.objectContaining({ searchProvider: 'p7' }),
+        }))
+
+        const explicitHome = temporaryHome()
+        const profileDir = profile.ensureDesktopProfile(explicitHome)
+        writeFileSync(join(profileDir, 'cordis.patch.yml'), [
+          '- id: web',
+          '  config:',
+          '    searchProvider: custom-search',
+          '',
+        ].join('\n'))
+        const explicitRows = composeEntries([profile.prepareDesktopProfile(undefined, explicitHome, 'win32').patches])
+        expect(explicitRows.find(row => row.id === 'web')).toEqual(expect.objectContaining({
+          config: expect.objectContaining({ searchProvider: 'custom-search' }),
+        }))
+      })
+
+      process.env.DSH_WEB_SEARCH_PROVIDER = 'operator-search'
+      await withCompanyProfileModule(profile => {
+        const rows = composeEntries([profile.prepareDesktopProfile(undefined, temporaryHome(), 'win32').patches])
+        expect(rows.find(row => row.id === 'web')).toEqual(expect.objectContaining({
+          config: expect.objectContaining({ searchProvider: 'deepseek-official' }),
+        }))
+      })
+    } finally {
+      if (oldProvider === undefined) delete process.env.DSH_WEB_SEARCH_PROVIDER
+      else process.env.DSH_WEB_SEARCH_PROVIDER = oldProvider
+    }
   })
 
   it('merges a frozen LAN IPv4 snapshot into existing Web runtime trust', () => {

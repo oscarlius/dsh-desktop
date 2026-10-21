@@ -1150,11 +1150,23 @@ export function shippedSkillRoot(moduleUrl: string = import.meta.url): string {
 }
 
 /** Read a row's object config without trusting arbitrary YAML values. */
-function rowConfig(row: EntryOptions | undefined): Record<string, unknown> {
+function rowConfig(row: { readonly config?: unknown } | undefined): Record<string, unknown> {
   const config = row?.config
   return config !== null && typeof config === 'object' && !Array.isArray(config)
     ? config as Record<string, unknown>
     : {}
+}
+
+/** A later profile or machine patch owns an explicit provider choice. */
+function hasExplicitWebSearchProvider(patches: readonly PatchOptions[]): boolean {
+  return patches.some(patch => patch.id === 'web'
+    && Object.hasOwn(rowConfig(patch), 'searchProvider'))
+}
+
+/** Operational provider selection takes precedence over the sealed Company default. */
+function hasConfiguredWebSearchProviderEnvironment(): boolean {
+  const provider = process.env.DSH_WEB_SEARCH_PROVIDER
+  return provider !== undefined && provider.trim().length > 0
 }
 
 /** Snapshot, validate, and deduplicate the LAN allowlist supplied by the launcher. */
@@ -1685,14 +1697,21 @@ export function prepareDesktopProfile(
       // instruction to launch the operating system's default browser.
       openBrowser: false,
       trustedHosts: desktopTrustedHosts,
-      // The sealed Company build owns the P7 credential lifecycle and chooses
-      // its governed search provider. Ordinary Desktop distributions preserve
-      // the configured/default web provider.
-      ...(DESKTOP_COMPANY_SERVICE_ENABLED && webRuntimeConfig.searchProvider === undefined
-        ? { searchProvider: 'p7' }
-        : {}),
     },
   })
+  // `web-runtime` is the browser carrier. The actual ctx.web seam is the base
+  // bundle's `web` row, whose upstream default pins DeepSeek search. Company
+  // builds replace that upstream default with P7, while a profile/machine patch
+  // or the documented operational environment selection remains authoritative.
+  const web = rows.get('web')
+  if (DESKTOP_COMPANY_SERVICE_ENABLED
+    && !hasConfiguredWebSearchProviderEnvironment()
+    && !hasExplicitWebSearchProvider([...filteredProfile.patches, ...filteredHome.patches])) {
+    if (web?.name !== '@deepseek-ai/dsh-web') {
+      throw new Error(`${BIN_NAME}: company Desktop profile must use @deepseek-ai/dsh-web in the web row`)
+    }
+    patches.push({ id: 'web', config: { ...rowConfig(web), searchProvider: 'p7' } })
+  }
   const connectionPatch = connectionTrustPatch(rows.get('connection'), desktopTrustedHosts)
   if (connectionPatch !== undefined) patches.push(connectionPatch)
   // The saved mode is what the next generation boots, so the config editor's
