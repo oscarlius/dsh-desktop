@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.18-beta.14",
+  "version": "2.0.18-beta.15",
   "description": "DSH Desktop Beta: an Electron shell composed as a DeepSeek Harness Cordis plugin",
   "desktopName": "dsh-desktop-beta.desktop",
   "license": "MIT",
@@ -154,7 +154,8 @@
     "dist:mac-smoke": "node scripts/package-mac.ts",
     "dist:win": "node scripts/package-win.ts",
     "dist:win:company-update": "node scripts/package-win.ts --company-update",
-    "dist:win-company-test": "node scripts/company-test-windows.mjs",
+    "dist:win:company-release": "node scripts/package-company-release.mjs",
+    "dist:win-company-test": "node scripts/package-company-release.mjs",
     "dist:win-portable": "node scripts/package-win-portable.ts",
     "dist:linux": "node scripts/package-linux.ts",
     "prepack": "yarn run check",
@@ -162,7 +163,7 @@
     "icons:export": "node ../scripts/export-app-icons.mjs --channel beta"
   },
   "dependencies": {
-    "@agents-anywhere/dsh-bridge-next": "file:../vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.1.0-desktop.c00c927cd3745.r2e406d2a.tgz",
+    "@agents-anywhere/dsh-bridge-next": "file:../vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.1.0-desktop.c7931ff42885d.r2e406d2a.tgz",
     "@deepseek-ai/cordis": "4.0.5",
     "@deepseek-ai/cordis-plugin-group": "1.0.5",
     "@deepseek-ai/cordis-plugin-include": "1.0.10",

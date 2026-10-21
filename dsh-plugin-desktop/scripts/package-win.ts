@@ -96,6 +96,8 @@ export const COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS = [
   '--config.nsis.artifactName=P7-DSH-Company-Test-${version}-${arch}-Setup.${ext}',
 ] as const
 
+const COMPANY_RELEASE_COMMIT = /^[0-9a-f]{40}$/u
+
 const COMPANY_TEST_WINDOWS_PREFLIGHT = [
   'corepack yarn market:check',
   'corepack yarn aa:prepare-release --verify-release',
@@ -263,10 +265,26 @@ export function packageWindowsInstaller(
 export function packageCompanyTestWindowsInstaller(
   options: WindowsPackageOptions = createWindowsPackageOptions('./company-test-windows-verify.mjs'),
 ): void {
+  const output = options.env.DSH_COMPANY_PACKAGE_OUTPUT
+  const sourceCommit = options.env.DSH_COMPANY_RELEASE_SOURCE_COMMIT
+  if (sourceCommit !== undefined && !COMPANY_RELEASE_COMMIT.test(sourceCommit)) {
+    throw new Error('DSH_COMPANY_RELEASE_SOURCE_COMMIT must be a 40-character lowercase Git commit')
+  }
+  const initialDistribution = options.env.DSH_COMPANY_INITIAL_DISTRIBUTION === '1'
+  if (initialDistribution && options.env.DSH_COMPANY_UPDATE_DISTRIBUTION === '1') {
+    throw new Error('Company initial and update distribution modes are mutually exclusive')
+  }
   packageWindowsArtifact({
     ...options,
     builderArguments: [
-      ...COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS,
+      ...(initialDistribution
+        ? COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS.filter(argument => !argument.startsWith('--config.nsis.artifactName='))
+        : COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS),
+      ...(initialDistribution
+        ? ['--config.nsis.artifactName=P7-DSH-Company-Full-${version}-${arch}-Setup.${ext}']
+        : []),
+      ...(output === undefined ? [] : [`--config.directories.output=${output}`]),
+      ...(sourceCommit === undefined ? [] : [`--config.extraMetadata.dshCompanyReleaseSourceCommit=${sourceCommit}`]),
       ...(options.env.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
         ? ['--config.extraMetadata.dshDesktopUpdateDistribution=true'] : []),
     ],
