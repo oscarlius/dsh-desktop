@@ -17,6 +17,7 @@ export function createSyncController(options: { client: P7Client; apply(config: 
   const now = options.now ?? Date.now
   let connection: ManagedConnection | undefined; let snapshot = options.store.load(); let state: SyncState = snapshot ? { status: 'stale', revision: snapshot.config.revision, lastSuccessAt: snapshot.appliedAt } : { status: 'idle' }
   let generation = 0; let requestGeneration: number | undefined; let requestAbort: AbortController | undefined; let scheduled: unknown; let failures = 0; let started = false
+  let applyBeforeFetch = false; let restoreBeforeFetch = false
   const current = (expected: number, target: ManagedConnection | undefined) => () => generation === expected && connection === target
   const cancelRequest = () => { requestAbort?.abort(); requestAbort = undefined; requestGeneration = undefined }
   const clearSchedule = () => { if (scheduled !== undefined) timer.clearTimeout(scheduled); scheduled = undefined }
@@ -53,6 +54,14 @@ export function createSyncController(options: { client: P7Client; apply(config: 
     const active = connection; const activeGeneration = generation; const abort = new AbortController(); requestGeneration = activeGeneration; requestAbort = abort; clearError(); state = { ...state, status: 'syncing' }
     const previous = snapshot
     try {
+      // A cached catalog is not usable until its providers have been restored.
+      // Keep this pending across a failed apply so backoff retries cannot accept
+      // a 304 and mark an unapplied catalog ready.
+      if (applyBeforeFetch) {
+        await options.apply(restoreBeforeFetch ? previous?.config : undefined, active, current(activeGeneration, active))
+        if (!current(activeGeneration, active)()) return
+        applyBeforeFetch = false
+      }
       const result = await options.client.fetchConfig({ origin: active.origin, key: active.key, ...(previous ? { etag: previous.etag } : {}), hasSnapshot: previous !== undefined, signal: abort.signal })
       if (!current(activeGeneration, active)()) return
       if (result.kind === 'not-modified') {
@@ -82,8 +91,7 @@ export function createSyncController(options: { client: P7Client; apply(config: 
     const expected = ++generation; cancelRequest(); clearSchedule(); connection = next
     if (!restore) { snapshot = undefined; try { await options.store.clear() } catch { /* server sync may restore availability */ } }
     if (!current(expected, next)()) return
-    try { await options.apply(restore ? snapshot?.config : undefined, next, current(expected, next)) } catch { if (current(expected, next)()) state = errorState('network'); return }
-    if (!current(expected, next)()) return
+    applyBeforeFetch = true; restoreBeforeFetch = restore
     state = snapshot && restore ? { status: 'stale', revision: snapshot.config.revision, lastSuccessAt: snapshot.appliedAt } : { status: 'idle' }; await sync()
   }
   return {

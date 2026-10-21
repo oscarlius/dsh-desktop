@@ -29,6 +29,28 @@ describe('P7 sync controller', () => {
     expect(store.saves).toHaveLength(0)
     expect(controller.getState().status).toBe('idle')
   })
+  it('retries a failed cached restore before accepting a subsequent 304', async () => {
+    const store = createStore()
+    store.value = { config: modelConfig(), etag: '"revision-1"', appliedAt: 42 }
+    const timer = createTimer()
+    let retry: (() => void) | undefined
+    timer.setTimeout = (callback, delay) => { timer.delays.push(delay); retry = callback; return timer.delays.length }
+    const apply = vi.fn().mockRejectedValueOnce(Object.assign(new Error('concurrent settings edit'), { code: 'SETTINGS_CONFLICT' })).mockResolvedValue(undefined)
+    const fetchConfig = vi.fn(async () => ({ kind: 'not-modified' as const }))
+    const controller = createSyncController({ client: clientResult(fetchConfig), apply, store, timer })
+    controller.start()
+    await controller.restore(connection)
+    expect(controller.getState()).toMatchObject({ status: 'stale', error: 'network' })
+    expect(fetchConfig).not.toHaveBeenCalled()
+    expect(timer.delays).toEqual([60_000])
+    retry!()
+    await vi.waitFor(() => expect(controller.getState().status).toBe('ready'))
+    expect(apply).toHaveBeenCalledTimes(2)
+    expect(apply).toHaveBeenLastCalledWith(store.value!.config, connection, expect.any(Function))
+    expect(fetchConfig).toHaveBeenCalledTimes(1)
+    expect(fetchConfig).toHaveBeenCalledWith(expect.objectContaining({ etag: '"revision-1"', hasSnapshot: true }))
+    controller.stop()
+  })
   it('retains a valid snapshot and uses capped exponential retry for network errors', async () => {
     const store = createStore()
     const timer = createTimer()

@@ -66,6 +66,77 @@ describe('ManagedProviderStore', () => {
     expect(store.ownedIds()).toEqual([])
   })
 
+  it('recomputes path operations after a settings conflict and preserves a concurrent local provider', async () => {
+    let revision = 7
+    let value: { providers: Record<string, unknown> } = { providers: { local: { api: 'local' } } }
+    const mutations: { ops: readonly { op: string; path: string[]; value?: unknown }[]; revision?: number | undefined }[] = []
+    const settings: SettingsPort = {
+      describe: () => [{ ns: namespace, revision, value }],
+      mutate: async (_ns, ops, expectedRevision) => {
+        mutations.push({ ops: ops as readonly { op: string; path: string[]; value?: unknown }[], revision: expectedRevision })
+        if (mutations.length === 1) {
+          value = { providers: { ...value.providers, concurrent: { api: 'local-concurrent' } } }
+          revision++
+          throw Object.assign(new Error('settings changed'), { code: 'SETTINGS_CONFLICT' })
+        }
+        for (const operation of ops) if (operation.op === 'set') value.providers[operation.path[1]!] = operation.value
+      },
+    }
+    const store = new ManagedProviderStore(settings, () => namespace)
+    await store.apply([provider()])
+    expect(mutations.map(mutation => mutation.revision)).toEqual([7, 8])
+    expect(mutations[1]?.ops).toEqual([expect.objectContaining({ op: 'set', path: ['providers', P7_PROVIDER_IDS['openai-completions']] })])
+    expect(value.providers).toMatchObject({ local: { api: 'local' }, concurrent: { api: 'local-concurrent' } })
+    expect(store.ownedIds()).toEqual([P7_PROVIDER_IDS['openai-completions']])
+  })
+
+  it('stops after three settings conflicts without claiming provider ownership', async () => {
+    const { settings } = createSettings({ providers: {} })
+    let mutations = 0
+    settings.mutate = async () => {
+      mutations++
+      throw Object.assign(new Error('settings changed'), { code: 'SETTINGS_CONFLICT' })
+    }
+    const store = new ManagedProviderStore(settings, () => namespace)
+    await expect(store.apply([provider()])).rejects.toMatchObject({ code: 'SETTINGS_CONFLICT' })
+    expect(mutations).toBe(3)
+    expect(store.ownedIds()).toEqual([])
+  })
+
+  it('does not retry a stale generation after its first settings conflict', async () => {
+    let current = true
+    let mutations = 0
+    const { settings } = createSettings({ providers: {} })
+    settings.mutate = async () => {
+      mutations++
+      current = false
+      throw Object.assign(new Error('settings changed'), { code: 'SETTINGS_CONFLICT' })
+    }
+    const store = new ManagedProviderStore(settings, () => namespace)
+    await store.apply([provider()], () => current)
+    expect(mutations).toBe(1)
+    expect(store.ownedIds()).toEqual([])
+  })
+
+  it('rejects a reserved provider collision introduced while retrying a settings conflict', async () => {
+    let revision = 7
+    let value: { providers: Record<string, unknown> } = { providers: {} }
+    let mutations = 0
+    const settings: SettingsPort = {
+      describe: () => [{ ns: namespace, revision, value }],
+      mutate: async () => {
+        mutations++
+        value = { providers: { [P7_PROVIDER_IDS['openai-completions']]: { local: true } } }
+        revision++
+        throw Object.assign(new Error('settings changed'), { code: 'SETTINGS_CONFLICT' })
+      },
+    }
+    const store = new ManagedProviderStore(settings, () => namespace)
+    await expect(store.apply([provider()])).rejects.toThrow('already in use')
+    expect(mutations).toBe(1)
+    expect(store.ownedIds()).toEqual([])
+  })
+
   it('recovers only reserved routes that reference this profile credential', async () => {
     const owned = P7_PROVIDER_IDS['openai-completions']
     const foreign = P7_PROVIDER_IDS['anthropic-messages']
@@ -77,6 +148,26 @@ describe('ManagedProviderStore', () => {
     const store = new ManagedProviderStore(settings, () => namespace)
     await expect(store.recover('P7_PROFILE_KEY')).resolves.toEqual([owned])
     expect(mutations).toEqual([{ ns: namespace, revision: 7, ops: [{ op: 'unset', path: ['providers', owned] }] }])
+    expect(store.ownedIds()).toEqual([])
+  })
+
+  it('retries credential-scoped recovery after a settings conflict', async () => {
+    const owned = P7_PROVIDER_IDS['openai-completions']
+    let revision = 7
+    const mutations: { revision?: number | undefined }[] = []
+    const settings: SettingsPort = {
+      describe: () => [{ ns: namespace, revision, value: { providers: { [owned]: { apiKeyEnv: 'P7_PROFILE_KEY' } } } }],
+      mutate: async (_ns, _ops, expectedRevision) => {
+        mutations.push({ revision: expectedRevision })
+        if (mutations.length === 1) {
+          revision++
+          throw Object.assign(new Error('settings changed'), { code: 'SETTINGS_CONFLICT' })
+        }
+      },
+    }
+    const store = new ManagedProviderStore(settings, () => namespace, [owned])
+    await expect(store.recover('P7_PROFILE_KEY')).resolves.toEqual([owned])
+    expect(mutations).toEqual([{ revision: 7 }, { revision: 8 }])
     expect(store.ownedIds()).toEqual([])
   })
 })
