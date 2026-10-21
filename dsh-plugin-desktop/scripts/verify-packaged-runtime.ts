@@ -926,8 +926,12 @@ export function stageCompanyConnection(context: PackagedRuntimeContext): void {
   if (!existsSync(manifest)) return
   const metadata = JSON.parse(readFileSync(manifest, 'utf8')) as { dshDesktopFlavor?: string }
   if (metadata.dshDesktopFlavor !== 'companytest') return
-  // Updates also initialize older company installs that never acquired a key.
-  // Keep this Host-only resource restricted to the explicit company flavor.
+  if ((metadata as { dshDesktopUpdateDistribution?: boolean }).dshDesktopUpdateDistribution === true) {
+    if (existsSync(join(dirname(applicationRoot), 'p7-company-connection.json'))) {
+      throw new Error('Update distributions must not contain a reusable P7 credential.')
+    }
+    return
+  }
   const projectDir = context.packager.projectDir ?? DESKTOP_PACKAGE_ROOT
   const source = join(projectDir, '.desktop-build', 'company', 'p7-company-connection.json')
   try {

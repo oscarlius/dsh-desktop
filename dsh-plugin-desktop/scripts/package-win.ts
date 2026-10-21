@@ -151,7 +151,7 @@ export function createWindowsPackageOptions(verifier = './verify-win-installer.t
       : join(windowsRoot, 'System32', 'cmd.exe'),
     builderCli: require.resolve('electron-builder/cli.js'),
     prepareRuntime: () => {
-      if (process.env.DSH_COMPANY_TEST_WINDOWS === '1') {
+      if (process.env.DSH_COMPANY_TEST_WINDOWS === '1' && process.env.DSH_COMPANY_UPDATE_DISTRIBUTION !== '1') {
         const destination = join(desktopRoot, '.desktop-build', 'company', 'p7-company-connection.json')
         const source = process.env.DSH_P7_BOOTSTRAP_FILE ?? destination
         try {

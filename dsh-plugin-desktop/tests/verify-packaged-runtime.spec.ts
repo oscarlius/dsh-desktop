@@ -321,23 +321,15 @@ describe('packaged desktop runtime verification', () => {
     }
   })
 
-  it('includes company initialization in differential updates for unconfigured profiles', () => {
+  it('keeps shared P7 credentials out of update distributions', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-update-credential-'))
-    const projectDir = join(root, 'project')
-    const source = join(projectDir, '.desktop-build', 'company', 'p7-company-connection.json')
-    const destination = join(root, 'resources', 'p7-company-connection.json')
     try {
       mkdirSync(join(root, 'resources', 'app'), { recursive: true })
-      mkdirSync(join(source, '..'), { recursive: true })
       writeFileSync(join(root, 'resources', 'app', 'package.json'), JSON.stringify({ dshDesktopFlavor: 'companytest', dshDesktopUpdateDistribution: true }))
-      const runtimeContext = { ...context(root, 'win32'), packager: { appInfo: { productFilename: 'P7 DSH Company Test' }, projectDir } }
-      const material = JSON.stringify({ origin: 'https://maas.zxrc.com.cn:8090', key: 'p7k_update-fixture-only' })
-      writeFileSync(source, material)
-      stageCompanyConnection(runtimeContext)
-      expect(readFileSync(destination, 'utf8')).toBe(material)
-      rmSync(source)
-      rmSync(destination)
-      expect(() => stageCompanyConnection(runtimeContext)).toThrow('protected P7 connection resource')
+      const runtimeContext = context(root, 'win32')
+      expect(() => stageCompanyConnection(runtimeContext)).not.toThrow()
+      writeFileSync(join(root, 'resources', 'p7-company-connection.json'), '{}')
+      expect(() => stageCompanyConnection(runtimeContext)).toThrow('must not contain')
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 
