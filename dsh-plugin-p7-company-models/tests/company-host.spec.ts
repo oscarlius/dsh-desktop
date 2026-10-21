@@ -36,6 +36,22 @@ describe('CompanyHost integration', () => {
     expect(app.credentials.set).toHaveBeenCalledWith(app.host.credentialRef, 'p7k_packaged-test-only')
     expect(JSON.stringify([app.host.status(), app.persisted.value])).not.toContain('p7k_packaged-test-only')
   })
+  it('initializes a previously unconnected installation when its later company update supplies bootstrap material', async () => {
+    const persisted = state(); const port = settings()
+    const beforeUpdate = createHost(vi.fn(), persisted, port)
+    await beforeUpdate.host.initialize()
+    expect(beforeUpdate.host.status()).toMatchObject({ phase: 'disconnected', origin: null })
+    expect(port.data.providers).toEqual({ local: { local: true } })
+    await beforeUpdate.host.dispose()
+
+    const bootstrap = vi.fn(async () => ({ origin: DEFAULT_P7_PUBLIC_ORIGIN, key: 'p7k_packaged-test-only' }))
+    const afterUpdate = createHost(vi.fn(async () => response(config())), persisted, port, bootstrap)
+    await afterUpdate.host.initialize()
+    expect(bootstrap).toHaveBeenCalledOnce()
+    expect(afterUpdate.host.status()).toMatchObject({ phase: 'ready', origin: DEFAULT_P7_PUBLIC_ORIGIN })
+    expect(port.data.providers.local).toEqual({ local: true })
+    expect(port.data.providers[P7_PROVIDER_IDS['openai-completions']]).toBeDefined()
+  })
   it('respects an explicit disconnect on subsequent starts even with a packaged key', async () => {
     const persisted = state()
     const bootstrap = vi.fn(async () => ({ origin: DEFAULT_P7_PUBLIC_ORIGIN, key: 'p7k_packaged-test-only' }))
@@ -110,6 +126,27 @@ describe('CompanyHost integration', () => {
     ;(fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(response(config({ enabled: false, defaultModel: null, models: [] })))
     await app.host.sync()
     expect(app.port.data.providers[P7_PROVIDER_IDS['openai-completions']]).toBeUndefined()
+  })
+
+  it('adds a published alias on a later revision without replacing local providers or an unchanged default', async () => {
+    const initial = config()
+    const added = { ...initial.models[0], id: 'new-admin-alias', displayName: 'New administrator model' }
+    const updated = config({ revision: 'revision-2', models: [...initial.models, added] })
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response(initial, 200, { ETag: '"revision-1"' }))
+      .mockResolvedValueOnce(response(updated, 200, { ETag: '"revision-2"' })) as unknown as typeof globalThis.fetch
+    const app = createHost(fetch)
+    await app.host.initialize()
+    await app.host.connect('https://p7.example', 'p7k_valid-key')
+    const defaultCalls = app.saveDefault.mock.calls.length
+
+    await app.host.sync()
+
+    const provider = app.port.data.providers[P7_PROVIDER_IDS['openai-completions']] as { models: { id: string }[] }
+    expect(provider.models.map(model => model.id)).toEqual(['admin-alias', 'new-admin-alias'])
+    expect(app.host.status()).toMatchObject({ revision: 'revision-2', defaultModel: 'admin-alias' })
+    expect(app.port.data.providers.local).toEqual({ local: true })
+    expect(app.saveDefault).toHaveBeenCalledTimes(defaultCalls)
   })
 
   it.each([401, 403])('revokes the credential and managed providers after a %i authorization response', async status => {

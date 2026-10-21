@@ -62,15 +62,13 @@ for (const [path, label] of [[installer, 'Company test NSIS installer'], [applic
 const packaged = JSON.parse(readFileSync(manifest, 'utf8'))
 const connectionPath = join(dist, 'win-unpacked', 'resources', 'p7-company-connection.json')
 if (packaged.dshDesktopUpdateDistribution === true) {
-  if (existsSync(connectionPath)) throw new Error('Public update packages must not carry a reusable P7 credential')
   const blockmap = `${installer}.blockmap`
   if (!existsSync(blockmap) || statSync(blockmap).size === 0) throw new Error('Company update installer is missing its blockmap')
-  console.log('Company update distribution has no bundled credential and includes a differential blockmap.')
-} else {
-  const connection = JSON.parse(readFileSync(connectionPath, 'utf8'))
-  if (connection.origin !== 'https://maas.zxrc.com.cn:8090' || typeof connection.key !== 'string' || !/^p7k_[\x21-\x7e]+$/.test(connection.key)) throw new Error('The company connection resource is missing or invalid')
-  console.log('Company public gateway and dedicated connection resource verified (credential withheld).')
+  console.log('Company update distribution includes its differential blockmap.')
 }
+const connection = JSON.parse(readFileSync(connectionPath, 'utf8'))
+if (connection.origin !== 'https://maas.zxrc.com.cn:8090' || typeof connection.key !== 'string' || !/^p7k_[\x21-\x7e]+$/.test(connection.key)) throw new Error('The company connection resource is missing or invalid')
+console.log('Company public gateway and dedicated connection resource verified (credential withheld).')
 if (packaged.dshDesktopFlavor !== 'companytest') throw new Error('packaged runtime does not carry the companytest flavor marker')
 if (packaged.dependencies?.['dsh-plugin-p7-company-models'] !== 'workspace:*') throw new Error('packaged runtime does not declare the bundled P7 dependency')
 console.log(`Company test packaged runtime verified: ${manifest}`)
