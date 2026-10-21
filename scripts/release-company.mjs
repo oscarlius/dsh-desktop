@@ -18,13 +18,14 @@ try {
   }
   const version = JSON.parse(readFileSync(join(root, 'dsh-plugin-desktop-beta/package.json'), 'utf8')).version
   const directory = resolve(process.env.DSH_COMPANY_RELEASE_OUTPUT ?? join(root, 'dsh-plugin-desktop-beta/dist-company', version))
+  const releaseEnvironment = { ...process.env, DSH_COMPANY_RELEASE_OUTPUT: directory }
   if (existsSync(directory)) throw new Error('Release bundle already exists; use publish:company-release to resume its upload')
   const shell = process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:/Windows', 'System32/cmd.exe') : 'sh'
   const command = process.platform === 'win32' ? ['/d', '/s', '/c', 'corepack yarn dist:win-company-release'] : ['-c', 'corepack yarn dist:win-company-release']
-  const build = spawnSync(shell, command, { cwd: root, env: process.env, stdio: 'inherit' })
+  const build = spawnSync(shell, command, { cwd: root, env: releaseEnvironment, stdio: 'inherit' })
   if (build.error) throw build.error
   if (build.status !== 0) throw new Error('Paired package build failed; no P7 publication was attempted')
-  const publish = spawnSync(process.execPath, [join(root, 'scripts/publish-company-release.mjs'), '--bundle', directory, ...args], { cwd: root, env: process.env, stdio: 'inherit' })
+  const publish = spawnSync(process.execPath, [join(root, 'scripts/publish-company-release.mjs'), '--bundle', directory, ...args], { cwd: root, env: releaseEnvironment, stdio: 'inherit' })
   if (publish.error) throw publish.error
   process.exitCode = publish.status ?? 1
 } catch (error) { console.error(error instanceof Error ? error.message : 'Company release failed'); process.exitCode = 1 }
