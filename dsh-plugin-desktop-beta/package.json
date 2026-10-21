@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.18-beta.14",
+  "version": "2.0.18-beta.16",
   "description": "DSH Desktop Beta: an Electron shell composed as a DeepSeek Harness Cordis plugin",
   "desktopName": "dsh-desktop-beta.desktop",
   "license": "MIT",
@@ -155,7 +155,8 @@
     "dist:mac-smoke": "node scripts/package-mac.ts",
     "dist:win": "node scripts/package-win.ts",
     "dist:win:company-update": "node scripts/package-win.ts --company-update",
-    "dist:win-company-test": "node scripts/company-test-windows.mjs",
+    "dist:win:company-release": "node scripts/package-company-release.mjs",
+    "dist:win-company-test": "node scripts/package-company-release.mjs",
     "dist:win-portable": "node scripts/package-win-portable.ts",
     "dist:linux": "node scripts/package-linux.ts",
     "prepack": "yarn run check",

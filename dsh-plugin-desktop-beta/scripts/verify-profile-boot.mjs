@@ -62,6 +62,9 @@ const LAN_HTTPS = Object.freeze({
   async stop() { return LAN_HTTPS_SNAPSHOT },
 })
 const home = mkdtempSync(join(tmpdir(), 'dsh-desktop-profile-'))
+const themePluginsRequested = process.env.DSH_VERIFY_THEME_PLUGINS === '1'
+const themePluginSource = process.env.DSH_THEME_PLUGIN_SOURCE
+  ?? join(userInfo().homedir, '.p7-dsh-companytest', 'profiles', 'desktop', 'node_modules')
 const originalUserInfo = os.userInfo
 os.userInfo = options => ({
   ...originalUserInfo(options),
@@ -130,6 +133,27 @@ try {
       name: '@agents-anywhere/dsh-bridge-next', version: '99.0.0',
       dsh: { bundle: { patch: './missing.patch.yml' } },
     }))
+  }
+  if (themePluginsRequested) {
+    const themeProfile = prepareDesktopProfile('1', home, 'win32')
+    const profileManifestPath = join(themeProfile.profile.dir, 'package.json')
+    const profileManifest = JSON.parse(readFileSync(profileManifestPath, 'utf8'))
+    for (const packageName of ['beauticode-dsh', 'dsh-any-background']) {
+      const source = join(themePluginSource, packageName)
+      const target = join(themeProfile.profile.dir, 'node_modules', packageName)
+      if (!existsSync(source)) throw new Error(`Theme verification package is unavailable: ${packageName}`)
+      cpSync(source, target, { recursive: true, force: false, errorOnExist: true })
+      profileManifest.dependencies ??= {}
+      profileManifest.dependencies[packageName] = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8')).version
+      profileManifest.dsh.profile.bundles.push(packageName)
+    }
+    // The third-party default reads LOCALAPPDATA; pin the bridge token path to
+    // this disposable home so the test cannot consult operator data.
+    writeFileSync(join(themeProfile.profile.dir, 'node_modules', 'beauticode-dsh', 'cordis.patch.yml'), [
+      '- insert:', '    - id: beauticode-bridge', '      name: beauticode-dsh', '      inject: [webServer]',
+      '      config:', `        tokenFile: ${JSON.stringify(join(home, 'beauticode', 'dsh-bridge.token'))}`, '',
+    ].join('\n'))
+    writeFileSync(profileManifestPath, JSON.stringify(profileManifest, null, 2) + '\n')
   }
   const prepared = prepareDesktopProfile('1', home, 'win32', undefined, undefined, undefined, { aaEnabled: aaRequested })
   if (brokenAa && (!prepared.aaFailure || prepared.aaEnabled)) throw new Error('Broken AA bundle did not fail closed')
@@ -206,6 +230,7 @@ try {
     setLocalePreference(preference) { runtime.locale = preference ?? 'en' },
     setThemeSource(source) { nativeThemeSource = source },
     async requestRestart() {},
+    reportRendererBoot() { return true },
     prepareToQuit() {},
   }
   // Native update UI is mocked along with Electron's window/tray adapter. The
@@ -306,6 +331,12 @@ try {
   await (await agentPresets.acquireScope('cordis'))[Symbol.asyncDispose]()
   if ((await ctx.get('pluginManager').listPlugins()).length === 0) {
     throw new Error('Official plugin manager cannot inspect the Desktop composition')
+  }
+  if (themePluginsRequested) {
+    const modules = (await ctx.get('pluginManager').listPlugins()).map(plugin => plugin.moduleName)
+    for (const packageName of ['beauticode-dsh', 'dsh-any-background']) {
+      if (!modules.includes(packageName)) throw new Error(`Theme verification profile did not load ${packageName}`)
+    }
   }
   // The official metadata reader must reach installation packages through the Desktop resolver.
   const inspectorMeta = ctx.get('pluginPackages')?.metaOf('@deepseek-ai/dsh-experimental-inspector', ctx.baseUrl)
@@ -459,6 +490,18 @@ try {
     const { verifyCompanySettingsBrowser } = await import('../../scripts/verify-company-settings-browser.mjs')
     await verifyCompanySettingsBrowser({ url: expectedUrl, cookie,
       headers: { [BROWSER_ACCESS.rendererHeader.name]: BROWSER_ACCESS.rendererHeader.value } })
+  }
+  if (themePluginsRequested) {
+    const screenshots = fileURLToPath(new URL('../../.omx/theme-validation-20261021/browser/', import.meta.url))
+    if (process.env.DSH_VERIFY_THEME_ELECTRON === '1') {
+      const { verifyThemeElectron } = await import('../../scripts/verify-theme-electron.mjs')
+      await verifyThemeElectron({ ctx, spec: mountedSpec, home, profileDir: prepared.profile.dir, screenshots })
+    } else {
+      const { verifyThemePluginsBrowser } = await import('../../scripts/verify-theme-plugins-browser.mjs')
+      await verifyThemePluginsBrowser({ url: expectedUrl, cookie,
+        headers: { [BROWSER_ACCESS.rendererHeader.name]: BROWSER_ACCESS.rendererHeader.value },
+        ctx, mountedSpec, home, profileDir: prepared.profile.dir, screenshots })
+    }
   }
   if (response.status !== 200) {
     throw new Error(`assembled Web root returned HTTP ${String(response.status)}`)

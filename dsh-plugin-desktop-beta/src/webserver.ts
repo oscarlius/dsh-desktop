@@ -9,8 +9,14 @@ import WebServer, {
   type WebRoute,
   type WebUpgradeRoute,
 } from '@deepseek-ai/dsh-host-webserver'
-import { decideDesktopBrowserAccess } from './desktop-browser-access.ts'
+import { decideDesktopBrowserAccess, desktopBrowserUrlHasRendererMarkers } from './desktop-browser-access.ts'
 import { DESKTOP_WEB_PORT_RETRY_LIMIT } from './desktop-port.ts'
+import {
+  createHostSelfAccess,
+  hasHostSelfAccess,
+  type HostSelfAccess,
+  installHostSelfFetch,
+} from './host-self-fetch.ts'
 
 function isAddressInUse(cause: unknown): boolean {
   return (cause as NodeJS.ErrnoException | null)?.code === 'EADDRINUSE'
@@ -51,6 +57,7 @@ export class DesktopWebServer extends WebServer {
   static override Config = WebServer.Config
 
   private readonly desktopConfig: Config
+  private hostSelfAccess: HostSelfAccess | undefined
 
   constructor(ctx: ConstructorParameters<typeof WebServer>[0], config: Config) {
     if (config.host !== '127.0.0.1') {
@@ -60,11 +67,18 @@ export class DesktopWebServer extends WebServer {
     this.desktopConfig = config
   }
 
-  private permits(request: Parameters<WebRoute['handler']>[0]): boolean {
+  private permits(request: Parameters<WebRoute['handler']>[0], permitHostSelf = true): boolean {
     const access = this.ctx.get('desktopBrowserAccess')
     // The Desktop-owned server remains usable in an ordinary `dsh` launch,
     // where the Electron launcher capability is intentionally absent.
-    return access === undefined || decideDesktopBrowserAccess(access, request) !== 'denied'
+    if (access === undefined) return true
+    // Host self-access intentionally cannot carry Desktop URL markers: those
+    // remain renderer-only effects and require the Electron capability.
+    if (permitHostSelf && hasHostSelfAccess(request.headers, this.hostSelfAccess)
+      && !desktopBrowserUrlHasRendererMarkers(request.url)) {
+      return true
+    }
+    return decideDesktopBrowserAccess(access, request) !== 'denied'
   }
 
   private traceHttp(route: string, handler: WebRoute['handler']): WebRoute['handler'] {
@@ -99,7 +113,7 @@ export class DesktopWebServer extends WebServer {
     return super.registerUpgrade({
       ...route,
       handler: (req, socket, head) => {
-        if (!this.permits(req)) return rejectBrowserUpgrade(socket)
+        if (!this.permits(req, false)) return rejectBrowserUpgrade(socket)
         return route.handler(req, socket, head)
       },
     })
@@ -109,11 +123,13 @@ export class DesktopWebServer extends WebServer {
     const requestedPort = this.desktopConfig.port
     if (requestedPort === 0) {
       await super[Service.init]()
+      this.installHostSelfFetch()
       return
     }
     for (let attempt = 0; ; attempt += 1) {
       try {
         await super[Service.init]()
+        this.installHostSelfFetch()
         return
       } catch (cause) {
         const nextPort = requestedPort + attempt + 1
@@ -126,6 +142,13 @@ export class DesktopWebServer extends WebServer {
         this.desktopConfig.port = nextPort
       }
     }
+  }
+
+  private installHostSelfFetch(): void {
+    if (this.ctx.get('desktopBrowserAccess') === undefined) return
+    this.hostSelfAccess = createHostSelfAccess()
+    const uninstall = installHostSelfFetch(this.getOrigin(), this.hostSelfAccess)
+    this.ctx.effect(() => uninstall, 'Desktop Host self-fetch capability')
   }
 }
 

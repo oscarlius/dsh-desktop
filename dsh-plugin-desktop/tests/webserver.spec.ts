@@ -115,6 +115,7 @@ describe('Desktop WebServer browser gate', () => {
   })
 
   it('requires the exact Electron capability while ordinary browser access is disabled', async () => {
+    const browserFetch = globalThis.fetch
     const access = createDesktopBrowserAccess(false, Buffer.alloc(32, 3).toString('base64url'))
     const server = await startWebServer(access)
     server.register({
@@ -125,20 +126,44 @@ describe('Desktop WebServer browser gate', () => {
     server.registerFallback((_req, res) => { res.end('fallback') })
     const root = `http://127.0.0.1:${String(server.port)}`
 
-    expect((await fetch(`${root}/api/private`)).status).toBe(403)
-    expect((await fetch(`${root}/api/private`, {
+    expect((await browserFetch(`${root}/api/private`)).status).toBe(403)
+    expect((await browserFetch(`${root}/api/private`, {
       headers: { [access.rendererHeader.name]: 'wrong' },
     })).status).toBe(403)
-    const exact = await fetch(`${root}/api/private`, {
+    const exact = await browserFetch(`${root}/api/private`, {
       headers: { [access.rendererHeader.name]: access.rendererHeader.value },
     })
     expect(exact.status).toBe(200)
     await expect(exact.text()).resolves.toBe('private')
-    const fallback = await fetch(`${root}/assets/app.js`, {
+    const fallback = await browserFetch(`${root}/assets/app.js`, {
       headers: { [access.rendererHeader.name]: access.rendererHeader.value },
     })
     expect(fallback.status).toBe(200)
     await expect(fallback.text()).resolves.toBe('fallback')
+  })
+
+  it('authorizes Host self-fetches without changing browser or renderer policy', async () => {
+    const browserFetch = globalThis.fetch
+    const access = createDesktopBrowserAccess(false, Buffer.alloc(32, 7).toString('base64url'))
+    const server = await startWebServer(access)
+    server.register({
+      kind: 'exact',
+      path: '/host-only',
+      handler: async (req, res) => {
+        let body = ''
+        for await (const chunk of req) body += chunk.toString()
+        res.end(`${req.headers.authorization ?? ''}:${body}`)
+      },
+    })
+    const root = server.getOrigin()
+
+    expect((await browserFetch(`${root}/host-only`)).status).toBe(403)
+    const response = await fetch(`${root}/host-only`, {
+      method: 'POST', body: 'payload', signal: AbortSignal.timeout(2_000),
+      headers: { authorization: 'Bearer retained' },
+    })
+    expect(response.status).toBe(200)
+    await expect(response.text()).resolves.toBe('Bearer retained:payload')
   })
 
   it('allows marker-free browser routes but rejects Desktop marker impersonation', async () => {
