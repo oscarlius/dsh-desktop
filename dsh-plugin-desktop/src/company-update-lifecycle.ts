@@ -3,6 +3,7 @@
 import { open } from 'node:fs/promises'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type { CompanyReleaseResult } from './company-update-check.ts'
+import { companyBuildLabel } from './company-build-version.ts'
 import type {
   DesktopLocale,
   DesktopNotification,
@@ -258,12 +259,12 @@ class CompanyUpdateLifecycleOwner implements CompanyUpdateLifecycle {
       const progress = this.progress
       const suffix = progress === undefined ? '' : formatProgress(progress)
       return this.options.locale() === 'zh'
-        ? `正在下载 P7 更新 ${this.downloading.version}…${suffix}`
-        : `Downloading P7 update ${this.downloading.version}…${suffix}`
+        ? `正在下载 P7 更新 ${companyBuildLabel(this.downloading.version)}…${suffix}`
+        : `Downloading P7 update ${companyBuildLabel(this.downloading.version)}…${suffix}`
     }
     if (this.available !== undefined) return this.options.locale() === 'zh'
-      ? `P7 更新 ${this.available.version} 可用`
-      : `P7 update ${this.available.version} available`
+      ? `P7 更新 ${companyBuildLabel(this.available.version)} 可用`
+      : `P7 update ${companyBuildLabel(this.available.version)} available`
     return this.options.locale() === 'zh'
       ? (this.checking ? '正在检查 P7 更新…' : '检查 P7 更新…')
       : (this.checking ? 'Checking P7 updates…' : 'Check P7 updates…')
@@ -295,8 +296,8 @@ function sameConfirmationRelease(left: CompanyReleaseResult | null, right: Compa
 
 function updateAvailableNotification(locale: DesktopLocale, version: string): DesktopNotification {
   return locale === 'zh'
-    ? { title: 'P7 有可用更新', body: `版本 ${version} 已可下载。` }
-    : { title: 'P7 Update Available', body: `Version ${version} is ready to download.` }
+    ? { title: 'P7 有可用更新', body: `版本 ${companyBuildLabel(version)} 已可下载。` }
+    : { title: 'P7 Update Available', body: `Version ${companyBuildLabel(version)} is ready to download.` }
 }
 
 function parseState(text: string): CompanyUpdateState {

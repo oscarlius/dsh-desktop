@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
 const version = process.env.DSH_COMPANY_UPDATE_VERSION ?? JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
-if (!/^\d+\.\d+\.\d+-beta\.\d+$/u.test(version)) throw new Error('Invalid company update version')
+if (!/^\d+\.\d+\.\d+-beta\.\d+(?:\.build\.[1-9]\d*)?$/u.test(version)) throw new Error('Invalid company update version')
 const dist = process.env.DSH_COMPANY_PACKAGE_OUTPUT ?? join(root, 'dist')
 const updateDistribution = process.env.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
 const initialDistribution = process.env.DSH_COMPANY_INITIAL_DISTRIBUTION === '1'

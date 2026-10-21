@@ -46,11 +46,14 @@ describe('company test product flavor', () => {
 
   it('fails startup when the packaged product manifest cannot be read', () => {
     const directory = mkdtempSync(join(tmpdir(), 'dsh-company-identity-'))
-    const source = new URL('../src/product-identity.ts', import.meta.url).href
+    mkdirSync(join(directory, 'app/src'), { recursive: true })
+    const installedSource = join(directory, 'app/src/product-identity.ts')
+    writeFileSync(installedSource, readFileSync(new URL('../src/product-identity.ts', import.meta.url)))
+    const source = pathToFileURL(installedSource).href
     try {
       const invoke = () => spawnSync(process.execPath, ['--input-type=module', '-e', `process.resourcesPath = process.argv[1]; const m = await import(${JSON.stringify(source)}); console.log(m.DESKTOP_PRODUCT_NAME, m.DESKTOP_UPDATES_ENABLED)`, directory], { encoding: 'utf8' })
       expect(invoke().status).not.toBe(0)
-      mkdirSync(join(directory, 'app'))
+      mkdirSync(join(directory, 'app'), { recursive: true })
       writeFileSync(join(directory, 'app/package.json'), '{not json')
       expect(invoke().status).not.toBe(0)
       writeFileSync(join(directory, 'app/package.json'), '{"dshDesktopFlavor":"companytest"}')

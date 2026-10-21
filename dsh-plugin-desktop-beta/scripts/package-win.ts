@@ -84,6 +84,7 @@ export interface WindowsPackageOptions {
 }
 
 export const COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS = [
+  '--config.buildNumber=0',
   '--config.beforePack=scripts/company-update-before-pack.ts',
   '--config.publish.provider=generic',
   '--config.publish.url=https://maas.zxrc.com.cn:8090/v1/desktop/releases/companytest/',

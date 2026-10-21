@@ -539,6 +539,14 @@ describe('Desktop native action presentation', () => {
     expect(markup).toContain('data-slot="hover-card-trigger"')
   })
 
+  it('shows the beta15 release label without exposing its internal raw version', () => {
+    const markup = renderToStaticMarkup(createElement(DesktopVersionControl, {
+      version: '2.0.18-beta.15.build.2026102101', checkForUpdates: api.checkForUpdates, t,
+    }))
+    expect(markup).toContain('v2.0.18-beta.15')
+    expect(markup).not.toContain('2.0.18-beta.15.build.2026102101')
+  })
+
   it('renders the active presentation pill through a shadcn hover-card trigger', () => {
     const markup = renderToStaticMarkup(createElement(DesktopModeControl, {
       mode: 'extended',

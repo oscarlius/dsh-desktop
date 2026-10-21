@@ -2,7 +2,8 @@
 
 import { createRequire, syncBuiltinESMExports } from 'node:module'
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cp } from 'node:fs/promises'
 import os, { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -66,11 +67,17 @@ const themePluginsRequested = process.env.DSH_VERIFY_THEME_PLUGINS === '1'
 const themePluginSource = process.env.DSH_THEME_PLUGIN_SOURCE
   ?? join(userInfo().homedir, '.p7-dsh-companytest', 'profiles', 'desktop', 'node_modules')
 const originalUserInfo = os.userInfo
+const originalHomeEnvironment = new Map(['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'].map(name => [name, process.env[name]]))
 os.userInfo = options => ({
   ...originalUserInfo(options),
   homedir: options?.encoding === 'buffer' ? Buffer.from(home) : home,
 })
 os.homedir = () => home
+// The Node bridge uses userInfo(), while its bundled Python connector resolves
+// Path.home() from the Windows home environment. Keep both views inside this
+// disposable fixture so the smoke never creates or reads an operator endpoint.
+process.env.HOME = home
+process.env.USERPROFILE = home
 syncBuiltinESMExports()
 let ctx
 let releasePackageResolver
@@ -119,7 +126,7 @@ try {
     staleManifest.version = '0.1.0-dev.0.desktop.ca022d9286dd0.rc4b2a1d2'
     staleManifest.peerDependencies['@deepseek-ai/dsh-session'] = '0.1.5-rc.2'
     writeFileSync(join(stalePackage, 'package.json'), JSON.stringify(staleManifest))
-    cpSync(new URL('./cordis.patch.yml', pathToFileURL(installedManifest)), join(stalePackage, 'cordis.patch.yml'))
+    await cp(new URL('./cordis.patch.yml', pathToFileURL(installedManifest)), join(stalePackage, 'cordis.patch.yml'))
     mkdirSync(join(stalePackage, 'lib', 'bundled-connector'), { recursive: true })
     writeFileSync(join(stalePackage, 'lib', 'bundled-connector', 'pyproject.toml'), '')
     mkdirSync(join(home, 'aa-smoke-state'))
@@ -142,7 +149,7 @@ try {
       const source = join(themePluginSource, packageName)
       const target = join(themeProfile.profile.dir, 'node_modules', packageName)
       if (!existsSync(source)) throw new Error(`Theme verification package is unavailable: ${packageName}`)
-      cpSync(source, target, { recursive: true, force: false, errorOnExist: true })
+      await cp(source, target, { recursive: true, force: false, errorOnExist: true })
       profileManifest.dependencies ??= {}
       profileManifest.dependencies[packageName] = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8')).version
       profileManifest.dsh.profile.bundles.push(packageName)
@@ -163,7 +170,7 @@ try {
     HOST_SERVICE_PLUGIN_NAME,
   )
   mkdirSync(join(prepared.profile.dir, 'node_modules'), { recursive: true })
-  cpSync(
+  await cp(
     fileURLToPath(new URL('../tests/fixtures/desktop-host-services-smoke-plugin/', import.meta.url)),
     hostServicePluginDir,
     { recursive: true, force: false, errorOnExist: true },
@@ -518,17 +525,16 @@ try {
     throw new Error('AA Host services did not activate in the actual Desktop profile')
   }
   if (aaEnabled) {
-    // AA 2.0.3 publishes one fixed per-user rendezvous that DSH_HOME does not
-    // move, so the isolated Profile home is not where the Connector looks.
-    const endpoint = join(userInfo().homedir, '.agents-anywhere', 'dsh-bridge', 'endpoint.json')
     const runtimeStatus = ctx.get('agentsAnywhereRuntime').status()
     if (runtimeStatus.state !== 'ready') {
       throw new Error(`AA local runtime is ${String(runtimeStatus.state)}: ${String(runtimeStatus.message)}`)
     }
-    if (!existsSync(endpoint)) throw new Error('AA did not publish its per-user bridge endpoint')
-    if (JSON.parse(readFileSync(endpoint, 'utf8')).pid !== process.pid) {
-      throw new Error('AA bridge endpoint belongs to another process; quit any running Desktop with AA enabled')
-    }
+    // connector.json is published by the Connector-side BridgeHost only after
+    // a Connector starts. This smoke deliberately has no account or Connector;
+    // requiring that file would either consult an operator endpoint or fabricate
+    // an authenticated Connector. The real capability here is the DSH-side
+    // bridge: it mounted, served the authenticated profile, and resolved its
+    // configured bundled runtime without inheriting an account.
     const snapshot = await ctx.get('agentsAnywhereOnboarding').inspect()
     if (snapshot.account) throw new Error('A fresh Profile inherited an AA account')
     for (const [key, value] of Object.entries(aaSettings)) {
@@ -570,4 +576,8 @@ try {
   releasePackageResolver?.()
   pnpmRuntime?.dispose()
   rmSync(home, { recursive: true, force: true })
+  for (const [name, value] of originalHomeEnvironment) {
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+  }
 }

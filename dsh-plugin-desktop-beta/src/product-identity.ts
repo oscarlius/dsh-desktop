@@ -57,22 +57,28 @@ export function desktopProductIdentityForManifest(manifestText: string | undefin
     : DESKTOP_RELEASE_IDENTITIES.beta
 }
 
+/** Electron also exposes resourcesPath in development and RUN_AS_NODE CLI mode. */
+export function desktopManifestUrl(moduleUrl: string, resourcesUrl?: string): URL {
+  if (resourcesUrl && moduleUrl.toLowerCase().startsWith(resourcesUrl.toLowerCase())) {
+    return new URL('app/package.json', resourcesUrl)
+  }
+  return new URL('../package.json', moduleUrl)
+}
+
 function packagedManifestText(): string | undefined {
   // Keep the Node lookup dynamic so this Host-owned branch stays out of Vite's client globals.
   const nodeProcess = Reflect.get(globalThis, 'process') as {
-    getBuiltinModule?: (name: string) => { readFileSync(path: string | URL, encoding: string): string } | undefined
+    getBuiltinModule?: (name: string) => unknown
     resourcesPath?: string
   } | undefined
-  const fs = nodeProcess?.getBuiltinModule?.('node:fs')
+  const fs = nodeProcess?.getBuiltinModule?.('node:fs') as Pick<typeof import('node:fs'), 'readFileSync'> | undefined
   if (fs === undefined) return undefined // Browser client; product identity is Host-owned.
   const resourcesPath = nodeProcess?.resourcesPath
-  if (resourcesPath !== undefined) {
-    // A packaged application must never become Beta after a metadata read failure.
-    return fs.readFileSync(`${resourcesPath}/app/package.json`, 'utf8')
-  }
-  // Utility processes and standalone Node have no Electron resourcesPath.
-  // Both source and bundled Host modules live one level below their manifest.
-  return fs.readFileSync(new URL(['..', 'package.json'].join('/'), import.meta.url), 'utf8')
+  const urls = nodeProcess?.getBuiltinModule?.('node:url') as Pick<typeof import('node:url'), 'pathToFileURL'> | undefined
+  const resourcesUrl = resourcesPath === undefined ? undefined : urls?.pathToFileURL(`${resourcesPath}/`).href
+  // Installed modules use sealed root metadata and still fail closed on any
+  // read error. Development CLI modules use their own adjacent manifest.
+  return fs.readFileSync(desktopManifestUrl(import.meta.url, resourcesUrl), 'utf8')
 }
 
 /** Beta is the normal identity; the internal test identity is sealed by electron-builder metadata. */

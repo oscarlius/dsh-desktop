@@ -34,4 +34,16 @@ describe('CompanyPersistence', () => {
       await expect(persistence.load()).rejects.toThrow('could not be read')
     } finally { await rm(temp.directory, { recursive: true, force: true }) }
   })
+
+  it('persists only the non-secret personal-mode opt-in', async () => {
+    const temp = await tempState()
+    try {
+      const persistence = new CompanyPersistence(temp.path)
+      await persistence.save({ version: 1, origin: 'https://p7.example', ownedIds: [], personalMode: true })
+      const raw = await readFile(temp.path, 'utf8')
+      expect(raw).toContain('"personalMode":true')
+      expect(raw).not.toMatch(/access|refresh|token/i)
+      await expect(persistence.load()).resolves.toMatchObject({ personalMode: true })
+    } finally { await rm(temp.directory, { recursive: true, force: true }) }
+  })
 })

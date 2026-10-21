@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { CompanyHost } from './company-host.js'
 import { API_PATHS } from './http-contract.js'
+import type { AccountBroker } from './account-broker.js'
 
 export interface CompanyWebServer {
   getOrigin(): string
@@ -38,14 +39,23 @@ async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
   return value as Record<string, unknown>
 }
 /** Loopback + browser-origin admission protects the write-only key submission. */
-export function registerCompanyRoutes(server: CompanyWebServer, host: Pick<CompanyHost, 'status' | 'connect' | 'sync' | 'disconnect'>): () => void {
+export function registerCompanyRoutes(server: CompanyWebServer, host: Pick<CompanyHost, 'status' | 'connect' | 'sync' | 'disconnect'>, account?: Pick<AccountBroker, 'status' | 'login' | 'logout' | 'usage'>): () => void {
   const remove = Object.entries(API_PATHS).map(([action, path]) => server.register({
     kind: 'exact', path,
     async handler(req, res) {
-      const method = action === 'status' ? 'GET' : 'POST'
+      const method = action === 'status' || action === 'accountStatus' || action === 'accountUsage' ? 'GET' : 'POST'
       if (req.method !== method) { res.setHeader('allow', method); reply(res, 405, { error: 'Method not allowed.' }); return }
       if (!sameOrigin(req, server.getOrigin(), method === 'POST')) { reply(res, 403, { error: 'Request origin is not allowed.' }); return }
       try {
+        if (action === 'accountStatus') { if (!account) throw new Error('account unavailable'); reply(res, 200, account.status()); return }
+        if (action === 'accountUsage') {
+          if (!account) throw new Error('account unavailable')
+          const url = new URL(req.url ?? '', server.getOrigin()); const from = url.searchParams.get('from'); const to = url.searchParams.get('to'); const groupBy = url.searchParams.get('groupBy')
+          if (!from || !to || (groupBy !== null && groupBy !== 'day' && groupBy !== 'model' && groupBy !== 'service')) throw new Error('invalid-body')
+          reply(res, 200, await account.usage(from, to, groupBy ?? 'day')); return
+        }
+        if (action === 'accountLogin') { if (!account) throw new Error('account unavailable'); if (Object.keys(await body(req)).length) throw new Error('invalid-body'); reply(res, 200, await account.login()); return }
+        if (action === 'accountLogout') { if (!account) throw new Error('account unavailable'); if (Object.keys(await body(req)).length) throw new Error('invalid-body'); await account.logout(); reply(res, 200, account.status()); return }
         if (action !== 'status') {
           const value = await body(req)
           if (action === 'connect') {

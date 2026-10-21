@@ -2,6 +2,7 @@
 import { boot, resolveProfileDir } from '@deepseek-ai/dsh-app-boot'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { createDesktopProfileBoot } from './profile-context.ts'
+import { openP7AccountBrowser, p7AccountStore } from './p7-account-browser.ts'
 import { logInactiveStartupEntries } from './startup-audit.ts'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { DESKTOP_PACKAGE_NAME as BIN_NAME } from './product-identity.ts'
@@ -157,6 +158,9 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
         hostCtx.provide('desktopBrowserAccess', browserAccess)
         hostCtx.provide('desktopLanHttps', lanHttps)
         hostCtx.provide('desktopRuntime', runtime)
+        hostCtx.provide('p7AccountBrowser', { open: (url: string) => openP7AccountBrowser(runtime, url) })
+          const accountStore = p7AccountStore(runtime)
+          if (accountStore) hostCtx.provide('p7AccountStore', accountStore)
         hostCtx.provide('desktopPnpmBootstrap', desktopPnpmBootstrap)
         await hostCtx.plugin(DesktopActionsService, {
           openTerminal: () => { runtime.openTerminal() },

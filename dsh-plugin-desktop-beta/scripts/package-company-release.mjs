@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(dirname(fileURLToPath(new URL('../package.json', import.meta.url))))
 const workspaceRoot = resolve(packageRoot, '..')
-const VERSION = /^\d+\.\d+\.\d+-beta\.(?:0|[1-9]\d*)$/u
+const VERSION = /^\d+\.\d+\.\d+-beta\.(?:0|[1-9]\d*)(?:\.build\.[1-9]\d*)?$/u
 const COMMIT = /^[0-9a-f]{40}$/u
 
 function command(command, args, cwd, env = process.env) {

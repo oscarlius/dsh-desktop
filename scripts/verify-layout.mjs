@@ -21,6 +21,7 @@ const fabric = readJson('dsh-community-fabric/package.json')
 const market = readJson('dsh-community-market/package.json')
 const p7Models = readJson('dsh-plugin-p7-company-models/package.json')
 const p7WebSearch = readJson('dsh-plugin-p7-web-search/package.json')
+const p7Mcp = readJson('dsh-plugin-p7-mcp/package.json')
 const upstreamPackage = readJson('deepseek-harness/package.json')
 
 if (stablePlugin.name !== 'dsh-plugin-desktop') fail('the stable Desktop workspace must retain dsh-plugin-desktop')
@@ -35,6 +36,7 @@ if (workspace.packageManager !== 'yarn@4.18.0') {
 if (JSON.stringify(workspace.workspaces) !== JSON.stringify([
   'dsh-plugin-p7-company-models',
   'dsh-plugin-p7-web-search',
+  'dsh-plugin-p7-mcp',
   'dsh-plugin-desktop',
   'dsh-plugin-desktop-beta',
   'dsh-desktop-next',
@@ -46,6 +48,7 @@ if (JSON.stringify(workspace.workspaces) !== JSON.stringify([
 for (const [name, manifest] of [
   ['dsh-plugin-p7-company-models', p7Models],
   ['dsh-plugin-p7-web-search', p7WebSearch],
+  ['dsh-plugin-p7-mcp', p7Mcp],
   ['dsh-plugin-desktop', stablePlugin],
   ['dsh-plugin-desktop-beta', betaPlugin],
   ['dsh-desktop-next', nextDesktop],
@@ -58,6 +61,7 @@ if (fabric.name !== 'dsh-community-fabric') fail('the Fabric workspace must own 
 if (market.name !== 'dsh-community-market') fail('the market workspace must own dsh-community-market')
 if (p7Models.name !== 'dsh-plugin-p7-company-models') fail('the company model workspace must own dsh-plugin-p7-company-models')
 if (p7WebSearch.name !== 'dsh-plugin-p7-web-search') fail('the company search workspace must own dsh-plugin-p7-web-search')
+if (p7Mcp.name !== 'dsh-plugin-p7-mcp') fail('the managed MCP workspace must own dsh-plugin-p7-mcp')
 const claudePath = resolve(root, 'CLAUDE.md')
 const claudeStat = lstatSync(claudePath)
 // Windows checkouts materialize the symlink as a regular file holding the
@@ -100,6 +104,7 @@ for (const [owner, manifest] of [
   ['root', workspace],
   ['company models', p7Models],
   ['p7 web search', p7WebSearch],
+  ['p7 mcp', p7Mcp],
   ['stable desktop', stablePlugin],
   ['beta desktop', betaPlugin],
   ['next desktop', nextDesktop],
@@ -110,8 +115,8 @@ for (const [owner, manifest] of [
     for (const [name, range] of Object.entries(manifest[field] ?? {})) {
       if (typeof range !== 'string') continue
       // These private plugins are owned by Desktop, outside the pinned upstream.
-      if (['dsh-plugin-p7-company-models', 'dsh-plugin-p7-web-search'].includes(name) && field === 'dependencies'
-        && ['stable desktop', 'beta desktop'].includes(owner) && range === 'workspace:*') continue
+      if (['dsh-plugin-p7-company-models', 'dsh-plugin-p7-web-search', 'dsh-plugin-p7-mcp'].includes(name) && field === 'dependencies'
+        && ['stable desktop', 'beta desktop', 'p7 mcp', 'p7 web search'].includes(owner) && range === 'workspace:*') continue
       if (/^(?:workspace|portal|link):/u.test(range)
         || (range.startsWith('file:') && range.includes('deepseek-harness'))) {
         fail(`${owner} ${field}.${name} bypasses the published DSH package boundary`)

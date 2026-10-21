@@ -13,6 +13,8 @@
     # upstream default, and an explicit profile or environment provider wins.
     - id: p7-web-search
       name: dsh-plugin-p7-web-search
+    - id: p7-managed-mcp
+      name: dsh-plugin-p7-mcp
     - id: desktop-shell
       name: dsh-plugin-desktop
       config:

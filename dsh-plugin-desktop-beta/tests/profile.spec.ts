@@ -109,9 +109,21 @@ async function withCompanyProfileModule<T>(run: (profile: typeof import('../src/
   writeFileSync(join(resources, 'app', 'package.json'), JSON.stringify({ dshDesktopFlavor: 'companytest' }))
   Object.defineProperty(process, 'resourcesPath', { configurable: true, value: resources })
   await vi.resetModules()
+  // Sealed product identity is exercised by company-test-flavor.spec.ts with
+  // modules physically inside Resources. This fixture varies composition only.
+  vi.doMock('../src/product-identity.ts', async () => {
+    const actual = await vi.importActual<typeof import('../src/product-identity.ts')>('../src/product-identity.ts')
+    const identity = actual.desktopProductIdentityForManifest(readFileSync(join(resources, 'app', 'package.json'), 'utf8'))
+    return { ...actual, DESKTOP_PRODUCT_IDENTITY: identity,
+      DESKTOP_PRODUCT_NAME: identity.productName, DESKTOP_APP_ID: identity.appId,
+      DESKTOP_HOME_DIRECTORY_NAME: identity.homeDirectoryName,
+      DESKTOP_ACCOUNT_ONBOARDING_ENABLED: identity.accountOnboardingEnabled,
+      DESKTOP_COMPANY_SERVICE_ENABLED: true, DESKTOP_UPDATES_ENABLED: identity.updatesEnabled }
+  })
   try {
     return await run(await import('../src/profile.ts'))
   } finally {
+    vi.doUnmock('../src/product-identity.ts')
     await vi.resetModules()
     if (descriptor === undefined) Reflect.deleteProperty(process, 'resourcesPath')
     else Object.defineProperty(process, 'resourcesPath', descriptor)

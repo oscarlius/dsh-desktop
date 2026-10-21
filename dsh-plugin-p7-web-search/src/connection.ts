@@ -102,6 +102,14 @@ export async function readPersistedP7Origin(path: string): Promise<string | unde
 export interface P7CredentialReader {
   resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
 }
+/** The cross-bundle Host account face stored under the profile registry Symbol. */
+interface RegisteredP7Account { usesPersonalToken(): boolean; getValidAccessToken(): Promise<string> }
+const ACCOUNT_REGISTRY = Symbol.for('dsh.p7.account-broker.registry')
+function registeredAccount(profileId: string | undefined): RegisteredP7Account | undefined {
+  if (profileId === undefined) return undefined
+  const host = globalThis as typeof globalThis & { [ACCOUNT_REGISTRY]?: Map<string, RegisteredP7Account> }
+  return host[ACCOUNT_REGISTRY]?.get(profileId)
+}
 
 /** The fully resolved connection one search is served with. */
 export interface P7ResolvedConnection {
@@ -121,6 +129,8 @@ export interface P7ResolvedConnection {
 
 /** Configuration planes `apply` hands to the resolver, most trusted first. */
 export interface P7ConnectionSources {
+  /** Profile id binds this resolver to the Host's personal-account registry. */
+  readonly profileId?: string
   /** Literal origin from config; wins over the Profile snapshot and the default. */
   readonly configuredOrigin?: string
   /** Literal key from config; wins over every credential layer. */
@@ -129,6 +139,9 @@ export interface P7ConnectionSources {
   readonly credentialRef: CredentialRef
   /** Credential plane; `undefined` only in compositions that did not mount it. */
   readonly credentials?: P7CredentialReader
+  /** Host-only personal-account source. When selected, legacy shared keys are forbidden. */
+  readonly personalAccessToken?: () => Promise<string | undefined>
+  readonly usesPersonalToken?: () => boolean
   /** Same reference read from the launch environment, synchronously. */
   ambientApiKey(): string | undefined
   /** Profile file whose `origin` field the P7 company-model plugin maintains. */
@@ -228,6 +241,10 @@ export class P7ConnectionResolver {
   }
 
   private async readKey(): Promise<string> {
+    const account = registeredAccount(this.sources.profileId)
+    if (account?.usesPersonalToken() === true || this.sources.usesPersonalToken?.() === true) {
+      try { return (await (account?.getValidAccessToken() ?? this.sources.personalAccessToken?.()))?.trim() ?? '' } catch { return '' }
+    }
     const literal = this.sources.configuredApiKey?.trim() ?? ''
     if (literal.length > 0) return literal
     const { credentials, credentialRef } = this.sources

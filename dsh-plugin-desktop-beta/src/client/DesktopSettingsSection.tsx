@@ -15,6 +15,7 @@ import {
   desktopBrowserAccessAvailable,
   desktopBrowserAccessEnabled,
 } from '../desktop-network.ts'
+import { companyBuildVersion } from '../company-build-version.ts'
 
 /** Browser view of the Host `dsh-desktop` settings namespace. */
 export interface DesktopShellSettings {
@@ -371,6 +372,7 @@ export function DesktopSettingsSection({
   browserActions,
   extraSections,
 }: DesktopSettingsSectionInjected & Pick<PropsLocale<'desktop.settings'>, 't'> & Partial<PropsRuntime<'settings.section'>>) {
+  const displayedVersion = companyBuildVersion(version)
   const desktop = useScope(desktopSettings)
   const notifications = useScope(notificationSettings)
   const [view, setView] = useState<DesktopSettingsView>()
@@ -926,7 +928,7 @@ export function DesktopSettingsSection({
           <div className="dshDesktopSettingsUpdateRow">
             <span className="dshDesktopSettingsChoiceCopy">
               <span className="dshDesktopSettingsChoiceTitle">{t('currentVersion')}</span>
-              <span className="dshDesktopSettingsChoiceBody">{`v${version}`}</span>
+              <span className="dshDesktopSettingsChoiceBody">{`v${displayedVersion.visible}`}{displayedVersion.build !== undefined && <small>{` 构建 ${displayedVersion.build}`}</small>}</span>
             </span>
             <button
               type="button"

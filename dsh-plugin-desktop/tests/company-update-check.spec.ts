@@ -21,6 +21,15 @@ describe('company release metadata', () => {
     expect(await checkCompanyRelease('2.0.18-beta.3', async () => Response.json({ published: false, channel: 'companytest' }))).toEqual({ status: 'not-published' })
     expect(await checkCompanyRelease('2.0.18-beta.4', async () => Response.json(release()))).toMatchObject({ status: 'up-to-date' })
   })
+  it('keeps the raw internal build identifier for release comparison and request headers', async () => {
+    const current = '2.0.18-beta.15.build.2026102101'
+    const newer = '2.0.18-beta.15.build.2026102102'
+    const request = vi.fn(async () => Response.json({ ...release(), version: newer }))
+    await expect(checkCompanyRelease(current, request)).resolves.toMatchObject({ status: 'update-available', version: newer })
+    expect(request).toHaveBeenCalledWith(COMPANY_RELEASE_ENDPOINT, expect.objectContaining({
+      headers: expect.objectContaining({ 'X-DSH-Desktop-Version': current }),
+    }))
+  })
   it.each([
     { channel: 'stable' }, { version: 'invalid' }, { sha256: '' },
     { downloadUrl: 'http://maas.zxrc.com.cn:8090/ui/downloads/setup.exe' },

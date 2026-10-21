@@ -12,7 +12,7 @@ const normalDelay = 60_000
 const retryDelay = (failures: number) => [60_000, 120_000, 240_000, 300_000][Math.min(failures, 3)] ?? 300_000
 
 export interface RecoveryFailureContext { reason: 'rollback-failed' | 'authorization-cleanup-failed' | 'disconnect-cleanup-failed'; error: unknown; connection: ManagedConnection }
-export function createSyncController(options: { client: P7Client; apply(config: ModelConfigV1 | undefined, connection: ManagedConnection, isCurrent: () => boolean): void | Promise<void>; store: SnapshotStore; onAuthorizationFailure?(): void | Promise<void>; onRecoveryFailure?(context: RecoveryFailureContext): void | Promise<void>; timer?: Timer; now?: () => number }): SyncController {
+export function createSyncController(options: { client: P7Client; apply(config: ModelConfigV1 | undefined, connection: ManagedConnection, isCurrent: () => boolean): void | Promise<void>; store: SnapshotStore; resolveKey?(connection: ManagedConnection): Promise<string>; onAuthorizationFailure?(connection: ManagedConnection): void | Promise<void>; onRecoveryFailure?(context: RecoveryFailureContext): void | Promise<void>; timer?: Timer; now?: () => number }): SyncController {
   const timer = options.timer ?? { setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms), clearTimeout: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>) }
   const now = options.now ?? Date.now
   let connection: ManagedConnection | undefined; let snapshot = options.store.load(); let state: SyncState = snapshot ? { status: 'stale', revision: snapshot.config.revision, lastSuccessAt: snapshot.appliedAt } : { status: 'idle' }
@@ -41,7 +41,7 @@ export function createSyncController(options: { client: P7Client; apply(config: 
     let cleanupError: unknown
     try { await options.store.clear() } catch (error) { cleanupError = error }
     if (!current(authGeneration, active)()) return
-    try { await options.onAuthorizationFailure?.() } catch (error) { cleanupError ??= error }
+    try { await options.onAuthorizationFailure?.(active) } catch (error) { cleanupError ??= error }
     if (!current(authGeneration, active)()) return
     if (connection === active) active.key = ''
     try { if (connection === active) await options.apply(undefined, active, current(authGeneration, active)) } catch (error) { cleanupError ??= error }
@@ -62,7 +62,8 @@ export function createSyncController(options: { client: P7Client; apply(config: 
         if (!current(activeGeneration, active)()) return
         applyBeforeFetch = false
       }
-      const result = await options.client.fetchConfig({ origin: active.origin, key: active.key, ...(previous ? { etag: previous.etag } : {}), hasSnapshot: previous !== undefined, signal: abort.signal })
+      const key = options.resolveKey ? await options.resolveKey(active) : active.key
+      const result = await options.client.fetchConfig({ origin: active.origin, key, ...(previous ? { etag: previous.etag } : {}), hasSnapshot: previous !== undefined, signal: abort.signal })
       if (!current(activeGeneration, active)()) return
       if (result.kind === 'not-modified') {
         if (!previous) throw new P7ClientError('invalid-response')

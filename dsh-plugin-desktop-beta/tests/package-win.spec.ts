@@ -157,7 +157,7 @@ describe('Windows x64 installer packaging', () => {
     const calls: CommandCall[] = []
     const value = {
       ...options(calls),
-      env: { ...options(calls).env, DSH_PACKAGE_CHECK_ALREADY_RAN: '1' },
+      env: { ...options(calls).env, DSH_PACKAGE_CHECK_ALREADY_RAN: '1', BUILD_NUMBER: '2026102101' },
       verifier: 'C:\\repo\\dsh-plugin-desktop\\scripts\\company-test-windows-verify.mjs',
     }
 
@@ -168,6 +168,7 @@ describe('Windows x64 installer packaging', () => {
       'corepack yarn market:check && corepack yarn aa:prepare-release --verify-release && corepack yarn workspace dsh-plugin-desktop-beta check:win-package',
     )
     expect(calls[1]?.args).toContain('--config.appId=ai.deepseek.dsh.desktop.companytest')
+    expect(calls[1]?.args).toContain('--config.buildNumber=0')
     expect(calls[1]?.args).toContain('--config.productName=P7 DSH Company Test')
     expect(calls[1]?.args).toContain('--config.extraMetadata.dshDesktopFlavor=companytest')
     expect(calls[1]?.args).toContain('--config.nsis.artifactName=P7-DSH-Company-Test-${version}-${arch}-Setup.${ext}')

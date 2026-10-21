@@ -5,7 +5,7 @@ import { validateModelConfig } from './validate-config.js'
 import { validateP7Origin } from './p7-client.js'
 import { P7_PROVIDER_IDS } from './map-providers.js'
 
-export interface PersistedCompanyState { version: 1; origin: string | null; ownedIds: string[]; snapshot?: P7Snapshot; bootstrapDisabled?: boolean }
+export interface PersistedCompanyState { version: 1; origin: string | null; ownedIds: string[]; snapshot?: P7Snapshot; bootstrapDisabled?: boolean; personalMode?: boolean; deviceId?: string }
 const empty = (): PersistedCompanyState => ({ version: 1, origin: null, ownedIds: [] })
 /** The file contains only origin, ownership and a validated non-secret catalog. */
 export class CompanyPersistence {
@@ -22,6 +22,14 @@ export class CompanyPersistence {
       if (value.bootstrapDisabled !== undefined) {
         if (typeof value.bootstrapDisabled !== 'boolean') throw new Error('Invalid saved company configuration.')
         state.bootstrapDisabled = value.bootstrapDisabled
+      }
+      if (value.personalMode !== undefined) {
+        if (typeof value.personalMode !== 'boolean') throw new Error('Invalid saved company configuration.')
+        state.personalMode = value.personalMode
+      }
+      if (value.deviceId !== undefined) {
+        if (typeof value.deviceId !== 'string' || !/^[a-zA-Z0-9_-]{16,128}$/.test(value.deviceId)) throw new Error('Invalid saved company configuration.')
+        state.deviceId = value.deviceId
       }
       if (value.snapshot !== undefined) {
         if (typeof value.snapshot !== 'object' || value.snapshot === null || Array.isArray(value.snapshot)) throw new Error('Invalid saved company snapshot.')

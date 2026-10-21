@@ -30,6 +30,16 @@ describe('company differential updater', () => {
     expect(onProgress).toHaveBeenCalledWith(64, 512)
     expect(backend.listenerCount('download-progress')).toBe(0)
   })
+  it('passes the newer raw beta15 build through the unmodified NSIS updater', async () => {
+    const internal = { ...release, version: '2.0.18-beta.15.build.2026102102' }
+    const backend = updater({
+      ...result(),
+      updateInfo: { ...result().updateInfo, version: internal.version },
+      versionInfo: { ...result().versionInfo, version: internal.version },
+    })
+    await expect(downloadCompanyDifferentialUpdate({ release: internal, signal: new AbortController().signal, onProgress: () => {}, createUpdater: async () => backend as unknown as NsisUpdater })).resolves.toBe('C:/private/pending/update.exe')
+    expect(backend).toMatchObject({ allowDowngrade: false })
+  })
   it.each(['version', 'url', 'digest', 'size', 'extra-file', 'web-package'] as const)('rejects a feed changing %s after confirmation', async change => {
     const value = result()
     if (change === 'version') Object.assign(value.updateInfo, { version: '2.0.18-beta.5' })

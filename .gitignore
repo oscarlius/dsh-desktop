@@ -8,6 +8,7 @@
 node_modules/
 dsh-plugin-p7-company-models/lib/
 dsh-plugin-p7-web-search/lib/
+dsh-plugin-p7-mcp/lib/
 *.tsbuildinfo
 .build/
 

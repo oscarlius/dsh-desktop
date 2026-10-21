@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { ModelConfigV1, P7Snapshot } from './contracts.js'
 import { createP7Client, validateP7Origin, type P7Fetch } from './p7-client.js'
 import { mapConfigToProviders } from './map-providers.js'
@@ -18,6 +18,10 @@ export interface CompanyHostOptions {
   saveDefault(provider: string, model: string, reasoningEffort?: string): Promise<void>
   fetch?: P7Fetch
   bootstrap?(): Promise<CompanyBootstrap | undefined>
+  personalMode?(): boolean
+  resolvePersonalAccessToken?(): Promise<string>
+  restorePersonalSession?(): Promise<void>
+  onPersonalModeLoaded?(personalMode: boolean): void
 }
 export class CompanyHost {
   private origin: string | null = null
@@ -32,12 +36,14 @@ export class CompanyHost {
   private command: Promise<void> = Promise.resolve()
   private application: Promise<void> = Promise.resolve()
   private connectionIntent = 0
+  private personalMode = false
+  private deviceId = randomUUID().replace(/-/g, '')
   readonly credentialRef: string
   constructor(private readonly options: CompanyHostOptions) {
     this.credentialRef = 'P7_DSH_' + createHash('sha256').update(options.profileId).digest('hex').slice(0, 24).toUpperCase() + '_API_KEY'
   }
   private async persist(): Promise<void> {
-    await this.options.persistence.save({ version: 1, origin: this.origin, ownedIds: this.owned?.ownedIds() ?? [], ...(this.snapshot ? { snapshot: this.snapshot } : {}), ...(this.bootstrapDisabled ? { bootstrapDisabled: true } : {}) })
+    await this.options.persistence.save({ version: 1, origin: this.origin, ownedIds: this.owned?.ownedIds() ?? [], deviceId: this.deviceId, ...(this.snapshot ? { snapshot: this.snapshot } : {}), ...(this.bootstrapDisabled ? { bootstrapDisabled: true } : {}), ...(this.personalMode ? { personalMode: true } : {}) })
   }
   async initialize(): Promise<void> {
     let ownedIds: string[] = []
@@ -48,6 +54,9 @@ export class CompanyHost {
       this.snapshot = saved.snapshot
       ownedIds = saved.ownedIds
       this.bootstrapDisabled = saved.bootstrapDisabled === true
+      this.personalMode = saved.personalMode === true
+      if (saved.deviceId !== undefined) this.deviceId = saved.deviceId
+      this.options.onPersonalModeLoaded?.(this.personalMode)
     } catch {
       corruptPersistence = true
       this.origin = null
@@ -56,9 +65,10 @@ export class CompanyHost {
     this.owned = new ManagedProviderStore(this.options.settings, this.options.modelNamespace, ownedIds)
     this.controller = createSyncController({
       client: createP7Client({ fetch: this.options.fetch ?? globalThis.fetch }),
+      resolveKey: async connection => this.personalMode ? await this.options.resolvePersonalAccessToken?.() ?? '' : connection.key,
       onAuthorizationFailure: async () => {
         this.authorizationFailed = true
-        await this.options.credentials.unset(this.credentialRef)
+        if (!this.personalMode) await this.options.credentials.unset(this.credentialRef)
         this.snapshot = undefined
         await this.persist()
       },
@@ -86,6 +96,21 @@ export class CompanyHost {
       } catch {
         this.message = 'The packaged P7 connection is unavailable. Connect manually or reinstall the company client.'
       }
+    }
+    if (this.origin && this.personalMode) {
+      // Personal mode is an explicit, persisted choice. Never read a legacy
+      // profile key while restoring it: only the broker may load the OS-held
+      // refresh token and it supplies each access token on demand.
+      await this.owned.apply([])
+      this.snapshot = undefined
+      await this.persist()
+      await this.options.restorePersonalSession?.()
+      try {
+        await this.options.resolvePersonalAccessToken?.()
+        this.controller.start()
+        await this.controller.restore({ origin: this.origin, key: '', credentialRef: this.credentialRef })
+      } catch { this.authorizationFailed = true }
+      return
     }
     if (this.origin) {
       const key = await this.options.credentials.read(this.credentialRef)
@@ -162,17 +187,31 @@ export class CompanyHost {
   sync(): Promise<void> {
     return this.serialize(async () => { await this.controller!.sync(); await this.handleAuthorizationFailure() })
   }
+  /** Persist the non-secret user choice and remove catalog routes until a valid personal session can fetch them. */
+  personalSessionChanged(): Promise<void> {
+    return this.serialize(async () => {
+      const next = this.options.personalMode?.() === true
+      if (!next) return
+      this.personalMode = true
+      await this.persist()
+      await this.controller!.disconnect()
+      if (!this.origin) return
+      try { await this.options.resolvePersonalAccessToken?.() } catch { return }
+      this.controller!.start()
+      await this.controller!.restore({ origin: this.origin, key: '', credentialRef: this.credentialRef })
+    })
+  }
   private async handleAuthorizationFailure(): Promise<void> {
     if (this.controller!.getState().status !== 'reauth-required') return
     this.authorizationFailed = true
     this.controller!.stop()
-    await this.options.credentials.unset(this.credentialRef)
+    if (!this.personalMode) await this.options.credentials.unset(this.credentialRef)
     this.snapshot = undefined
     await this.persist()
   }
   private async recoverCorruptPersistence(): Promise<void> {
     const failures: unknown[] = []
-    try { await this.options.credentials.unset(this.credentialRef) } catch (error) { failures.push(error) }
+    if (!this.personalMode) try { await this.options.credentials.unset(this.credentialRef) } catch (error) { failures.push(error) }
     try { await this.owned!.recover(this.credentialRef) } catch (error) { failures.push(error) }
     try { await this.persist() } catch (error) { failures.push(error) }
     this.message = failures.length
@@ -240,5 +279,9 @@ export class CompanyHost {
       message: this.message ?? (phase === 'unauthorized' ? 'P7 access is no longer authorized. Reconnect with a valid key.' : state?.error ? 'P7 synchronization failed. The previous valid catalog is retained when available.' : null),
     }
   }
+  /** Origin selected by the user; exposed only to the in-process identity broker. */
+  currentOrigin(): string | null { return this.origin }
+  /** Stable random device installation id; it contains no user or credential material. */
+  currentDeviceId(): string { return createHash('sha256').update(this.deviceId).digest('hex') }
   async dispose(): Promise<void> { this.closed = true; this.controller?.stop(); await this.command; await this.application }
 }

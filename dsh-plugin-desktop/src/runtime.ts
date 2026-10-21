@@ -183,6 +183,8 @@ export interface DesktopShellSpec extends DesktopWindowConfig {
 
 /** Electron bootstrap capability supplied before the profile tree mounts. */
 export interface DesktopRuntime {
+  /** Native-process OS-encrypted P7 refresh storage; never exposed to a Renderer. */
+  p7SessionVault?(request: import('./p7-session-vault.ts').P7SessionVaultRequest): Promise<import('./p7-session-vault.ts').P7SessionVaultResult>
   /** Own company polling, prompts and installer work in the same Host generation. */
   startCompanyUpdates?(policy: import('./update-lifecycle.ts').DesktopUpdatePolicy): import('./update-lifecycle.ts').DesktopUpdateLifecycle
   /** User-invoked company release query; no automatic installer execution. */

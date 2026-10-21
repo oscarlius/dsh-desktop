@@ -109,3 +109,24 @@ it.each(['zh', undefined] as const)('synchronizes tray language at boot and on c
     expect(disposeShell).toHaveBeenCalledOnce()
   } finally { await release(); parent.close(); child.close(); port1.close(); port2.close() }
 })
+
+
+it('keeps refresh storage on the native side of Host IPC and advertises its availability', async () => {
+  const { port1, port2 } = new MessageChannel()
+  const [parent, child] = [port1, port2].map(port => new HostRpc({
+    send: value => port.postMessage(value),
+    listen: receive => { port.on('message', receive); return () => { port.off('message', receive) } },
+  })) as [HostRpc, HostRpc]
+  const vault = vi.fn(async (request: { action: string }) => request.action === 'load' ? { refreshToken: 'p7r_synthetic-only' } : {})
+  const native = { platform: 'win32', locale: 'en', updates: { isPackaged: false, canDownload: false, currentVersion: '2.0.18-beta.15.build.2026102101', statePath: '/fixture' }, p7SessionVault: vault } as unknown as DesktopRuntime
+  const release = bindNativeRuntime(parent, native)
+  try {
+    const runtime = createHostRuntime(child, runtimeSnapshot(native))
+    expect(await runtime.p7SessionVault?.({ action: 'load', origin: 'https://p7.example' })).toEqual({ refreshToken: 'p7r_synthetic-only' })
+    expect(vault).toHaveBeenCalledWith({ action: 'load', origin: 'https://p7.example' })
+    const { p7AccountStore } = await import('../src/p7-account-browser.ts')
+    expect(p7AccountStore(runtime)?.clientVersion).toBe('2.0.18-beta.15.build.2026102101')
+    const unsupported = { ...native, p7SessionVault: undefined } as unknown as DesktopRuntime
+    expect(createHostRuntime(child, runtimeSnapshot(unsupported)).p7SessionVault).toBeUndefined()
+  } finally { await release(); parent.close(); child.close(); port1.close(); port2.close() }
+})

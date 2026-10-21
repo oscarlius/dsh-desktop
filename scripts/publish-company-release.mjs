@@ -19,7 +19,7 @@ const digest = async path => {
 export async function validateCompanyRelease(directory) {
   const root = realpathSync(resolve(directory)), manifest = json(join(root, 'release-manifest.json'))
   ensure(manifest.schemaVersion === 1 && manifest.channel === 'companytest', 'Unsupported company release manifest')
-  ensure(/^\d+\.\d+\.\d+-beta\.(?:0|[1-9]\d*)$/.test(manifest.version), 'Invalid company release version')
+  ensure(/^\d+\.\d+\.\d+-beta\.(?:0|[1-9]\d*)(?:\.build\.[1-9]\d*)?$/.test(manifest.version), 'Invalid company release version')
   ensure(/^[0-9a-f]{40}$/.test(manifest.sourceCommit), 'Release must identify its committed source')
   ensure(Array.isArray(manifest.artifacts) && manifest.artifacts.length === 3, 'Full, update and blockmap must be supplied together')
   const artifacts = []

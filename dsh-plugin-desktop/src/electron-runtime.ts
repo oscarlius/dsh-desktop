@@ -11,6 +11,7 @@ import {
 } from 'electron'
 import { checkCompanyRelease, type CompanyReleaseResult, type PublishedCompanyRelease } from './company-update-check.ts'
 import { startCompanyUpdateLifecycle } from './company-update-lifecycle.ts'
+import { companyBuildLabel } from './company-build-version.ts'
 import { verifyCompanyInstaller } from './company-update-installer.ts'
 import { downloadCompanyDifferentialUpdate } from './company-differential-update.ts'
 import type { DesktopUpdateLifecycle, DesktopUpdatePolicy } from './update-lifecycle.ts'
@@ -305,8 +306,8 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     const available = result.status === 'update-available' && app.isPackaged && this.platform === 'win32'
     const answer = await this.showDesktopMessageBox({ type: 'info',
       title: zh ? 'P7 客户端更新' : 'P7 client updates',
-      message: result.status === 'update-available' ? (zh ? `发现 P7 新版本 ${result.version}` : `P7 version ${result.version} is available`)
-        : (zh ? `当前已是 P7 最新版本（${PRODUCT_VERSION}）` : `You are running the latest P7 version (${PRODUCT_VERSION})`),
+      message: result.status === 'update-available' ? (zh ? `发现 P7 新版本 ${companyBuildLabel(result.version)}` : `P7 version ${companyBuildLabel(result.version)} is available`)
+        : (zh ? `当前已是 P7 最新版本（${companyBuildLabel(PRODUCT_VERSION)}）` : `You are running the latest P7 version (${companyBuildLabel(PRODUCT_VERSION)})`),
       detail: `${result.releaseNotes}\n\n${zh ? '更新会保留当前配置、登录信息、会话和工作区数据。' : 'Updating preserves your settings, sign-in, sessions and workspace data.'}${!available && result.status === 'update-available' ? (zh ? '\n请使用已安装的 Windows 公司版进行更新。' : '\nUpdate from an installed Windows company edition.') : ''}`,
       buttons: available ? (zh ? ['下载更新', '稍后'] : ['Download update', 'Later']) : [zh ? '确定' : 'OK'],
       defaultId: available ? 1 : 0, cancelId: available ? 1 : 0, noLink: true,
@@ -340,7 +341,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     await recordDesktopUpdateArtifact(app.getPath('userData'), { platform: 'win32', version: release.version, path: artifactPath })
     const zh = this.locale === 'zh'
     const answer = await this.showDesktopMessageBox({ type: 'info', title: zh ? 'P7 更新已就绪' : 'P7 update ready',
-      message: zh ? `版本 ${release.version} 已下载并通过校验` : `Version ${release.version} is downloaded and verified`,
+      message: zh ? `版本 ${companyBuildLabel(release.version)} 已下载并通过校验` : `Version ${companyBuildLabel(release.version)} is downloaded and verified`,
       detail: zh ? '请先保存正在编辑的内容。安装将退出并重新打开客户端，保留当前配置、会话和工作区数据。' : 'Save your work. Installation closes and reopens the app, preserving settings, sessions and workspace data.',
       buttons: zh ? ['退出并安装', '稍后'] : ['Exit and install', 'Later'], defaultId: 1, cancelId: 1, noLink: true,
     })

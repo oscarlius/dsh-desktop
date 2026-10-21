@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.18-beta.16",
+  "version": "2.0.18-beta.15.build.2026102101",
   "description": "DSH Desktop Beta: an Electron shell composed as a DeepSeek Harness Cordis plugin",
   "desktopName": "dsh-desktop-beta.desktop",
   "license": "MIT",
@@ -127,7 +127,7 @@
     }
   },
   "scripts": {
-    "build": "yarn workspace dsh-plugin-p7-company-models build && yarn workspace dsh-plugin-p7-web-search build && node scripts/clean.mjs && node ../scripts/run-parallel.mjs \"tsdown\" \"vite build --config vite.client.config.ts\" \"vite build --config vite.native-ui.config.ts\" \"tsc -p tsconfig.json --emitDeclarationOnly\" \"tsc -p tsconfig.client.json --emitDeclarationOnly\"",
+    "build": "yarn workspace dsh-plugin-p7-company-models build && yarn workspace dsh-plugin-p7-web-search build && yarn workspace dsh-plugin-p7-mcp build && node scripts/clean.mjs && node ../scripts/run-parallel.mjs \"tsdown\" \"vite build --config vite.client.config.ts\" \"vite build --config vite.native-ui.config.ts\" \"tsc -p tsconfig.json --emitDeclarationOnly\" \"tsc -p tsconfig.client.json --emitDeclarationOnly\"",
     "typecheck": "node ../scripts/run-parallel.mjs \"tsc -p tsconfig.native-ui.json --noEmit\" \"tsc -p tsconfig.tests.json --noEmit\" \"tsc -p tsconfig.tests.client.json --noEmit\"",
     "test": "vitest run",
     "verify:closure": "node --test scripts/runtime-closure.spec.mjs && node scripts/verify-runtime-closure.mjs",
@@ -345,6 +345,7 @@
     "adm-zip": "^0.6.0",
     "dsh-community-market": "0.1.0-dev.0",
     "dsh-plugin-p7-company-models": "workspace:*",
+    "dsh-plugin-p7-mcp": "workspace:*",
     "dsh-plugin-p7-web-search": "workspace:*",
     "dshmarket": "1.66.45",
     "electron-updater": "6.8.9",

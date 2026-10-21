@@ -12,6 +12,14 @@ import { readCompanyBootstrap } from './bootstrap.js'
 import { CompanyHost } from './company-host.js'
 import { CompanyPersistence } from './persistence.js'
 import { registerCompanyRoutes } from './routes.js'
+import { AccountBroker, type P7AccountStore } from './account-broker.js'
+import { installPersonalCredentialOverlay } from './personal-credential-overlay.js'
+
+interface P7AccountBrowser { open(url: string): Promise<void> | void }
+
+declare module '@deepseek-ai/cordis' {
+  interface Context { p7Account: AccountBroker; p7AccountBrowser?: P7AccountBrowser; p7AccountStore?: P7AccountStore }
+}
 
 export const name = 'p7-company-models'
 export const inject = ['loader', 'webServer', 'settings', 'credentials', 'profileContext', 'llm', 'agentDefaultModel']
@@ -19,9 +27,16 @@ export const Config = Schema.object({ bootstrapFile: Schema.string().default('')
 
 /** Compose beside the official adapters without modifying the upstream runtime. */
 export function apply(ctx: Context, config: { bootstrapFile?: string } = {}): void {
-  const host = new CompanyHost({
+  let host: CompanyHost | undefined
+  const accountStore = ctx.get('p7AccountStore')
+  const account = new AccountBroker({ origin: () => host?.currentOrigin() ?? null, deviceFingerprint: () => host?.currentDeviceId() ?? '', clientVersion: accountStore?.clientVersion ?? '2.0.18-beta.15', profileId: ctx.profileContext.dir, ...(accountStore ? { store: accountStore } : {}) })
+  host = new CompanyHost({
     profileId: ctx.profileContext.dir,
     bootstrap: () => readCompanyBootstrap(config.bootstrapFile ?? ''),
+    personalMode: () => account.usesPersonalToken(),
+    resolvePersonalAccessToken: () => account.getValidAccessToken(),
+    restorePersonalSession: () => account.restore(),
+    onPersonalModeLoaded: value => account.setPersonalMode(value),
     persistence: new CompanyPersistence(join(ctx.profileContext.dir, '.p7-company-models.json')),
     settings: ctx.settings,
     modelNamespace: () => {
@@ -40,19 +55,31 @@ export function apply(ctx: Context, config: { bootstrapFile?: string } = {}): vo
       ...(reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(reasoningEffort) }),
     }),
   })
+  const companyHost = host
+  ctx.provide('p7Account', account)
+  const browser = ctx.get('p7AccountBrowser')
+  account.setBrowserLauncher(browser ? url => browser.open(url) : undefined)
+  const removeCredentialOverlay = installPersonalCredentialOverlay(ctx.credentials, credentialRef(companyHost.credentialRef), account)
+  // Do not let restore notifications race host initialization; normal login
+  // and logout still synchronize immediately after the initial catalog pass.
+  let initialized: Promise<void>
+  ctx.effect(() => account.subscribe(() => { void initialized.then(() => companyHost.personalSessionChanged()) }), 'p7-company-models: personal session catalog')
   let disposed = false
-  ctx.effect(() => () => { disposed = true; return host.dispose() }, 'p7-company-models: lifecycle')
+  ctx.effect(() => () => { disposed = true; removeCredentialOverlay(); return Promise.all([companyHost.dispose(), account.dispose()]).then(() => {}) }, 'p7-company-models: lifecycle')
   // Applying a fetched catalog writes volatile Profile settings. Their editor
   // must validate against a settled Loader, so startup sync cannot hold this
   // plugin's own activation open while waiting for that write.
-  const initialized = ctx.root.loader.await().then(async () => { if (!disposed) await host.initialize() }).catch(() => {
+  initialized = ctx.root.loader.await().then(async () => { if (!disposed) await companyHost.initialize() }).catch(() => {
     ctx.logger.warn('P7 startup synchronization could not complete. Reconnect from company model settings.')
   })
   ctx.effect(() => registerCompanyRoutes(ctx.webServer, {
-    status: () => host.status(),
-    connect: async (origin, key) => { await initialized; await host.connect(origin, key) },
-    sync: async () => { await initialized; await host.sync() },
-    disconnect: async () => { await initialized; await host.disconnect() },
-  }), 'p7-company-models: local settings')
+    status: () => companyHost.status(),
+    connect: async (origin, key) => { await initialized; await companyHost.connect(origin, key) },
+    sync: async () => { await initialized; await companyHost.sync() },
+    disconnect: async () => { await initialized; await companyHost.disconnect() },
+  }, account), 'p7-company-models: local settings')
 }
 export { CompanyHost } from './company-host.js'
+export { AccountBroker, getAccountBroker } from './account-broker.js'
+export { installPersonalCredentialOverlay } from './personal-credential-overlay.js'
+export type { P7AccountProfile, P7AccountStatus, P7Usage, P7UsageTotals } from './account-broker.js'

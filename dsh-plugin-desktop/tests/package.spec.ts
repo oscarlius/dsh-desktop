@@ -76,7 +76,7 @@ const workspaceManifest = JSON.parse(readFileSync(new URL('package.json', worksp
   scripts?: Record<string, unknown>
 }
 const ciWorkflow = readFileSync(new URL('.github/workflows/ci.yml', workspaceRoot), 'utf8')
-const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
 const runtimeVersion = String(manifest.dependencies?.['@deepseek-ai/dsh'])
 const betaRuntimeVersion = (JSON.parse(readFileSync(
   new URL('dsh-plugin-desktop-beta/package.json', workspaceRoot), 'utf8',
@@ -87,12 +87,12 @@ const dshResolution = (name: string): unknown =>
 describe('published package surface', () => {
   it('runs all desktop editions and community market typechecks from the root command', () => {
     expect(workspaceManifest.scripts?.typecheck)
-      .toBe('yarn workspace dsh-plugin-p7-company-models typecheck && yarn workspace dsh-plugin-p7-web-search typecheck && yarn workspace dsh-plugin-desktop typecheck && yarn workspace dsh-plugin-desktop-beta typecheck && yarn workspace dsh-community-market typecheck && yarn workspace dsh-desktop-next typecheck')
+      .toBe('yarn workspace dsh-plugin-p7-company-models typecheck && yarn workspace dsh-plugin-p7-web-search typecheck && yarn workspace dsh-plugin-p7-mcp typecheck && yarn workspace dsh-plugin-desktop typecheck && yarn workspace dsh-plugin-desktop-beta typecheck && yarn workspace dsh-community-market typecheck && yarn workspace dsh-desktop-next typecheck')
   })
 
   it('runs all desktop editions and community market tests from the root command', () => {
     expect(workspaceManifest.scripts?.test)
-      .toBe('yarn workspace dsh-plugin-p7-company-models test && yarn workspace dsh-plugin-p7-web-search test && yarn workspace dsh-plugin-desktop test && yarn workspace dsh-plugin-desktop-beta test && yarn workspace dsh-community-market test && yarn workspace dsh-desktop-next test')
+      .toBe('yarn workspace dsh-plugin-p7-company-models test && yarn workspace dsh-plugin-p7-web-search test && yarn workspace dsh-plugin-p7-mcp test && yarn workspace dsh-plugin-desktop test && yarn workspace dsh-plugin-desktop-beta test && yarn workspace dsh-community-market test && yarn workspace dsh-desktop-next test')
   })
 
   it('registers both npm launcher names', () => {
@@ -478,7 +478,7 @@ describe('published package surface', () => {
   })
 
   it('installs Host command PATHs after the launch snapshot and before profile boot', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const recover = main.indexOf('await resolveDesktopShellEnvironment')
     const applyRecovered = main.indexOf('Object.entries(shellEnvironmentResolution.updates)')
     const snapshot = main.indexOf('const environment = loadLayeredEnv')
@@ -520,7 +520,7 @@ describe('published package surface', () => {
   })
 
   it('installs the outbound proxy policy in both processes before anything can request', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const launchEnv = main.indexOf('const desktopLaunchEnvironment = withDesktopDshHome')
     const probe = main.indexOf('probe: await probeSystemProxy()')
     const overlay = main.indexOf('const proxyResolution = buildDesktopProxyOverlay(')
@@ -559,14 +559,14 @@ describe('published package surface', () => {
 
   it('keeps the release-age override in the shared process-local pnpm policy', () => {
     const policy = readFileSync(new URL('src/pnpm-policy.ts', packageRoot), 'utf8')
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
 
     expect(policy).toContain("'--config.minimumReleaseAge=0'")
     expect(main).not.toContain('allowYoungLockedDependencies')
   })
 
   it('injects profile creation into the generation-scoped Host service without selecting it', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const profileImport = main.indexOf('createDesktopWebProfile,')
     const profileService = main.indexOf('await hostCtx.plugin(DesktopProfileService, {')
     const create = main.indexOf('create: name => createFreshDesktopProfile(name),', profileService)
@@ -598,7 +598,7 @@ describe('published package surface', () => {
   })
 
   it('wires local crash evidence before Electron becomes ready', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const startCrashReporter = main.indexOf('startDesktopCrashReporting(crashReporter')
     const beginRun = main.indexOf('beginDesktopRun(')
     const childLogging = main.indexOf('installDesktopChildProcessLogging(app')
@@ -617,7 +617,7 @@ describe('published package surface', () => {
   })
 
   it('creates unified Profile checkpoints before composition and records only after health', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const beginProfile = main.indexOf('const profileStartup = beginDesktopProfileStartup(')
     const admissionGuard = main.indexOf('if (!recoveryModeRequested)', beginProfile)
     const admission = main.indexOf('inspectDesktopProfileChannelAdmission(', admissionGuard)
@@ -650,7 +650,7 @@ describe('published package surface', () => {
   })
 
   it('contributes per-Profile setup to the live official client with restart-safe completion', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const prepare = main.indexOf('let prepared = prepareDesktopProfile(')
     const pending = main.indexOf('await beginDesktopSetupWizard(', prepare)
     const bridge = main.indexOf('runtime.setupOnboarding =', pending)
@@ -672,7 +672,7 @@ describe('published package surface', () => {
   })
 
   it('keeps active Profile preferences as the lazy source and serializes runtime mirrors', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const preferencesSource = readFileSync(new URL('src/profile-preferences.ts', packageRoot), 'utf8')
     const projection = preferencesSource.indexOf('function desktopProfilePreferencesFromSettings(')
     const projectionEnd = preferencesSource.indexOf('type ErrorFactory', projection)
@@ -737,7 +737,7 @@ describe('published package surface', () => {
   })
 
   it('wires lifecycle evidence through key startup stages and terminal outcomes', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const createRecorder = main.indexOf('const lifecycleRecorder = createDesktopLifecycleRecorder({')
     const startRun = main.indexOf('lifecycleRecorder.startStartup(startupStage)')
     const finishRenderer = main.indexOf('lifecycleRecorder.finishRendererBoot(')
@@ -778,7 +778,7 @@ describe('published package surface', () => {
   })
 
   it('keeps compatibility Profile selection separate from requested and failed recovery', () => {
-    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
+    const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8').replaceAll('\r\n', '\n')
     const recoveryUi = readFileSync(new URL('src/native-ui/recovery/App.tsx', packageRoot), 'utf8')
     const selectorUi = readFileSync(new URL('src/native-ui/profile-selector/App.tsx', packageRoot), 'utf8')
     const windows = [...main.matchAll(/await openStartupRecoveryWindow\(/gu)]

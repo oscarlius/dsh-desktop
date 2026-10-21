@@ -5,11 +5,12 @@ import { HostRpc } from './host-rpc.ts'
 import { parseDesktopPlatformLoginRequest } from './platform-login.ts'
 
 export type RuntimeSnapshot = Pick<DesktopRuntime, 'platform' | 'locale'> & {
+  p7SessionVaultAvailable?: boolean
   updates: Omit<DesktopUpdateAdapter, 'request' | 'confirmDownload' | 'showManualCheckResult' | 'downloadAndOpen' | 'notify'>
 }
 export function runtimeSnapshot(runtime: DesktopRuntime): RuntimeSnapshot {
   const { isPackaged, canDownload, currentVersion, releaseChannel, statePath, installationId } = runtime.updates
-  return { platform: runtime.platform, locale: runtime.locale,
+  return { platform: runtime.platform, locale: runtime.locale, p7SessionVaultAvailable: runtime.p7SessionVault !== undefined,
     updates: { isPackaged, canDownload, currentVersion, statePath,
       ...(releaseChannel ? { releaseChannel } : {}), ...(installationId ? { installationId } : {}) } }
 }
@@ -48,6 +49,7 @@ export function createHostRuntime(rpc: HostRpc, snapshot: RuntimeSnapshot): Desk
     return localeSync
   }
   const runtime: DesktopRuntime = {
+    ...(snapshot.p7SessionVaultAvailable ? { p7SessionVault: (request: import('./p7-session-vault.ts').P7SessionVaultRequest) => send<import('./p7-session-vault.ts').P7SessionVaultResult>('native:p7SessionVault', [request]) } : {}),
     platform: snapshot.platform,
     get locale() { return locale },
     updates: {
@@ -163,6 +165,10 @@ export function bindNativeRuntime(rpc: HostRpc, runtime: DesktopRuntime): () => 
     runtime.configureDeveloperLogging?.(preferences)
   })
   handle('native:platformLogin', ([request]) => { runtime.platformLogin(parseDesktopPlatformLoginRequest(request)) })
+  handle('native:p7SessionVault', ([request]) => {
+    if (runtime.p7SessionVault === undefined) throw new Error('OS encrypted P7 sign-in storage is unavailable')
+    return runtime.p7SessionVault(request)
+  })
   handle('native:startCompanyUpdates', ([policy]) => {
     if (companyUpdates !== undefined) throw new Error('P7 updates are already active')
     if (runtime.startCompanyUpdates === undefined) throw new Error('P7 update lifecycle is unavailable')

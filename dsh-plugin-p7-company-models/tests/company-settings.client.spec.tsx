@@ -12,6 +12,11 @@ const READY: CompanyStatus = {
   phase: 'ready', origin: 'https://models.example.com', revision: 'r7', lastSyncedAt: 1_700_000_000_000,
   defaultModel: 'p7-default', models: [{ id: 'p7-default', displayName: 'P7 Default' }], message: null,
 }
+const ACCOUNT_PROFILE = { userId: 'u1', organizationId: 'o1', displayName: 'Ada', role: 'employee', deviceId: 'd1', sessionId: 's1', scopes: [] }
+const SIGNED_IN = { phase: 'signed-in' as const, profile: ACCOUNT_PROFILE, expiresAt: Date.now() + 60_000, authorizationUrl: null, upgradeUrl: null, message: null }
+const PENDING = { phase: 'pending' as const, profile: null, expiresAt: null, authorizationUrl: 'https://identity.example/login', upgradeUrl: null, message: null }
+const SIGNED_OUT = { phase: 'signed-out' as const, profile: null, expiresAt: null, authorizationUrl: null, upgradeUrl: null, message: null }
+const USAGE = { from: '2026-10-01T00:00:00+08:00', to: '2026-10-21T00:00:00.000Z', timeZone: 'Asia/Shanghai', totals: { requests: 3, inputTokens: 1, outputTokens: 2, cacheReadTokens: null, cacheWriteTokens: null, searchCalls: 0, mcpCalls: 0, costMicrounits: null, currency: null }, unknownRequestCount: 0, partialRequestCount: 0, unattributedLegacyRequestCount: 0, items: [] }
 
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
@@ -169,5 +174,57 @@ describe('P7 company-model settings section', () => {
     view.unmount()
     await act(async () => { resolve(READY) })
     expect(document.body.textContent).not.toContain('P7 Default')
+  })
+
+  it('polls a pending browser login to completion and requests usage once with a Shanghai month boundary', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-21T00:00:00.000Z'))
+    try {
+      const api = {
+        status: vi.fn(async () => READY), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(),
+        accountStatus: vi.fn().mockResolvedValueOnce(PENDING).mockResolvedValue(SIGNED_IN),
+        accountLogin: vi.fn(async () => PENDING), accountLogout: vi.fn(async () => SIGNED_OUT), accountUsage: vi.fn(async () => USAGE),
+      }
+      render(<CompanySettingsSection {...({ api, t } as unknown as CompanySettingsSectionProps)} />)
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      expect(screen.getByText('Sign-in pending')).toBeTruthy()
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+      expect(screen.getByText('Signed in')).toBeTruthy()
+      expect(api.accountUsage).toHaveBeenCalledTimes(1)
+      expect(api.accountUsage).toHaveBeenCalledWith(expect.objectContaining({ from: '2026-10-01T00:00:00+08:00', groupBy: 'service' }), expect.any(AbortSignal))
+    } finally { vi.useRealTimers() }
+  })
+
+  it('refreshes account status with company polling without repeatedly querying signed-in usage', async () => {
+    vi.useFakeTimers()
+    try {
+      const api = {
+        status: vi.fn(async () => READY), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(),
+        accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(async () => PENDING), accountLogout: vi.fn(async () => SIGNED_OUT), accountUsage: vi.fn(async () => USAGE),
+      }
+      render(<CompanySettingsSection {...({ api, t } as unknown as CompanySettingsSectionProps)} />)
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      expect(api.accountUsage).toHaveBeenCalledTimes(1)
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      expect(api.accountStatus.mock.calls.length).toBeGreaterThan(1)
+      expect(api.accountUsage).toHaveBeenCalledTimes(1)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('does not apply a late usage response after logout', async () => {
+    let completeUsage!: (value: typeof USAGE) => void
+    const api = {
+      status: vi.fn(async () => READY), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(),
+      accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(async () => PENDING), accountLogout: vi.fn(async () => SIGNED_OUT),
+      accountUsage: vi.fn(async () => await new Promise<typeof USAGE>(resolve => { completeUsage = resolve })),
+    }
+    render(<CompanySettingsSection {...({ api, t } as unknown as CompanySettingsSectionProps)} />)
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+    expect(completeUsage).toBeTypeOf('function')
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    completeUsage(USAGE)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(screen.getByText('Signed out')).toBeTruthy()
+    expect(screen.queryByText('3')).toBeNull()
   })
 })

@@ -1,7 +1,8 @@
 /** Headless artifact smoke for the Electron-backed dsh and pnpm command entries. */
 
 import { spawnSync } from 'node:child_process'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -160,7 +161,7 @@ function runPackagedPnpmShim() {
   }
 }
 
-function runFlatProfileDshEntry() {
+async function runFlatProfileDshEntry() {
   const root = mkdtempSync(join(tmpdir(), 'dsh-desktop-flat-cli-smoke-'))
   const desktopPackage = join(root, 'node_modules', 'dsh-plugin-desktop-beta')
   const linkedAppBootPackage = join(root, 'node_modules', '@deepseek-ai', 'dsh-app-boot')
@@ -171,8 +172,8 @@ function runFlatProfileDshEntry() {
   const linkedSemverPackage = join(root, 'node_modules', 'semver')
   try {
     mkdirSync(join(root, 'node_modules', '@deepseek-ai'), { recursive: true })
-    cpSync(fileURLToPath(new URL('lib/', packageRoot)), join(desktopPackage, 'lib'), { recursive: true })
-    cpSync(fileURLToPath(new URL('package.json', packageRoot)), join(desktopPackage, 'package.json'))
+    await cp(fileURLToPath(new URL('lib/', packageRoot)), join(desktopPackage, 'lib'), { recursive: true })
+    await cp(fileURLToPath(new URL('package.json', packageRoot)), join(desktopPackage, 'package.json'))
     symlinkSync(dshAppBootPackage, linkedAppBootPackage, process.platform === 'win32' ? 'junction' : 'dir')
     symlinkSync(dshAtomicWritePackage, linkedAtomicWritePackage, process.platform === 'win32' ? 'junction' : 'dir')
     symlinkSync(cordisPluginLoaderPackage, linkedCordisPluginLoaderPackage, process.platform === 'win32' ? 'junction' : 'dir')
@@ -199,5 +200,5 @@ function runFlatProfileDshEntry() {
 }
 
 runElectronEntry('dsh', ['--expose-internals'], desktopCli, ['--version'], dshVersion)
-runFlatProfileDshEntry()
+await runFlatProfileDshEntry()
 runPackagedPnpmShim()
