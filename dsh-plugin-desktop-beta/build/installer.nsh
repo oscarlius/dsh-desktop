@@ -98,6 +98,54 @@ Var pid
   !endif
 !macroend
 
+; Node quotes a final /D argument when its value has spaces. GetDParameter
+; returns that closing quote as part of the value, although it is not part of
+; a valid Windows path.
+!macro normalizeInstallDirectory path
+  StrLen $R1 ${path}
+  ${if} $R1 > 0
+    StrCpy $R1 ${path} 1 -1
+    ${if} $R1 == "$\""
+      StrCpy ${path} ${path} -1
+    ${endIf}
+  ${endIf}
+  StrCpy $R1 ${path} 1
+  ${if} $R1 == "$\""
+    StrCpy ${path} ${path} "" 1
+  ${endIf}
+!macroend
+
+; assistedInstaller.nsh sanitizes the directory in instFilesPre. Replace its
+; callback with a wrapper so legacy registered paths are restored after that
+; sanitizer and immediately before extraction.
+!macro customPageAfterChangeDir
+  !ifdef allowToChangeInstallationDirectory
+  !undef MUI_PAGE_CUSTOMFUNCTION_PRE
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE dshLegacyInstallPathPre
+  Function dshLegacyInstallPathPre
+    Call instFilesPre
+    !ifndef BUILD_UNINSTALLER
+    ${if} ${isUpdated}
+      !insertmacro GetDParameter $R0
+      ${if} $R0 != ""
+        !insertmacro normalizeInstallDirectory $R0
+        StrCpy $INSTDIR $R0
+      ${else}
+        ${if} $installMode == "all"
+          ReadRegStr $R0 HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
+        ${else}
+          ReadRegStr $R0 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+        ${endIf}
+        ${if} $R0 != ""
+          StrCpy $INSTDIR $R0
+        ${endIf}
+      ${endIf}
+    ${endIf}
+    !endif
+  FunctionEnd
+  !endif
+!macroend
+
 ; When launched visibly by an in-app update (--updated --force-run), relaunch
 ; the updated application and close the installer as soon as extraction finishes
 ; without stopping on the Finish wizard page.
@@ -106,7 +154,15 @@ Var pid
   ${andIf} ${isForceRun}
   ${andIfNot} ${Silent}
     HideWindow
-    ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--updated"
-    !insertmacro quitSuccess
+    ${StdUtils.ExecShellAsUser} $0 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "open" "--updated"
+    DetailPrint "Restarting updated application: $0"
+    ${if} $0 == "ok"
+      !insertmacro quitSuccess
+    ${orIf} $0 == "fallback"
+      !insertmacro quitSuccess
+    ${else}
+      ShowWindow $HWNDPARENT ${SW_SHOWNORMAL}
+      MessageBox MB_ICONEXCLAMATION "The update is installed, but the application could not be reopened. Please open it from its installation folder."
+    ${endIf}
   ${endIf}
 !macroend

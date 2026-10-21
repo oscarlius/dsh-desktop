@@ -47,6 +47,7 @@ import {
 } from './desktop-network.ts'
 import type { DesktopShellMode } from './runtime.ts'
 import {
+  DESKTOP_COMPANY_SERVICE_ENABLED,
   DESKTOP_PACKAGE_NAME,
   DESKTOP_PACKAGE_NAMES,
 } from './product-identity.ts'
@@ -112,6 +113,10 @@ const DESKTOP_WEB_SERVER_PACKAGE = `${DESKTOP_PACKAGE_NAME}/webserver`
 // moved persisted form values into the active profile's own patch layer. The row that
 // carries the settings service is now the profile-owned `@deepseek-ai/dsh-settings`.
 const SETTINGS_PACKAGE = '@deepseek-ai/dsh-settings'
+const ACCOUNT_SETTINGS_ROW_ID = 'ui-settings-account'
+const ACCOUNT_SETTINGS_PACKAGE = '@deepseek-ai/dsh-client-ui-settings-account'
+const COMPANY_CONTACT_SOURCE = 'p7-company-hidden'
+const P7_COMPANY_MODELS_ROW_ID = 'p7-company-models'
 /** Legacy harness-home document the upstream one-shot import still reads. */
 const SETTINGS_DOCUMENT_FILENAME = 'settings.yaml'
 const SETTINGS_DOCUMENT_FORMATS: Readonly<Record<string, 'yaml' | 'json'>> = Object.freeze({
@@ -1595,6 +1600,23 @@ export function prepareDesktopProfile(
   const settings = rows.get('settings')
   if (settings?.name !== SETTINGS_PACKAGE) {
     throw new Error(`${BIN_NAME}: desktop profile must use ${SETTINGS_PACKAGE} in the settings row`)
+  }
+  if (DESKTOP_COMPANY_SERVICE_ENABLED) {
+    const accountSettings = rows.get(ACCOUNT_SETTINGS_ROW_ID)
+    if (accountSettings?.name !== ACCOUNT_SETTINGS_PACKAGE) {
+      throw new Error(`${BIN_NAME}: company Desktop profile must use ${ACCOUNT_SETTINGS_PACKAGE} in the ${ACCOUNT_SETTINGS_ROW_ID} row`)
+    }
+    const companyModels = rows.get(P7_COMPANY_MODELS_ROW_ID)
+    if (companyModels?.name !== 'dsh-plugin-p7-company-models') {
+      throw new Error(`${BIN_NAME}: company Desktop profile is missing ${P7_COMPANY_MODELS_ROW_ID}`)
+    }
+    patches.push(
+      { id: ACCOUNT_SETTINGS_ROW_ID, config: { ...rowConfig(accountSettings), contactSource: COMPANY_CONTACT_SOURCE } },
+      { id: P7_COMPANY_MODELS_ROW_ID, config: {
+        ...rowConfig(companyModels),
+        bootstrapFile: process.env.DSH_P7_BOOTSTRAP_FILE ?? join(dirname(INSTALL_ANCHOR), '..', 'p7-company-connection.json'),
+      } },
+    )
   }
   // 0.1.7's settings row is the profile-owned service and takes no document config,
   // so Desktop resolves the harness-home document itself. The Host, the setup wizard,

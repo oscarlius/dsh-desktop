@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import {
   accessSync,
   constants,
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdtempSync,
@@ -913,7 +914,36 @@ export async function afterPack(
   const summary = verify(context)
   verifyAa(context)
   verifyRuntime(context)
+  stageCompanyConnection(context)
   report(summary)
+}
+
+/** Only the sealed company flavor receives the installer-owned Host credential. */
+export function stageCompanyConnection(context: PackagedRuntimeContext): void {
+  if (context.electronPlatformName !== 'win32') return
+  const applicationRoot = resolvePackagedApplicationRoot(context)
+  const manifest = join(applicationRoot, 'package.json')
+  if (!existsSync(manifest)) return
+  const metadata = JSON.parse(readFileSync(manifest, 'utf8')) as { dshDesktopFlavor?: string }
+  if (metadata.dshDesktopFlavor !== 'companytest') return
+  if ((metadata as { dshDesktopUpdateDistribution?: boolean }).dshDesktopUpdateDistribution === true) {
+    if (existsSync(join(dirname(applicationRoot), 'p7-company-connection.json'))) {
+      throw new Error('Update distributions must not contain a reusable P7 credential.')
+    }
+    return
+  }
+  const projectDir = context.packager.projectDir ?? DESKTOP_PACKAGE_ROOT
+  const source = join(projectDir, '.desktop-build', 'company', 'p7-company-connection.json')
+  try {
+    const material = readFileSync(source, 'utf8')
+    if (Buffer.byteLength(material) > 8192) throw new Error('size')
+    const value = JSON.parse(material) as { origin?: unknown; key?: unknown }
+    if (value.origin !== 'https://maas.zxrc.com.cn:8090' || typeof value.key !== 'string'
+      || !/^p7k_[\x21-\x7e]+$/.test(value.key) || value.key.length > 4096) throw new Error('connection')
+    copyFileSync(source, join(dirname(applicationRoot), 'p7-company-connection.json'))
+  } catch {
+    throw new Error('The company installer requires its protected P7 connection resource.')
+  }
 }
 
 export default afterPack

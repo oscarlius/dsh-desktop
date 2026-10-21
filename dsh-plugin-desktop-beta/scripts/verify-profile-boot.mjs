@@ -19,6 +19,7 @@ import { DesktopPluginPackages } from '../lib/plugin-packages.js'
 import { prepareDesktopProfile } from '../lib/profile.js'
 import { DesktopProfileService } from '../lib/profile-service.js'
 import { createDesktopProfileBoot } from '../lib/profile-context.js'
+import { startCompanyUpdateLifecycle } from '../lib/company-update-lifecycle.js'
 
 /** Loader entry id of the Desktop shell row, which 0.1.7 uses as its settings namespace. */
 const DESKTOP_SETTINGS_ENTRY_ID = 'desktop-shell'
@@ -208,6 +209,15 @@ try {
     async requestRestart() {},
     prepareToQuit() {},
   }
+  runtime.startCompanyUpdates = policy => startCompanyUpdateLifecycle({
+    ...policy, isPackaged: false, canDownload: false,
+    statePath: join(home, 'company-update-state.json'), locale: () => runtime.locale,
+    registerTrayItem: item => runtime.registerTrayItem(item),
+    check: async () => ({ status: 'not-published' }),
+    confirm: async () => false,
+    download: async () => { throw new Error('The headless Profile fixture cannot install an update') },
+    notify() {}, reportDownloadError: async () => {},
+  })
   const pnpmBootstrap = {
     activeProfileName: 'desktop',
     activeProfileDir: prepared.profile.dir,
@@ -361,7 +371,7 @@ try {
   if (desktopSettings?.mode !== 'advanced') {
     throw new Error('assembled Host settings are missing the advanced desktop-shell mode')
   }
-  if (!trayItems.some(item => item.label() === 'Check for Updates…')) {
+  if (!trayItems.some(item => ['Check for Updates…', 'Check P7 updates…'].includes(item.label()))) {
     throw new Error('assembled desktop profile is missing the update tray command')
   }
   if (process.platform !== 'linux'
@@ -423,12 +433,27 @@ try {
     },
   })
   const html = await response.text()
+  if (process.argv.includes('--company-bootstrap')) {
+    const statusResponse = await fetch(new URL('/p7-company-models/status', expectedUrl), {
+      headers: { [BROWSER_ACCESS.rendererHeader.name]: BROWSER_ACCESS.rendererHeader.value, Cookie: cookie, Origin: new URL(expectedUrl).origin },
+    })
+    const status = await statusResponse.json()
+    if (statusResponse.status !== 200 || status.phase !== 'ready' || status.origin !== 'https://maas.zxrc.com.cn:8090'
+      || !status.models.length || !status.defaultModel) throw new Error('The fresh company Profile did not automatically load its public P7 catalog: ' + JSON.stringify({ httpStatus: statusResponse.status, phase: status.phase, origin: status.origin, message: status.message, modelCount: status.models?.length }))
+    if (!html.includes('__DSH_COMPANY_POLICY__')) throw new Error('The company browser policy is missing from the actual served page')
+    console.log(`Company bootstrap passed: ${status.models.length} public P7 model(s), default ${status.defaultModel}; no key input.`)
+  }
   if (process.argv.includes('--onboarding')) {
     const { verifyDesktopOnboardingBrowser } = await import('../../scripts/verify-desktop-onboarding-browser.mjs')
     await verifyDesktopOnboardingBrowser({
       url: expectedUrl, cookie,
       headers: { [BROWSER_ACCESS.rendererHeader.name]: BROWSER_ACCESS.rendererHeader.value },
     })
+  }
+  if (process.argv.includes('--company-settings')) {
+    const { verifyCompanySettingsBrowser } = await import('../../scripts/verify-company-settings-browser.mjs')
+    await verifyCompanySettingsBrowser({ url: expectedUrl, cookie,
+      headers: { [BROWSER_ACCESS.rendererHeader.name]: BROWSER_ACCESS.rendererHeader.value } })
   }
   if (response.status !== 200) {
     throw new Error(`assembled Web root returned HTTP ${String(response.status)}`)

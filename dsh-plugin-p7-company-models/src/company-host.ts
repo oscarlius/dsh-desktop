@@ -6,6 +6,7 @@ import { createSyncController, type ManagedConnection, type RecoveryFailureConte
 import { ManagedProviderStore, type SettingsPort } from './managed-provider-store.js'
 import { CompanyPersistence } from './persistence.js'
 import type { CompanyStatus } from './public-status.js'
+import type { CompanyBootstrap } from './bootstrap.js'
 
 export interface CompanyHostOptions {
   profileId: string
@@ -16,6 +17,7 @@ export interface CompanyHostOptions {
   readDefault(): { provider: string; model: string; reasoningEffort?: string }
   saveDefault(provider: string, model: string, reasoningEffort?: string): Promise<void>
   fetch?: P7Fetch
+  bootstrap?(): Promise<CompanyBootstrap | undefined>
 }
 export class CompanyHost {
   private origin: string | null = null
@@ -26,6 +28,7 @@ export class CompanyHost {
   private authorizationFailed = false
   private closed = false
   private defaultAlias: string | null = null
+  private bootstrapDisabled = false
   private command: Promise<void> = Promise.resolve()
   private application: Promise<void> = Promise.resolve()
   private connectionIntent = 0
@@ -34,7 +37,7 @@ export class CompanyHost {
     this.credentialRef = 'P7_DSH_' + createHash('sha256').update(options.profileId).digest('hex').slice(0, 24).toUpperCase() + '_API_KEY'
   }
   private async persist(): Promise<void> {
-    await this.options.persistence.save({ version: 1, origin: this.origin, ownedIds: this.owned?.ownedIds() ?? [], ...(this.snapshot ? { snapshot: this.snapshot } : {}) })
+    await this.options.persistence.save({ version: 1, origin: this.origin, ownedIds: this.owned?.ownedIds() ?? [], ...(this.snapshot ? { snapshot: this.snapshot } : {}), ...(this.bootstrapDisabled ? { bootstrapDisabled: true } : {}) })
   }
   async initialize(): Promise<void> {
     let ownedIds: string[] = []
@@ -44,6 +47,7 @@ export class CompanyHost {
       this.origin = saved.origin
       this.snapshot = saved.snapshot
       ownedIds = saved.ownedIds
+      this.bootstrapDisabled = saved.bootstrapDisabled === true
     } catch {
       corruptPersistence = true
       this.origin = null
@@ -75,6 +79,14 @@ export class CompanyHost {
       return
     }
     if (!this.origin && ownedIds.length === 0) await this.recoverOrphanedPersistence()
+    if (!this.origin && !this.bootstrapDisabled && !this.message) {
+      try {
+        const bootstrap = await this.options.bootstrap?.()
+        if (bootstrap) { await this.connect(bootstrap.origin, bootstrap.key); return }
+      } catch {
+        this.message = 'The packaged P7 connection is unavailable. Connect manually or reinstall the company client.'
+      }
+    }
     if (this.origin) {
       const key = await this.options.credentials.read(this.credentialRef)
       if (key) {
@@ -136,6 +148,7 @@ export class CompanyHost {
       await this.controller!.disconnect()
       this.origin = normalized
       this.message = null
+      this.bootstrapDisabled = false
       this.authorizationFailed = false
       this.defaultAlias = null
       await this.options.credentials.set(this.credentialRef, key)
@@ -205,6 +218,7 @@ export class CompanyHost {
       await this.controller!.disconnect()
       await this.options.credentials.unset(this.credentialRef)
       this.origin = null
+      this.bootstrapDisabled = true
       this.snapshot = undefined
       this.authorizationFailed = false
       this.defaultAlias = null
@@ -214,7 +228,7 @@ export class CompanyHost {
   }
   status(): CompanyStatus {
     const state = this.controller?.getState()
-    const phase = this.authorizationFailed || state?.status === 'reauth-required' ? 'unauthorized'
+    const phase = !this.controller ? 'syncing' : this.authorizationFailed || state?.status === 'reauth-required' ? 'unauthorized'
       : this.message ? 'error' : state?.status === 'syncing' ? 'syncing'
         : state?.status === 'ready' ? 'ready' : state?.status === 'stale' ? 'stale'
           : state?.error ? 'error' : 'disconnected'

@@ -4,6 +4,7 @@ import type { SettingsPort } from '../src/managed-provider-store.js'
 import type { PersistedCompanyState } from '../src/persistence.js'
 import { P7_PROVIDER_IDS } from '../src/map-providers.js'
 import { config } from './fixtures/config.js'
+import { DEFAULT_P7_PUBLIC_ORIGIN } from '../src/defaults.js'
 
 const state = () => {
   const store = { value: { version: 1 as const, origin: null, ownedIds: [] } as PersistedCompanyState, save: undefined as unknown, load: undefined as unknown }
@@ -18,16 +19,58 @@ const settings = (): SettingsPort & { mutations: unknown[]; data: { providers: R
 const response = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { ETag: '"revision-1"', ...headers } })
 const activeHosts = new Set<CompanyHost>()
 afterEach(async () => { await Promise.all([...activeHosts].map(host => host.dispose())); activeHosts.clear() })
-const createHost = (fetch: typeof globalThis.fetch, persisted = state(), port = settings()) => {
+const createHost = (fetch: typeof globalThis.fetch, persisted = state(), port = settings(), bootstrap?: () => Promise<{ origin: string; key: string } | undefined>) => {
   const credentials = { read: vi.fn(async () => undefined), set: vi.fn(async () => {}), unset: vi.fn(async () => {}) }
   const saveDefault = vi.fn(async (_provider: string, _model: string, _reasoningEffort?: string) => {})
   const readDefault = vi.fn((): { provider: string; model: string; reasoningEffort?: string } => ({ provider: 'local-provider', model: 'local-model', reasoningEffort: 'high' }))
-  const host = new CompanyHost({ profileId: 'profile-a', persistence: persisted, settings: port, modelNamespace: () => 'models', credentials, readDefault, saveDefault, fetch })
+  const host = new CompanyHost({ profileId: 'profile-a', persistence: persisted, settings: port, modelNamespace: () => 'models', credentials, readDefault, saveDefault, fetch, ...(bootstrap ? { bootstrap } : {}) })
   activeHosts.add(host)
   return { host, persisted, port, credentials, readDefault, saveDefault }
 }
 
 describe('CompanyHost integration', () => {
+  it('connects a fresh company installation without asking for a key and keeps it out of public status/state', async () => {
+    const app = createHost(vi.fn(async () => response(config())), state(), settings(), async () => ({ origin: DEFAULT_P7_PUBLIC_ORIGIN, key: 'p7k_packaged-test-only' }))
+    await app.host.initialize()
+    expect(app.host.status()).toMatchObject({ phase: 'ready', origin: DEFAULT_P7_PUBLIC_ORIGIN })
+    expect(app.credentials.set).toHaveBeenCalledWith(app.host.credentialRef, 'p7k_packaged-test-only')
+    expect(JSON.stringify([app.host.status(), app.persisted.value])).not.toContain('p7k_packaged-test-only')
+  })
+  it('respects an explicit disconnect on subsequent starts even with a packaged key', async () => {
+    const persisted = state()
+    const bootstrap = vi.fn(async () => ({ origin: DEFAULT_P7_PUBLIC_ORIGIN, key: 'p7k_packaged-test-only' }))
+    const app = createHost(vi.fn(async () => response(config())), persisted, settings(), bootstrap)
+    await app.host.initialize()
+    await app.host.disconnect()
+    expect(persisted.value.bootstrapDisabled).toBe(true)
+    const restarted = createHost(vi.fn(), persisted, settings(), bootstrap)
+    await restarted.host.initialize()
+    expect(restarted.host.status().phase).toBe('disconnected')
+    expect(bootstrap).toHaveBeenCalledTimes(1)
+  })
+  it('preserves an existing user connection instead of replacing it with the packaged one', async () => {
+    const persisted = state(); persisted.value.origin = 'https://chosen.example'
+    const bootstrap = vi.fn(async () => ({ origin: DEFAULT_P7_PUBLIC_ORIGIN, key: 'p7k_packaged-test-only' }))
+    const app = createHost(vi.fn(async () => response(config())), persisted, settings(), bootstrap)
+    app.credentials.read.mockResolvedValue('p7k_saved-test-only' as never)
+    await app.host.initialize()
+    expect(app.host.status()).toMatchObject({ phase: 'ready', origin: 'https://chosen.example' })
+    expect(bootstrap).not.toHaveBeenCalled()
+  })
+  it('automatically loads public P7 company models on startup using the saved dedicated key', async () => {
+    const persisted = state()
+    persisted.value = { version: 1, origin: DEFAULT_P7_PUBLIC_ORIGIN, ownedIds: [] }
+    const fetch = vi.fn(async () => response(config())) as unknown as typeof globalThis.fetch
+    const app = createHost(fetch, persisted)
+    app.credentials.read.mockResolvedValue('p7k_saved-company-key' as never)
+    await app.host.initialize()
+    expect(fetch).toHaveBeenCalledWith(`${DEFAULT_P7_PUBLIC_ORIGIN}/v1/desktop/model-config`, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer p7k_saved-company-key' }),
+    }))
+    expect(app.host.status()).toMatchObject({ phase: 'ready', origin: DEFAULT_P7_PUBLIC_ORIGIN })
+    expect(app.port.data.providers[P7_PROVIDER_IDS['openai-completions']]).toBeDefined()
+    expect(app.saveDefault).toHaveBeenCalled()
+  })
   it('finishes a stale background default compensation before applying a new connection default', async () => {
     vi.useFakeTimers()
     let releasePoll!: () => void

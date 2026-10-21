@@ -232,6 +232,8 @@ import {
 } from './session-projcache-recovery.ts'
 import {
   DESKTOP_APP_ID,
+  DESKTOP_ACCOUNT_ONBOARDING_ENABLED,
+  DESKTOP_COMPANY_SERVICE_ENABLED,
   DESKTOP_PACKAGE_NAME,
   DESKTOP_PRODUCT_NAME,
   DESKTOP_RELEASE_CHANNEL,
@@ -1300,7 +1302,10 @@ async function start(): Promise<void> {
     startupStage = 'profile-composition'
     lifecycleRecorder.transitionStartupStage(startupStage)
     const lanAddresses = desktopLanAddresses()
-    const legacyMarketSelection = readDesktopMarketStateForUserData(marketUserDataDir)
+    const persistedMarketSelection = readDesktopMarketStateForUserData(marketUserDataDir)
+    const legacyMarketSelection = DESKTOP_COMPANY_SERVICE_ENABLED && persistedMarketSelection.legacyDefaulted
+      ? { requested: 'dsh-market' as const, effective: 'dsh-market' as const, legacyDefaulted: true }
+      : persistedMarketSelection
     let profilePreferences = readDesktopProfilePreferences(marketUserDataDir, activeProfileDir)
     let marketSelection = profilePreferences === undefined
       ? legacyMarketSelection
@@ -1455,7 +1460,8 @@ async function start(): Promise<void> {
     runtime.setupOnboarding = {
       read: async () => ({ required: setupPending, edition: 'desktop', profile: activeProfileName,
         restartPending: setupRestartPending,
-        accountPending: safeModePaths === undefined && !setupPending && desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir),
+        accountOnboardingEnabled: DESKTOP_ACCOUNT_ONBOARDING_ENABLED,
+        accountPending: DESKTOP_ACCOUNT_ONBOARDING_ENABLED && safeModePaths === undefined && !setupPending && desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir),
         input: setupInput }),
       dismissAccount: async profile => {
         if (setupPending || profile !== activeProfileName || safeModePaths !== undefined) throw new Error('Desktop account setup is unavailable')
@@ -1463,7 +1469,7 @@ async function start(): Promise<void> {
       },
       applyPending: async profile => {
         if (setupPending || setupSaving || profile !== activeProfileName || safeModePaths !== undefined
-          || desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir)) throw new Error('Desktop settings are not ready to apply')
+          || (DESKTOP_ACCOUNT_ONBOARDING_ENABLED && desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir))) throw new Error('Desktop settings are not ready to apply')
         if (!setupRestartPending) return
         setupRestartPending = false
         setImmediate(() => {

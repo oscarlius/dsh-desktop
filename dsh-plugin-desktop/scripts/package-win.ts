@@ -2,6 +2,8 @@
 
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { DEFAULT_P7_PUBLIC_ORIGIN } from 'dsh-plugin-p7-company-models/defaults'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { prepareFsExtForElectron } from './prepare-fs-ext.ts'
@@ -73,7 +75,32 @@ export interface WindowsPackageOptions {
   ) => void
   /** Report non-secret packaging progress. */
   readonly log: (message: string) => void
+  /** Extra electron-builder configuration arguments for a constrained flavor. */
+  readonly builderArguments?: readonly string[]
+  /** Command used for the non-skippable preflight of a constrained flavor. */
+  readonly preflightCommand?: string
+  /** Ignore the ordinary CI preflight bypass for this packaging operation. */
+  readonly requirePackageCheck?: boolean
 }
+
+export const COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS = [
+  '--config.beforePack=scripts/company-update-before-pack.ts',
+  '--config.publish.provider=generic',
+  '--config.publish.url=https://maas.zxrc.com.cn:8090/v1/desktop/releases/companytest/',
+  '--config.publish.channel=latest',
+  '--config.appId=ai.deepseek.dsh.desktop.companytest',
+  '--config.productName=P7 DSH Company Test',
+  '--config.extraMetadata.dshDesktopFlavor=companytest',
+  '--config.win.artifactName=P7-DSH-Company-Test-${version}-${arch}-Portable.${ext}',
+  '--config.nsis.shortcutName=P7 DSH Company Test',
+  '--config.nsis.artifactName=P7-DSH-Company-Test-${version}-${arch}-Setup.${ext}',
+] as const
+
+const COMPANY_TEST_WINDOWS_PREFLIGHT = [
+  'corepack yarn market:check',
+  'corepack yarn aa:prepare-release --verify-release',
+  'corepack yarn workspace dsh-plugin-desktop check:win-package',
+].join(' && ')
 
 /**
  * Remove all certificate discovery and secret variables from an unsigned build.
@@ -122,6 +149,22 @@ export function createWindowsPackageOptions(verifier = './verify-win-installer.t
       : join(windowsRoot, 'System32', 'cmd.exe'),
     builderCli: require.resolve('electron-builder/cli.js'),
     prepareRuntime: () => {
+      if (process.env.DSH_COMPANY_TEST_WINDOWS === '1' && process.env.DSH_COMPANY_UPDATE_DISTRIBUTION !== '1') {
+        const destination = join(desktopRoot, '.desktop-build', 'company', 'p7-company-connection.json')
+        const source = process.env.DSH_P7_BOOTSTRAP_FILE ?? destination
+        try {
+          if (statSync(source).size > 8192) throw new Error('size')
+          const value = JSON.parse(readFileSync(source, 'utf8')) as { origin?: unknown; key?: unknown }
+          if (value.origin !== DEFAULT_P7_PUBLIC_ORIGIN || typeof value.key !== 'string'
+            || !/^p7k_[\x21-\x7e]+$/.test(value.key) || value.key.length > 4096) throw new Error('connection')
+          if (resolve(source) !== resolve(destination)) {
+            mkdirSync(dirname(destination), { recursive: true })
+            copyFileSync(source, destination)
+          }
+        } catch {
+          throw new Error('Company packaging requires a valid protected P7 connection file (DSH_P7_BOOTSTRAP_FILE).')
+        }
+      }
       prepareFsExtForElectron({ platform: 'win32', arch: 'x64', desktopRoot })
       verifyPreparedDesktopRuntime(desktopRoot, 'win32')
     },
@@ -164,14 +207,14 @@ export function packageWindowsArtifact(
   if (compression !== undefined) {
     options.log(`Packaging the ${artifact} with ${compression} compression.`)
   }
-  if (options.env.DSH_PACKAGE_CHECK_ALREADY_RAN !== '1') {
+  if (options.requirePackageCheck || options.env.DSH_PACKAGE_CHECK_ALREADY_RAN !== '1') {
     options.run(
       options.commandShell,
       [
         '/d',
         '/s',
         '/c',
-        'corepack yarn workspace dsh-plugin-desktop check:win-package',
+        options.preflightCommand ?? 'corepack yarn workspace dsh-plugin-desktop check:win-package',
       ],
       options.workspaceRoot,
       cleanEnvironment,
@@ -192,6 +235,7 @@ export function packageWindowsArtifact(
       '--config.win.signExecutable=false',
       '--config.npmRebuild=false',
       '--config.electronFuses.onlyLoadAppFromAsar=false',
+      ...(options.builderArguments ?? []),
       ...(compression === undefined ? [] : [`--config.win.compression=${compression}`]),
     ],
     options.desktopRoot,
@@ -215,12 +259,36 @@ export function packageWindowsInstaller(
   packageWindowsArtifact(options, 'nsis', 'installer')
 }
 
+/** Package the isolated internal P7 test installer without accepting CI gate bypasses. */
+export function packageCompanyTestWindowsInstaller(
+  options: WindowsPackageOptions = createWindowsPackageOptions('./company-test-windows-verify.mjs'),
+): void {
+  packageWindowsArtifact({
+    ...options,
+    builderArguments: [
+      ...COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS,
+      ...(options.env.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
+        ? ['--config.extraMetadata.dshDesktopUpdateDistribution=true'] : []),
+    ],
+    preflightCommand: COMPANY_TEST_WINDOWS_PREFLIGHT,
+    requirePackageCheck: true,
+  }, 'nsis', 'installer')
+}
+
 const invokedPath = process.argv[1]
 if (invokedPath !== undefined && resolve(invokedPath) === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--company-update')) {
+    process.env.DSH_COMPANY_TEST_WINDOWS = '1'
+    process.env.DSH_COMPANY_UPDATE_DISTRIBUTION = '1'
+  }
   try {
     // The interpreter payload is downloaded and assembled before the long package gate; the flow re-checks it right before electron-builder.
     await prepareDesktopInterpreters({ desktopRoot: resolve(dirname(fileURLToPath(import.meta.url)), '..') })
-    packageWindowsInstaller()
+    if (process.env.DSH_COMPANY_TEST_WINDOWS === '1') {
+      packageCompanyTestWindowsInstaller(createWindowsPackageOptions('./company-test-windows-verify.mjs'))
+    } else {
+      packageWindowsInstaller()
+    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = 1

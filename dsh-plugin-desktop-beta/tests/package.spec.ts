@@ -91,7 +91,7 @@ const dshResolution = (name: string): unknown =>
 describe('published package surface', () => {
   it('keeps the private workspace version-neutral and versions the Beta package', () => {
     expect(workspaceManifest.version).toBeUndefined()
-    expect(manifest.version).toBe('2.0.18-beta.2')
+    expect(manifest.version).toBe('2.0.18-beta.3')
   })
 
   it('runs all desktop editions and community market typechecks from the root command', () => {
@@ -868,7 +868,7 @@ describe('published package surface', () => {
 
   it('fixes the installed application identity', () => {
     expect(workspaceManifest.version).toBeUndefined()
-    expect(manifest.version).toBe('2.0.18-beta.2')
+    expect(manifest.version).toBe('2.0.18-beta.3')
     expect(manifest.name).toBe('dsh-plugin-desktop-beta')
     expect(manifest.bin).toEqual({
       'dsh-desktop-beta': 'lib/bin.js',
@@ -934,7 +934,7 @@ describe('published package surface', () => {
       allowToChangeInstallationDirectory: true,
       createDesktopShortcut: true,
       createStartMenuShortcut: true,
-      differentialPackage: false,
+      differentialPackage: true,
       shortcutName: 'DSH Desktop Beta',
       useZip: false,
       artifactName: 'DSH-Desktop-Beta-${version}-${arch}-Setup.${ext}',

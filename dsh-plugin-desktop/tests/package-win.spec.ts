@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   packageWindowsArtifact,
+  packageCompanyTestWindowsInstaller,
   packageWindowsInstaller,
   type WindowsPackageOptions,
 } from '../scripts/package-win.ts'
@@ -150,6 +151,27 @@ describe('Windows x64 installer packaging', () => {
       'Building an unsigned Windows x64 installer; Authenticode is a separate release step.',
       'Skipping the Windows package preflight; the package gate already passed.',
     ])
+  })
+
+  it('forces Market and AA provenance gates for the isolated company test installer', () => {
+    const calls: CommandCall[] = []
+    const value = {
+      ...options(calls),
+      env: { ...options(calls).env, DSH_PACKAGE_CHECK_ALREADY_RAN: '1' },
+      verifier: 'C:\\repo\\dsh-plugin-desktop\\scripts\\company-test-windows-verify.mjs',
+    }
+
+    packageCompanyTestWindowsInstaller(value)
+
+    expect(calls).toHaveLength(3)
+    expect(calls[0]?.args.at(-1)).toBe(
+      'corepack yarn market:check && corepack yarn aa:prepare-release --verify-release && corepack yarn workspace dsh-plugin-desktop check:win-package',
+    )
+    expect(calls[1]?.args).toContain('--config.appId=ai.deepseek.dsh.desktop.companytest')
+    expect(calls[1]?.args).toContain('--config.productName=P7 DSH Company Test')
+    expect(calls[1]?.args).toContain('--config.extraMetadata.dshDesktopFlavor=companytest')
+    expect(calls[1]?.args).toContain('--config.nsis.artifactName=P7-DSH-Company-Test-${version}-${arch}-Setup.${ext}')
+    expect(calls[2]?.args).toEqual(['C:\\repo\\dsh-plugin-desktop\\scripts\\company-test-windows-verify.mjs'])
   })
 
   it('overrides electron-builder compression only when requested', () => {

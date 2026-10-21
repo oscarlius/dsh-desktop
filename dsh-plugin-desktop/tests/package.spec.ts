@@ -894,7 +894,7 @@ describe('published package surface', () => {
       allowToChangeInstallationDirectory: true,
       createDesktopShortcut: true,
       createStartMenuShortcut: true,
-      differentialPackage: false,
+      differentialPackage: true,
       shortcutName: 'DSH Desktop',
       uninstallerIcon: 'build/app-icon.ico',
       useZip: false,

@@ -2,6 +2,8 @@
 
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { DEFAULT_P7_PUBLIC_ORIGIN } from 'dsh-plugin-p7-company-models/defaults'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { prepareFsExtForElectron } from './prepare-fs-ext.ts'
@@ -82,6 +84,10 @@ export interface WindowsPackageOptions {
 }
 
 export const COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS = [
+  '--config.beforePack=scripts/company-update-before-pack.ts',
+  '--config.publish.provider=generic',
+  '--config.publish.url=https://maas.zxrc.com.cn:8090/v1/desktop/releases/companytest/',
+  '--config.publish.channel=latest',
   '--config.appId=ai.deepseek.dsh.desktop.companytest',
   '--config.productName=P7 DSH Company Test',
   '--config.extraMetadata.dshDesktopFlavor=companytest',
@@ -143,6 +149,22 @@ export function createWindowsPackageOptions(verifier = './verify-win-installer.t
       : join(windowsRoot, 'System32', 'cmd.exe'),
     builderCli: require.resolve('electron-builder/cli.js'),
     prepareRuntime: () => {
+      if (process.env.DSH_COMPANY_TEST_WINDOWS === '1' && process.env.DSH_COMPANY_UPDATE_DISTRIBUTION !== '1') {
+        const destination = join(desktopRoot, '.desktop-build', 'company', 'p7-company-connection.json')
+        const source = process.env.DSH_P7_BOOTSTRAP_FILE ?? destination
+        try {
+          if (statSync(source).size > 8192) throw new Error('size')
+          const value = JSON.parse(readFileSync(source, 'utf8')) as { origin?: unknown; key?: unknown }
+          if (value.origin !== DEFAULT_P7_PUBLIC_ORIGIN || typeof value.key !== 'string'
+            || !/^p7k_[\x21-\x7e]+$/.test(value.key) || value.key.length > 4096) throw new Error('connection')
+          if (resolve(source) !== resolve(destination)) {
+            mkdirSync(dirname(destination), { recursive: true })
+            copyFileSync(source, destination)
+          }
+        } catch {
+          throw new Error('Company packaging requires a valid protected P7 connection file (DSH_P7_BOOTSTRAP_FILE).')
+        }
+      }
       prepareFsExtForElectron({ platform: 'win32', arch: 'x64', desktopRoot })
       verifyPreparedDesktopRuntime(desktopRoot, 'win32')
     },
@@ -243,7 +265,11 @@ export function packageCompanyTestWindowsInstaller(
 ): void {
   packageWindowsArtifact({
     ...options,
-    builderArguments: COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS,
+    builderArguments: [
+      ...COMPANY_TEST_WINDOWS_BUILD_ARGUMENTS,
+      ...(options.env.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
+        ? ['--config.extraMetadata.dshDesktopUpdateDistribution=true'] : []),
+    ],
     preflightCommand: COMPANY_TEST_WINDOWS_PREFLIGHT,
     requirePackageCheck: true,
   }, 'nsis', 'installer')
@@ -251,6 +277,10 @@ export function packageCompanyTestWindowsInstaller(
 
 const invokedPath = process.argv[1]
 if (invokedPath !== undefined && resolve(invokedPath) === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--company-update')) {
+    process.env.DSH_COMPANY_TEST_WINDOWS = '1'
+    process.env.DSH_COMPANY_UPDATE_DISTRIBUTION = '1'
+  }
   try {
     // The interpreter payload is downloaded and assembled before the long package gate; the flow re-checks it right before electron-builder.
     await prepareDesktopInterpreters({ desktopRoot: resolve(dirname(fileURLToPath(import.meta.url)), '..') })

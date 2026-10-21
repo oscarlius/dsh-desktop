@@ -5,6 +5,8 @@ export const SETUP_ONBOARDING_CHANNEL = 'dsh-desktop:setup-onboarding'
 export interface DesktopOnboardingSnapshot {
   required: boolean
   accountPending?: boolean
+  /** False for company-managed builds that use P7 without a DeepSeek account. */
+  accountOnboardingEnabled?: boolean
   /** Preferences saved in this process, awaiting an explicit final application. */
   restartPending?: boolean
   profile: string

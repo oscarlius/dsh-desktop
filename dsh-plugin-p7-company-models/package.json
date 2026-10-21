@@ -16,7 +16,11 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./defaults": {
+      "types": "./lib/defaults.d.ts",
+      "default": "./lib/defaults.js"
+    }
   },
   "files": [
     "lib/**",

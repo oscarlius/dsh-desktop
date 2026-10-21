@@ -42,6 +42,8 @@ const ALLOWED_LICENSES = new Set([
  * review any addition.
  */
 const NOTICE_LICENSES = new Set([
+  // sax 1.6 ships LICENSE.md; retain that text and list the package in notices.
+  'BlueOak-1.0.0',
   'LGPL-3.0-or-later',
   'Apache-2.0 AND LGPL-3.0-or-later',
 ])

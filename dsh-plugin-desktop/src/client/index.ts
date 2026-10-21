@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only service convergence for the launch-folder bridge's scoped inject.
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
-import { registerDesktopOnboarding } from './onboarding.tsx'
+import { registerDesktopOnboarding, registerCompanyBrowserOnboarding } from './onboarding.tsx'
 import { PluginControls, REMOTE_CONTROL_BUNDLE, registerPluginControls } from './plugin-controls.tsx'
 import { installPluginControlsStyles } from './plugin-controls-styles.ts'
 import { createElement } from 'react'
@@ -130,8 +130,10 @@ export const inject = [
 
 /** Register desktop-owned client surfaces for the current BrowserWindow mode. @param ctx - browser Cordis context. */
 export function apply(ctx: ClientContext): void {
+  const policy = (window as unknown as { __DSH_COMPANY_POLICY__?: { browserSearch?: string } }).__DSH_COMPANY_POLICY__
   const environment = parseDesktopClientEnvironment(window.location.search)
-  if (!environment) return
+    ?? parseDesktopClientEnvironment(policy?.browserSearch ?? '')
+  if (!environment) { registerCompanyBrowserOnboarding(ctx); return }
   ctx.effect(installUiDiagnostics, 'Desktop client failure diagnostics')
   ctx.effect(
     () => provideDesktopWindow(ctx, desktopWindowService(environment)),
@@ -148,7 +150,7 @@ export function apply(ctx: ClientContext): void {
     () => installSidebarFooterStyles(),
     'dsh-plugin-desktop: sidebar footer stacking styles',
   )
-  ctx.effect(
+  if ('dshDesktop' in window) ctx.effect(
     () => startRendererBootReporter(ctx.loader),
     'dsh-plugin-desktop: renderer boot health report',
   )

@@ -7,6 +7,7 @@ export const DESKTOP_RELEASE_IDENTITIES = Object.freeze({
     appId: 'ai.deepseek.dsh.desktop',
     homeDirectoryName: '.dsh',
     updatesEnabled: true,
+    accountOnboardingEnabled: true,
   }),
   beta: Object.freeze({
     releaseChannel: 'beta' as const,
@@ -15,6 +16,7 @@ export const DESKTOP_RELEASE_IDENTITIES = Object.freeze({
     appId: 'ai.deepseek.dsh.desktop.beta',
     homeDirectoryName: '.dsh-beta',
     updatesEnabled: true,
+    accountOnboardingEnabled: true,
   }),
   companytest: Object.freeze({
     // Test builds remain Beta-compatible only for existing profile metadata;
@@ -27,6 +29,7 @@ export const DESKTOP_RELEASE_IDENTITIES = Object.freeze({
     appId: 'ai.deepseek.dsh.desktop.companytest',
     homeDirectoryName: '.p7-dsh-companytest',
     updatesEnabled: false,
+    accountOnboardingEnabled: false,
   }),
 })
 
@@ -81,6 +84,8 @@ export const DESKTOP_PRODUCT_NAME = DESKTOP_PRODUCT_IDENTITY.productName
 export const DESKTOP_APP_ID = DESKTOP_PRODUCT_IDENTITY.appId
 export const DESKTOP_RELEASE_CHANNEL = DESKTOP_PRODUCT_IDENTITY.releaseChannel
 export const DESKTOP_HOME_DIRECTORY_NAME = DESKTOP_PRODUCT_IDENTITY.homeDirectoryName
+export const DESKTOP_ACCOUNT_ONBOARDING_ENABLED = DESKTOP_PRODUCT_IDENTITY.accountOnboardingEnabled
+export const DESKTOP_COMPANY_SERVICE_ENABLED = DESKTOP_PRODUCT_IDENTITY === DESKTOP_RELEASE_IDENTITIES.companytest
 export const DESKTOP_UPDATES_ENABLED = DESKTOP_PRODUCT_IDENTITY.updatesEnabled !== false
 
 /** Both Desktop package identities are launcher-owned, never Profile plugins. */

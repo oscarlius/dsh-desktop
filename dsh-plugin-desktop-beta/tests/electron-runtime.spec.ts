@@ -1,4 +1,7 @@
 import { readFileSync, unlinkSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { EventEmitter } from 'node:events'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DesktopShellSpec } from '../src/runtime.ts'
@@ -6,6 +9,8 @@ import { desktopTrayLabel } from '../src/tray-locale.ts'
 import { DESKTOP_FRAME_HEIGHT } from '../src/window-chrome.ts'
 
 const terminal = vi.hoisted(() => ({ open: vi.fn() }))
+const companyInstaller = vi.hoisted(() => ({ verify: vi.fn(async () => {}) }))
+vi.mock('../src/company-update-installer.ts', () => ({ verifyCompanyInstaller: companyInstaller.verify }))
 const diagnostics = vi.hoisted(() => ({ export: vi.fn() }))
 const updater = vi.hoisted(() => ({
   download: vi.fn(),
@@ -231,7 +236,7 @@ const electron = vi.hoisted(() => {
       dock: { setIcon: vi.fn() },
       getLocale: vi.fn(() => 'en-US'),
       getPreferredSystemLanguages: vi.fn(() => ['en-US']),
-      getPath: vi.fn((name: string) => {
+      getPath: vi.fn((name: string): string => {
         if (name === 'crashDumps') return '/tmp/dsh-desktop-user-data/Crashpad'
         if (name === 'downloads') return '/tmp/Downloads'
         return '/tmp/dsh-desktop-user-data'
@@ -276,7 +281,7 @@ const electron = vi.hoisted(() => {
     popup,
     nativeImage: { createFromPath },
     nativeTheme,
-    net: { fetch: vi.fn() },
+    net: { fetch: vi.fn(), request: vi.fn() },
     Notification,
     notifications,
     resetZoomLevel: () => { zoomLevel = 0 },
@@ -493,7 +498,7 @@ describe('Electron desktop runtime', () => {
     expect(options).not.toHaveProperty('titleBarOverlay')
     expect(electron.contentViews).toHaveLength(2)
     expect(electron.contentViews[1]?.options).toEqual({ webPreferences: {
-      preload: expect.stringMatching(/\/preload\.cjs$/),
+      preload: expect.stringMatching(/[\\/]preload\.cjs$/),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -2992,6 +2997,74 @@ describe('Electron desktop runtime', () => {
     expect(window?.setBackgroundMaterial).not.toHaveBeenCalled()
 
     await release()
+  })
+
+  it('aborts company installer redirects before following them and omits session credentials', async () => {
+    const request = Object.assign(new EventEmitter(), { setHeader: vi.fn(), followRedirect: vi.fn(), end: vi.fn(), abort: vi.fn() })
+    request.abort.mockImplementation(() => { request.emit('abort') })
+    electron.net.request.mockReturnValue(request)
+    const { requestDesktopArtifact } = await import('../src/electron-runtime.ts')
+    const pending = requestDesktopArtifact('https://maas.zxrc.com.cn:8090/ui/downloads/dsh/setup.exe', { credentials: 'omit', redirect: 'error' })
+    request.emit('redirect', 302, 'GET', 'https://attacker.example/setup.exe')
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(electron.net.request).toHaveBeenCalledWith(expect.objectContaining({ credentials: 'omit' }))
+    expect(request.followRedirect).not.toHaveBeenCalled()
+  })
+
+  it.each(['install', 'later', 'invalid-installer', 'withdrawn'] as const)('handles company update %s through native download and installation', async outcome => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    electron.app.isPackaged = true
+    const directory = await mkdtemp(join(tmpdir(), 'p7-native-update-'))
+    const getPath = electron.app.getPath.getMockImplementation()!
+    electron.app.getPath.mockImplementation((name: string) => name === 'userData' ? directory
+      : name === 'exe' ? 'C:\\Company\\P7 DSH Company Test.exe' : getPath(name))
+    const metadata = { published: true, channel: 'companytest', version: '99.0.0', releaseNotes: 'Company release',
+      downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/dsh/setup.exe', sha256: 'a'.repeat(64) }
+    electron.net.fetch.mockImplementation(async () => Response.json(metadata))
+    const artifactPath = join(directory, 'updates', 'P7-DSH-Company-Test-99.0.0-Setup.exe')
+    updater.download.mockResolvedValue(artifactPath)
+    companyInstaller.verify.mockReset()
+    companyInstaller.verify.mockResolvedValue(undefined)
+    if (outcome === 'invalid-installer') companyInstaller.verify.mockRejectedValueOnce(new Error('product mismatch'))
+    electron.dialog.showMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false })
+    if (outcome === 'later') electron.dialog.showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
+    if (outcome === 'withdrawn') {
+      electron.net.fetch.mockResolvedValueOnce(Response.json(metadata)).mockResolvedValueOnce(Response.json(metadata))
+        .mockResolvedValueOnce(Response.json({ published: false, channel: 'companytest' }))
+    }
+    const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
+    const runtime = new ElectronDesktopRuntime(async () => {})
+    const requestQuit = vi.fn()
+    const releaseShell = runtime.schedule({ ...spec, requestQuit })
+    const lifecycle = runtime.startCompanyUpdates({ enabled: true, initialDelayMs: 60_000, intervalMs: 60_000, requestTimeoutMs: 1000 })
+    try {
+      const task = runtime.checkCompanyUpdates()
+      if (outcome === 'install') {
+        await vi.waitFor(() => expect(childProcess.spawn).toHaveBeenCalled())
+        childProcess.emit('spawn')
+      }
+      await task
+      expect(electron.shell.openExternal).not.toHaveBeenCalled()
+      if (outcome === 'later') expect(updater.download).not.toHaveBeenCalled()
+      else expect(updater.download).toHaveBeenCalledWith(expect.objectContaining({ companyRelease: expect.objectContaining({ version: metadata.version, sha256: metadata.sha256 }), destinationPath: artifactPath }))
+      if (outcome === 'install') {
+        expect(companyInstaller.verify).toHaveBeenCalledTimes(2)
+        expect(childProcess.spawn).toHaveBeenCalledWith(artifactPath, [
+          '--updated',
+          '--force-run',
+          '/D=C:\\Company',
+        ], expect.objectContaining({ shell: false }))
+        expect(requestQuit).toHaveBeenCalledWith(0)
+      } else {
+        expect(childProcess.spawn).not.toHaveBeenCalled()
+        expect(requestQuit).not.toHaveBeenCalled()
+      }
+      if (outcome === 'invalid-installer' || outcome === 'withdrawn') expect(electron.dialog.showMessageBox).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'error' }))
+    } finally {
+      await lifecycle.dispose(); await releaseShell()
+      electron.app.getPath.mockImplementation(getPath)
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('restores the preceding native appearance when advanced loading fails', async () => {

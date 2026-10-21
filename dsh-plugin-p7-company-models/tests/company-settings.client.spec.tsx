@@ -6,6 +6,7 @@ import { createCompanyModelsApi } from '../src/client/api.js'
 import { CompanySettingsSection, type CompanySettingsSectionProps } from '../src/client/CompanySettingsSection.js'
 import { apply, NS } from '../src/client/index.js'
 import { en, type CompanySettingsLocaleKey } from '../src/client/locales.js'
+import { installCompanySettingsStyles } from '../src/client/company-settings-styles.js'
 
 const READY: CompanyStatus = {
   phase: 'ready', origin: 'https://models.example.com', revision: 'r7', lastSyncedAt: 1_700_000_000_000,
@@ -18,7 +19,7 @@ function json(value: unknown, status = 200): Response {
 
 const t = (key: CompanySettingsLocaleKey): string => en[key]
 
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); document.getElementById('dsh-p7-company-models-settings-styles')?.remove() })
 
 describe('P7 company-model settings API', () => {
   it('uses only same-origin endpoints and does not turn an error body into a user message', async () => {
@@ -59,6 +60,17 @@ describe('P7 company-model settings registration', () => {
       name: 'settings.section', id: 'p7-company-models', order: 60, locale: NS,
     }), CompanySettingsSection)
   })
+
+  it('injects the scoped settings style from the bundled client code', () => {
+    document.getElementById('dsh-p7-company-models-settings-styles')?.remove()
+    const dispose = installCompanySettingsStyles()
+    const style = document.getElementById('dsh-p7-company-models-settings-styles')
+    expect(style?.dataset.pluginCss).toBe('dsh-plugin-p7-company-models/settings')
+    expect(style?.textContent).toContain('.dshP7CompanySettingsInput')
+    expect(style?.textContent).toContain('@media (max-width: 640px)')
+    dispose()
+    expect(document.getElementById('dsh-p7-company-models-settings-styles')).toBeNull()
+  })
 })
 
 describe('P7 company-model settings section', () => {
@@ -75,13 +87,16 @@ describe('P7 company-model settings section', () => {
       connect: vi.fn(async () => READY), sync: vi.fn(async () => READY), disconnect: vi.fn(async () => ({ ...READY, phase: 'disconnected' as const, origin: null, revision: null, lastSyncedAt: null, defaultModel: null, models: [] })),
     }
     const props = { api, t } as unknown as CompanySettingsSectionProps
-    render(<CompanySettingsSection {...props} />)
+    const view = render(<CompanySettingsSection {...props} />)
     await screen.findByText('Disconnected')
-    fireEvent.change(screen.getByLabelText('Service URL'), { target: { value: 'https://models.example.com' } })
+    expect(screen.getByText('https://maas.zxrc.com.cn:8090')).toBeTruthy()
+    expect(screen.queryByLabelText('Service URL')).toBeNull()
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'only-for-this-request' } })
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    await waitFor(() => expect(api.connect).toHaveBeenCalledWith({ origin: 'https://models.example.com', apiKey: 'only-for-this-request' }, expect.any(AbortSignal)))
+    await waitFor(() => expect(api.connect).toHaveBeenCalledWith({ origin: 'https://maas.zxrc.com.cn:8090', apiKey: 'only-for-this-request' }, expect.any(AbortSignal)))
     await screen.findByText('P7 Default')
+    expect(view.container.querySelector('.dshP7CompanySettingsModel')).toBeTruthy()
+    expect(view.container.querySelector('.dshP7CompanySettingsDefinitionGrid')).toBeTruthy()
     expect(screen.queryByDisplayValue('only-for-this-request')).toBeNull()
     expect(screen.queryByRole('textbox', { name: 'P7 Default' })).toBeNull()
     expect(screen.getByText('r7')).toBeTruthy()
@@ -100,6 +115,7 @@ describe('P7 company-model settings section', () => {
     const props = { api, t } as unknown as CompanySettingsSectionProps
     const view = render(<CompanySettingsSection {...props} />)
     await screen.findByText('Disconnected')
+    fireEvent.click(screen.getByRole('button', { name: 'Change service address' }))
     fireEvent.change(screen.getByLabelText('Service URL'), { target: { value: 'https://models.example.com' } })
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'temporary-key' } })
     fireEvent.click(screen.getByRole('button', { name: 'Cancel this input' }))

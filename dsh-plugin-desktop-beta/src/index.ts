@@ -62,7 +62,7 @@ import {
   effectiveDesktopWindowMaterial,
   type DesktopWindowMaterial,
 } from './window-material.ts'
-import { DESKTOP_PRODUCT_NAME } from './product-identity.ts'
+import { DESKTOP_PRODUCT_NAME, DESKTOP_COMPANY_SERVICE_ENABLED } from './product-identity.ts'
 import { watchPlatformLogin, type PlatformLoginAccount } from './platform-login.ts'
 import type { DesktopSetupWizardSettings } from './setup-wizard-settings.ts'
 import {
@@ -223,6 +223,10 @@ export function apply(ctx: Context, config: DesktopShellConfig): void {
   )
   ctx.on('webserver/index-inject', table => {
     table.push(...desktopBootRecoveryInjections())
+    if (DESKTOP_COMPANY_SERVICE_ENABLED) table.push({ kind: 'global', name: '__DSH_COMPANY_POLICY__', value: {
+      accountOnboardingEnabled: false,
+      browserSearch: new URL(desktopRendererUrl(webServerPort, resolved.mode, runtime.platform, runtime.updates.currentVersion, 'off')).search,
+    } })
   })
   const desktopSettings = ctx.get('desktopSettingsController')
   if (desktopSettings !== undefined) {

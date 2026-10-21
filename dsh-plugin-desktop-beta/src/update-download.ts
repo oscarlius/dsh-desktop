@@ -4,6 +4,7 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import { chmod, lstat, mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import { companyInstallerUrl, type PublishedCompanyRelease } from './company-update-check.ts'
 import {
   compareSemVerVersions,
   DESKTOP_RELEASE_CHANNEL_HEADER,
@@ -55,6 +56,8 @@ export type UpdateArtifactRequest = (url: string, init: RequestInit) => Promise<
 
 /** Inputs for one user-confirmed installer download. */
 export interface DownloadDesktopUpdateOptions {
+  /** Company releases use their validated immutable URL and mandatory digest, never the upstream feed. */
+  readonly companyRelease?: PublishedCompanyRelease
   /** Host platform selecting the fixed endpoint and installer validation. */
   readonly platform: DesktopDownloadPlatform
   /** Stable release version used to validate the selected installer. */
@@ -136,23 +139,35 @@ const UPDATE_ARTIFACT_STATE_FILENAME = 'pending-installer.json'
 export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOptions): Promise<string> {
   const platform = validatedPlatform(options.platform)
   const channel = options.channel ?? 'stable'
-  validatedVersion(options.version, channel)
+  const company = options.companyRelease
+  if (company === undefined) validatedVersion(options.version, channel)
+  else {
+    validatedReleaseVersion(options.version)
+    if (platform !== 'win32' || company.version !== options.version) {
+      throw new UpdateDownloadError('invalid-options', 'The company installer does not match the requested platform or version.')
+    }
+    companyInstallerUrl(company.downloadUrl)
+    if (!/^[a-fA-F0-9]{64}$/u.test(company.sha256)) {
+      throw new UpdateDownloadError('invalid-options', 'Company installers require a SHA-256 digest.')
+    }
+  }
   const destinationPath = validatedArtifactPath(options.destinationPath, platform)
-  const expectedSha256 = normalizedExpectedDigest(options.expectedSha256)
+  const expectedSha256 = normalizedExpectedDigest(company?.sha256 ?? options.expectedSha256)
   const paths = await prepareDownloadPaths(destinationPath)
   throwIfAborted(options.signal)
 
   let response: Response
   let finalUrl: string
   try {
-    const settled = await options.request(DESKTOP_DOWNLOAD_URLS[platform], {
+    const settled = await options.request(company?.downloadUrl ?? DESKTOP_DOWNLOAD_URLS[platform], {
       method: 'GET',
-      headers: {
+      headers: company === undefined ? {
         [DESKTOP_RELEASE_CHANNEL_HEADER]: channel,
         [DESKTOP_TARGET_VERSION_HEADER]: options.version,
-      },
+      } : { Accept: 'application/octet-stream' },
       cache: 'no-store',
-      redirect: 'follow',
+      redirect: company === undefined ? 'follow' : 'error',
+      credentials: 'omit',
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
     response = settled.response
@@ -174,7 +189,10 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
     throw new UpdateDownloadError('empty-body', 'The update download service returned an empty body.')
   }
   try {
-    assertSecureDownloadUrl(finalUrl)
+    if (company === undefined) assertSecureDownloadUrl(finalUrl)
+    else if (companyInstallerUrl(finalUrl) !== company.downloadUrl) {
+      throw new UpdateDownloadError('redirect-origin', 'The company download changed its immutable address.')
+    }
     assertDeclaredSize(response)
   } catch (cause) {
     await discardResponseBody(response)

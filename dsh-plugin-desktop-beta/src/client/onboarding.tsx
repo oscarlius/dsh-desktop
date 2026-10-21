@@ -10,15 +10,28 @@ export type SetupNavigation = PropsRuntime<'onboarding.desktop.before'>['renderN
 export type SetupContent = (snapshot: DesktopOnboardingSnapshot, locale: 'zh' | 'en', finish: DesktopOnboardingBridge['finish'], renderNavigation: SetupNavigation) => ReactNode
 
 function pendingSnapshot(value: DesktopOnboardingSnapshot | null): DesktopOnboardingSnapshot | null {
-  return value?.required || value?.accountPending || value?.restartPending ? value : null
+  const next = value?.accountOnboardingEnabled === false ? { ...value, accountPending: false } : value
+  return next?.required || next?.accountPending || next?.restartPending ? next : null
 }
 
 export function registerDesktopOnboarding(ctx: Context, content: SetupContent): void {
   const bridge = (window as unknown as { dshDesktopSetup?: DesktopOnboardingBridge }).dshDesktopSetup
-  if (!bridge) return
+  if (!bridge) {
+    registerCompanyBrowserOnboarding(ctx)
+    return
+  }
   ctx.slots.inject('onboarding.desktop.before', () => ctx.slots.register({
     name: 'onboarding.desktop.before', inject: () => ({ bridge, content, zh: ctx.locale.getLocale().active.startsWith('zh') }),
   }, DesktopOnboarding))
+}
+
+/** Plain browser URLs have no native query markers or Electron preload bridge. */
+export function registerCompanyBrowserOnboarding(ctx: Context): void {
+  const policy = (window as unknown as { __DSH_COMPANY_POLICY__?: { accountOnboardingEnabled?: boolean } }).__DSH_COMPANY_POLICY__
+  if (policy?.accountOnboardingEnabled !== false) return
+  ctx.slots.inject('onboarding.desktop.before', () => ctx.slots.register({
+    name: 'onboarding.desktop.before', inject: () => ({}),
+  }, () => null))
 }
 
 function DesktopOnboarding({ bridge, content, zh, renderSurface, renderLoading, renderNext, renderNavigation, accountStatus, openLogin }: PropsRuntime<'onboarding.desktop.before'> & {
@@ -28,12 +41,19 @@ function DesktopOnboarding({ bridge, content, zh, renderSurface, renderLoading, 
   const [error, setError] = useState('')
   const [revision, refresh] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [accountOnboardingEnabled, setAccountOnboardingEnabled] = useState(true)
+  const acceptSnapshot = (value: DesktopOnboardingSnapshot | null) => {
+    setAccountOnboardingEnabled(value?.accountOnboardingEnabled !== false)
+    setSnapshot(pendingSnapshot(value))
+  }
+  // The official account continuation is optional in company-managed builds.
+  const renderContinuation = () => accountOnboardingEnabled ? renderNext() : null
   useEffect(() => {
     let disposed = false
     void bridge.read().then(value => {
       if (disposed) return
       setError('')
-      setSnapshot(pendingSnapshot(value))
+      acceptSnapshot(value)
     }).catch(cause => { if (!disposed) setError(String(cause)) })
     return () => { disposed = true }
   }, [bridge, revision])
@@ -50,7 +70,7 @@ function DesktopOnboarding({ bridge, content, zh, renderSurface, renderLoading, 
     <p>{error}</p><Button onClick={() => { setError(''); setSnapshot(undefined); refresh(value => value + 1) }}>{zh ? '重试' : 'Retry'}</Button>
   </div>)
   if (snapshot === undefined) return renderLoading()
-  if (snapshot === null) return renderNext()
+  if (snapshot === null) return renderContinuation()
   if (!snapshot.required && !snapshot.accountPending) {
     // Use the official transient portal; onboarding-only styles are inactive
     // once this continuation returns to the ordinary shell.
@@ -61,7 +81,7 @@ function DesktopOnboarding({ bridge, content, zh, renderSurface, renderLoading, 
       catch (cause) { setError(String(cause)) }
       finally { setBusy(false) }
     }
-    return <>{renderNext()}<Toast tone="success" holdMs={8000}
+    return <>{renderContinuation()}<Toast tone="success" holdMs={8000}
       text={zh ? '桌面设置已保存，下次重启后生效。' : 'Desktop settings saved. They will take effect after restarting.'}
       actions={[{ label: zh ? '立即重启' : 'Restart now', onClick: () => { void apply() } }]}
       onDone={() => { setSnapshot(null) }} /></>
@@ -96,7 +116,7 @@ function DesktopOnboarding({ bridge, content, zh, renderSurface, renderLoading, 
     await bridge.finish(profile, selection)
     // Stable/Beta keep this renderer alive; Next still applies through its Host restart.
     if (snapshot.edition === 'desktop') {
-      try { setSnapshot(pendingSnapshot(await bridge.read())) }
+      try { acceptSnapshot(await bridge.read()) }
       catch (cause) { setError(String(cause)) }
     }
     else setSnapshot(selection === undefined ? null : undefined)

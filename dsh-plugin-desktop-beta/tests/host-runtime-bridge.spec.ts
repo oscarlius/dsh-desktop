@@ -5,6 +5,34 @@ import { bindNativeRuntime, createHostRuntime, runtimeSnapshot } from '../src/ho
 import { desktopTrayLabel } from '../src/tray-locale.ts'
 import type { DesktopLocale, DesktopRuntime, DesktopShellSpec, DesktopTrayItem } from '../src/runtime.ts'
 
+it('forwards the company update lifecycle through Host IPC and disposes the native owner', async () => {
+  const { port1, port2 } = new MessageChannel()
+  const [parent, child] = [port1, port2].map(port => new HostRpc({
+    send: value => port.postMessage(value),
+    listen: receive => { port.on('message', receive); return () => { port.off('message', receive) } },
+  })) as [HostRpc, HostRpc]
+  const checkNow = vi.fn(async () => {})
+  const dispose = vi.fn(async () => {})
+  const startCompanyUpdates = vi.fn(() => ({ checkNow, dispose }))
+  const native = {
+    platform: 'win32', locale: 'en',
+    updates: { isPackaged: true, canDownload: true, currentVersion: '2.0.18', statePath: '/tmp/update' },
+    startCompanyUpdates,
+  } as unknown as DesktopRuntime
+  const release = bindNativeRuntime(parent, native)
+  try {
+    const host = createHostRuntime(child, runtimeSnapshot(native))
+    const lifecycle = host.startCompanyUpdates?.({ enabled: true, initialDelayMs: 1, intervalMs: 1, requestTimeoutMs: 1 })
+    expect(lifecycle).toBeDefined()
+    await host.mountScheduled()
+    expect(startCompanyUpdates).toHaveBeenCalledWith({ enabled: true, initialDelayMs: 1, intervalMs: 1, requestTimeoutMs: 1 })
+    await lifecycle!.checkNow()
+    expect(checkNow).toHaveBeenCalledOnce()
+    await release()
+    expect(dispose).toHaveBeenCalledOnce()
+  } finally { await release(); parent.close(); child.close(); port1.close(); port2.close() }
+})
+
 it.each(['zh', undefined] as const)('synchronizes tray language at boot and on changes (preference: %s)', async initialPreference => {
   const { port1, port2 } = new MessageChannel()
   const [parent, child] = [port1, port2].map(port => new HostRpc({

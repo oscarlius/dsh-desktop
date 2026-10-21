@@ -183,6 +183,11 @@ export interface DesktopShellSpec extends DesktopWindowConfig {
 
 /** Electron bootstrap capability supplied before the profile tree mounts. */
 export interface DesktopRuntime {
+  /** Own company polling, prompts and installer work in the same Host generation. */
+  startCompanyUpdates?(policy: import('./update-lifecycle.ts').DesktopUpdatePolicy): import('./update-lifecycle.ts').DesktopUpdateLifecycle
+  /** User-invoked company release query; no automatic installer execution. */
+  checkCompanyUpdates?(): Promise<void>
+
   /** Apply live metadata tracing preferences in the Electron supervisor. */
   configureDeveloperLogging?(preferences: { developerLogging?: boolean; logLevel: 'debug' | 'info' | 'warn' | 'error' }): void
 

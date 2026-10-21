@@ -1,3 +1,4 @@
+import { DESKTOP_COMPANY_SERVICE_ENABLED } from './product-identity.ts'
 /** Electron implementation of the launcher-provided desktop runtime capability. */
 
 import {
@@ -8,12 +9,18 @@ import {
   Notification,
   shell,
 } from 'electron'
+import { checkCompanyRelease, type CompanyReleaseResult, type PublishedCompanyRelease } from './company-update-check.ts'
+import { startCompanyUpdateLifecycle } from './company-update-lifecycle.ts'
+import { verifyCompanyInstaller } from './company-update-installer.ts'
+import { downloadCompanyDifferentialUpdate } from './company-differential-update.ts'
+import type { DesktopUpdateLifecycle, DesktopUpdatePolicy } from './update-lifecycle.ts'
+import { lstat, mkdir } from 'node:fs/promises'
 import { configureDeveloperLogging, type DiagnosticPreferences } from './developer-logging.ts'
 import { spawn } from 'node:child_process'
 import { NextTransitionNotice } from './next-transition-notice.ts'
 import { RemoteControlOffer, remoteControlOfferCopy } from './remote-control-offer.ts'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { desktopTerminalStateDirectory, openDesktopTerminal } from './desktop-terminal.ts'
@@ -112,7 +119,8 @@ const NULL_BODY_STATUSES = new Set([204, 205, 304])
  */
 export function requestDesktopArtifact(url: string, init: RequestInit): Promise<UpdateArtifactResponse> {
   return new Promise((resolve, reject) => {
-    const request = net.request({ url, method: 'GET', redirect: 'manual' })
+    const request = net.request({ url, method: 'GET', redirect: 'manual',
+      ...(init.credentials === undefined ? {} : { credentials: init.credentials }) })
     let finalUrl = url
     let settled = false
     const headers = new Headers(init.headers)
@@ -120,6 +128,7 @@ export function requestDesktopArtifact(url: string, init: RequestInit): Promise<
     headers.set('cache-control', 'no-cache')
     headers.forEach((value, key) => { request.setHeader(key, value) })
     request.on('redirect', (_status, _method, redirectUrl) => {
+      if (init.redirect === 'error') { request.abort(); return }
       finalUrl = redirectUrl
       request.followRedirect()
     })
@@ -200,6 +209,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   private readonly workspaceAdmission: ElectronWorkspaceAdmission
   private readonly nextTransitionNotice: NextTransitionNotice
   private updateCleanupTask: Promise<void> | undefined
+  private companyUpdateLifecycle: DesktopUpdateLifecycle | undefined
   private rendererHealthGate: DesktopRendererHealthGate | undefined
   private rendererBootHealthy = false
   private profileCreateWindow: ProfileCreateWindow | undefined
@@ -246,6 +256,105 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       downloadAndOpen: (version, signal, channel, installerSha256) => this.downloadAndOpenUpdate(version, signal, channel, installerSha256),
       notify: notification => { this.showNotification(notification) },
     }
+  }
+
+  /** Bind company updates to the active Host generation. */
+  startCompanyUpdates(policy: DesktopUpdatePolicy): DesktopUpdateLifecycle {
+    if (this.companyUpdateLifecycle !== undefined) throw new Error('P7 updates are already active')
+    const lifecycle = startCompanyUpdateLifecycle({
+      ...policy, isPackaged: app.isPackaged, canDownload: app.isPackaged && this.platform === 'win32',
+      statePath: join(app.getPath('userData'), 'updates', 'company-state.json'), locale: () => this.locale,
+      registerTrayItem: item => this.registerTrayItem(item),
+      check: signal => checkCompanyRelease(PRODUCT_VERSION, (url, init) => net.fetch(url, init), signal),
+      confirm: release => this.confirmCompanyUpdate(release),
+      download: (release, signal, onProgress) => this.downloadCompanyUpdate(release, signal, onProgress),
+      notify: (notification, onClick) => { this.showNotification(notification, onClick) },
+      reportDownloadError: async () => {
+        const zh = this.locale === 'zh'
+        await this.showDesktopMessageBox({ type: 'error', title: zh ? 'P7 更新未完成' : 'P7 update failed',
+          message: zh ? '下载、校验或安装启动失败' : 'The installer could not be downloaded, verified or started',
+          detail: zh ? '当前版本、配置和数据保持不变。请稍后点击“检查 P7 更新”重试。' : 'Your current installation, settings and data are unchanged. Check for P7 updates to retry.' })
+      },
+    })
+    this.companyUpdateLifecycle = lifecycle
+    return { checkNow: () => lifecycle.checkNow(), dispose: async () => {
+      if (this.companyUpdateLifecycle === lifecycle) this.companyUpdateLifecycle = undefined
+      await lifecycle.dispose()
+    } }
+  }
+
+  /** Native chrome, settings and tray use the same company update flow. */
+  async checkCompanyUpdates(): Promise<void> {
+    if (this.companyUpdateLifecycle === undefined) throw new Error('P7 update checking is unavailable')
+    await this.companyUpdateLifecycle.checkNow()
+  }
+
+  private async confirmCompanyUpdate(result: CompanyReleaseResult | null): Promise<boolean> {
+    const zh = this.locale === 'zh'
+    if (result === null) {
+      await this.showDesktopMessageBox({ type: 'error', title: zh ? 'P7 客户端更新' : 'P7 client updates',
+        message: zh ? '暂时无法连接 P7 更新服务' : 'P7 updates are temporarily unavailable',
+        detail: zh ? '请检查公网连接后重试。' : 'Check your network connection and try again.' })
+      return false
+    }
+    if (result.status === 'not-published') {
+      await this.showDesktopMessageBox({ type: 'info', title: zh ? 'P7 客户端更新' : 'P7 client updates',
+        message: zh ? 'P7 尚未发布客户端版本' : 'P7 has not published a client release yet' })
+      return false
+    }
+    const available = result.status === 'update-available' && app.isPackaged && this.platform === 'win32'
+    const answer = await this.showDesktopMessageBox({ type: 'info',
+      title: zh ? 'P7 客户端更新' : 'P7 client updates',
+      message: result.status === 'update-available' ? (zh ? `发现 P7 新版本 ${result.version}` : `P7 version ${result.version} is available`)
+        : (zh ? `当前已是 P7 最新版本（${PRODUCT_VERSION}）` : `You are running the latest P7 version (${PRODUCT_VERSION})`),
+      detail: `${result.releaseNotes}\n\n${zh ? '更新会保留当前配置、登录信息、会话和工作区数据。' : 'Updating preserves your settings, sign-in, sessions and workspace data.'}${!available && result.status === 'update-available' ? (zh ? '\n请使用已安装的 Windows 公司版进行更新。' : '\nUpdate from an installed Windows company edition.') : ''}`,
+      buttons: available ? (zh ? ['下载更新', '稍后'] : ['Download update', 'Later']) : [zh ? '确定' : 'OK'],
+      defaultId: available ? 1 : 0, cancelId: available ? 1 : 0, noLink: true,
+    })
+    return available && answer.response === 0
+  }
+
+  private async downloadCompanyUpdate(release: PublishedCompanyRelease, signal: AbortSignal,
+    onProgress: (received: number, total: number | undefined) => void): Promise<void> {
+    if (this.platform !== 'win32' || !app.isPackaged) throw new Error('P7 Windows installer is unavailable')
+    const directory = join(app.getPath('userData'), 'updates')
+    await mkdir(directory, { recursive: true, mode: 0o700 })
+    const destinationPath = join(directory, `P7-DSH-Company-Test-${release.version}-Setup.exe`)
+    let cached = false
+    try {
+      const file = await lstat(destinationPath)
+      if (file.isFile() && !file.isSymbolicLink()) {
+        await verifyCompanyInstaller(destinationPath, release, signal)
+        cached = true
+      }
+    } catch { signal.throwIfAborted() }
+    const artifactPath = cached ? destinationPath : release.updaterFeedUrl !== undefined ? await downloadCompanyDifferentialUpdate({
+      release, signal: AbortSignal.any([signal, AbortSignal.timeout(30 * 60 * 1000)]), onProgress,
+      log: message => { this.logError(`P7 updater: ${message}`) },
+    }) : await downloadDesktopUpdate({
+      platform: 'win32', version: release.version, companyRelease: release,
+      destinationPath,
+      request: requestDesktopArtifact, signal: AbortSignal.any([signal, AbortSignal.timeout(30 * 60 * 1000)]), onProgress,
+    })
+    await verifyCompanyInstaller(artifactPath, release, signal)
+    await recordDesktopUpdateArtifact(app.getPath('userData'), { platform: 'win32', version: release.version, path: artifactPath })
+    const zh = this.locale === 'zh'
+    const answer = await this.showDesktopMessageBox({ type: 'info', title: zh ? 'P7 更新已就绪' : 'P7 update ready',
+      message: zh ? `版本 ${release.version} 已下载并通过校验` : `Version ${release.version} is downloaded and verified`,
+      detail: zh ? '请先保存正在编辑的内容。安装将退出并重新打开客户端，保留当前配置、会话和工作区数据。' : 'Save your work. Installation closes and reopens the app, preserving settings, sessions and workspace data.',
+      buttons: zh ? ['退出并安装', '稍后'] : ['Exit and install', 'Later'], defaultId: 1, cancelId: 1, noLink: true,
+    })
+    if (answer.response !== 0) return
+    signal.throwIfAborted()
+    const latest = await checkCompanyRelease(PRODUCT_VERSION, (url, init) => net.fetch(url, init), AbortSignal.any([signal, AbortSignal.timeout(15_000)]))
+    if (latest.status !== 'update-available' || latest.version !== release.version || latest.downloadUrl !== release.downloadUrl || latest.sha256 !== release.sha256
+      || latest.updaterFeedUrl !== release.updaterFeedUrl || latest.sha512 !== release.sha512 || latest.size !== release.size) throw new Error('P7 release changed before installation')
+    await verifyCompanyInstaller(artifactPath, release, signal)
+    const spec = this.scheduled
+    if (spec === undefined) throw new Error('P7 has no active shell to exit for installation')
+    await this.launchWindowsUpdateInstaller(artifactPath, dirname(app.getPath('exe')))
+    this.quitting = true
+    spec.requestQuit(0)
   }
 
   /** Log an Electron-scope error to the sink, falling back to stderr without a logger. */
@@ -372,6 +481,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
           developerTools: () => { this.toggleDeveloperTools() },
           exportDiagnostics: () => this.exportDiagnostics(),
           checkForUpdates: async () => {
+            if (DESKTOP_COMPANY_SERVICE_ENABLED) { await this.checkCompanyUpdates(); return }
             const command = [...this.trayItems.values()].find(item => item.id === 'check-for-updates')
             if (command === undefined || command.enabled?.() === false) throw new Error('Desktop update check is unavailable')
             await command.invoke()
@@ -780,13 +890,13 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     }
   }
 
-  private showNotification(notification: DesktopNotification): void {
+  private showNotification(notification: DesktopNotification, onClick?: () => void): void {
     if (!Notification.isSupported()) return
     const nativeNotification = new Notification({
       title: notification.title,
       body: notification.body,
     })
-    nativeNotification.once('click', () => { this.show() })
+    nativeNotification.once('click', () => { this.show(); onClick?.() })
     nativeNotification.show()
   }
 
@@ -987,11 +1097,15 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   }
 
   /** Start the downloaded NSIS installer visibly before releasing the current process. */
-  private async launchWindowsUpdateInstaller(installerPath: string): Promise<void> {
+  private async launchWindowsUpdateInstaller(installerPath: string, installDirectory?: string): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       let child: ReturnType<typeof spawn>
       try {
-        child = spawn(installerPath, ['--updated', '--force-run'], {
+        child = spawn(installerPath, [
+          '--updated',
+          '--force-run',
+          ...(installDirectory === undefined ? [] : [`/D=${installDirectory}`]),
+        ], {
           detached: true,
           stdio: 'ignore',
           shell: false,

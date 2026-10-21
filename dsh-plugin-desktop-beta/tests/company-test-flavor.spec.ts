@@ -20,10 +20,12 @@ describe('company test product flavor', () => {
       appId: 'ai.deepseek.dsh.desktop.companytest',
       homeDirectoryName: '.p7-dsh-companytest',
       updatesEnabled: false,
+      accountOnboardingEnabled: false,
     })
     expect(desktopProductIdentityForManifest(undefined)).toMatchObject({
       productName: 'DSH Desktop Beta',
       updatesEnabled: true,
+      accountOnboardingEnabled: true,
     })
   })
 
