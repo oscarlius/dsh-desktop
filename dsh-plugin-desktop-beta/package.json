@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.18-beta.15.build.2026102101",
+  "version": "2.0.18-beta.15.build.2026102102",
   "description": "DSH Desktop Beta: an Electron shell composed as a DeepSeek Harness Cordis plugin",
   "desktopName": "dsh-desktop-beta.desktop",
   "license": "MIT",

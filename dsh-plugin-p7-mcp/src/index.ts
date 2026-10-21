@@ -14,6 +14,17 @@ export { P7McpClient, P7McpError } from './client.js'
 export const name = 'p7-managed-mcp'
 export const inject = ['p7Account', 'tools', 'credentials', 'profileContext']
 
+type PublicMcpToolStatus = { phase: 'syncing' | 'registered' | 'unavailable'; tools: { name: string }[] }
+const TOOL_STATUS_REGISTRY = Symbol.for('dsh.p7.mcp-tool-status.registry')
+function toolStatusRegistry(): Map<string, PublicMcpToolStatus> {
+  const host = globalThis as typeof globalThis & { [TOOL_STATUS_REGISTRY]?: Map<string, PublicMcpToolStatus> }
+  return host[TOOL_STATUS_REGISTRY] ??= new Map()
+}
+function publishToolStatus(profileId: string, phase: PublicMcpToolStatus['phase'], names: readonly string[] = []): void {
+  toolStatusRegistry().set(profileId, { phase, tools: names.map(name => ({ name })) })
+}
+function clearToolStatus(profileId: string): void { toolStatusRegistry().delete(profileId) }
+
 // Peer-isolated runtime packages can expose distinct Cordis declaration identities.
 // Declare the capabilities this plugin consumes against its own Context as well.
 declare module '@deepseek-ai/cordis' {
@@ -39,6 +50,7 @@ export function apply(ctx: Context): void {
   let generation = 0; let disposed = false; let fingerprint = ''
   const owned: Array<() => void> = []
   const clear = (): void => { for (const dispose of owned.splice(0)) dispose(); fingerprint = '' }
+  publishToolStatus(ctx.profileContext.dir, 'syncing')
   const sync = async (): Promise<void> => {
     const current = ++generation
     try {
@@ -55,16 +67,20 @@ export function apply(ctx: Context): void {
         },
       }))
       clear()
-      try { for (const definition of definitions) owned.push(ctx.tools.register(definition)); fingerprint = next }
+      try {
+        for (const definition of definitions) owned.push(ctx.tools.register(definition))
+        fingerprint = next
+        publishToolStatus(ctx.profileContext.dir, 'registered', tools.map(tool => publicToolName(tool.name)))
+      }
       catch { clear(); throw new Error('Company tool namespace conflict') }
     } catch {
-      if (!disposed && generation === current) clear()
+      if (!disposed && generation === current) { clear(); publishToolStatus(ctx.profileContext.dir, 'unavailable') }
     }
   }
-  const unsubscribe = account.subscribe(() => { generation++; clear(); void sync() })
-  ctx.on('credentials/reference-updated', updated => { if (updated === ref) { generation++; clear(); void sync() } })
+  const unsubscribe = account.subscribe(() => { generation++; clear(); publishToolStatus(ctx.profileContext.dir, 'syncing'); void sync() })
+  ctx.on('credentials/reference-updated', updated => { if (updated === ref) { generation++; clear(); publishToolStatus(ctx.profileContext.dir, 'syncing'); void sync() } })
   const timer = setInterval(() => { void sync() }, 20_000)
   timer.unref()
   void sync()
-  ctx.effect(() => () => { disposed = true; generation++; clearInterval(timer); unsubscribe(); clear() }, 'p7-mcp lifecycle')
+  ctx.effect(() => () => { disposed = true; generation++; clearInterval(timer); unsubscribe(); clear(); clearToolStatus(ctx.profileContext.dir) }, 'p7-mcp lifecycle')
 }

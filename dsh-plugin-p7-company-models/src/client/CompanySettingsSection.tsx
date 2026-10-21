@@ -17,6 +17,14 @@ export type CompanySettingsSectionProps = PropsRuntime<'settings.section'> & Pro
 function statusKey(phase: CompanyStatus['phase']): CompanySettingsLocaleKey {
   return phase === 'syncing' ? 'syncing' : phase
 }
+function toolStatusKey(phase: CompanyStatus['tools']['phase']): CompanySettingsLocaleKey {
+  return phase === 'registered' ? 'toolsRegistered' : phase === 'syncing' ? 'toolsSyncing' : 'toolsUnavailable'
+}
+function toolLabel(name: string, t: CompanySettingsSectionProps['t']): string | undefined {
+  if (name === 'mcp__p7__gildata__FinQuery') return t('toolGildata')
+  if (name === 'mcp__p7__search__web_search') return t('toolWebSearch')
+  return undefined
+}
 
 function dateValue(value: number | null, t: CompanySettingsSectionProps['t']): string {
   return value === null ? t('never') : new Date(value).toLocaleString()
@@ -234,6 +242,12 @@ export function CompanySettingsSection({ api: suppliedApi, t }: CompanySettingsS
           {model.inputModalities?.map(modality => <span className="dshP7CompanySettingsBadge" key={modality}>{modality}</span>)}
         </div>}
       </li>)}</ul> : <p className="dshP7CompanySettingsEmpty">{t('noModels')}</p>}
+    </section>
+    <section className="dshP7CompanySettingsCatalog" aria-labelledby="p7-company-models-tools-title">
+      <div className="dshP7CompanySettingsStatusHeader"><h3 id="p7-company-models-tools-title">{t('tools')}</h3><span className="dshP7CompanySettingsBadge" data-phase={status?.tools.phase ?? 'syncing'}>{t(toolStatusKey(status?.tools.phase ?? 'syncing'))}</span></div>
+      <p className="dshP7CompanySettingsIntro">{t('toolsIntro')}</p>
+      {status?.tools.tools.length ? <ul className="dshP7CompanySettingsToolList">{status.tools.tools.map(tool => <li className="dshP7CompanySettingsTool" key={tool.name}>{toolLabel(tool.name, t) && <span>{toolLabel(tool.name, t)}</span>}<code>{tool.name}</code></li>)}</ul> : <p className="dshP7CompanySettingsEmpty">{t('noTools')}</p>}
+      <p className="dshP7CompanySettingsNotice">{t('toolUsageNotice')}</p>
     </section>
   </section>
 }

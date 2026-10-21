@@ -49,6 +49,10 @@ const STYLES = `
 .dshP7CompanySettingsModel code { min-width: 0; overflow-wrap: anywhere; color: var(--dsw-alias-label-secondary, #5d6470); font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Consolas, monospace); font-size: 12px; line-height: 18px; }
 .dshP7CompanySettingsModelMeta { display: flex; flex-wrap: wrap; gap: 6px; }
 .dshP7CompanySettingsModelMeta .dshP7CompanySettingsBadge { overflow-wrap: anywhere; }
+.dshP7CompanySettingsToolList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.dshP7CompanySettingsTool { display: grid; gap: 4px; min-width: 0; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); border-radius: 8px; background: color-mix(in srgb, var(--dsw-alias-bg-module-platform, #fff) 92%, var(--dsw-alias-interactive-bg-hover, #f3f4f6)); }
+.dshP7CompanySettingsTool > span { color: var(--dsw-alias-label-primary, #1f2329); font-size: 13px; line-height: 20px; font-weight: 500; }
+.dshP7CompanySettingsTool code { overflow-wrap: anywhere; color: var(--dsw-alias-label-primary, #1f2329); font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Consolas, monospace); font-size: 12px; line-height: 18px; }
 .dshP7CompanySettingsEmpty { padding: 14px; border: 1px dashed var(--dsw-alias-border-l2, #d1d5db); border-radius: 10px; background: color-mix(in srgb, var(--dsw-alias-bg-module-platform, #fff) 92%, var(--dsw-alias-interactive-bg-hover, #f3f4f6)); }
 @media (max-width: 640px) { .dshP7CompanySettings { gap: 18px; } .dshP7CompanySettingsCard { padding: 14px; } .dshP7CompanySettingsDefinitionGrid { grid-template-columns: 1fr; gap: 0; } .dshP7CompanySettingsActions > .dshP7CompanySettingsButton { flex: 1 1 auto; } }
 @media (prefers-color-scheme: dark) { .dshP7CompanySettingsCard { box-shadow: none; } .dshP7CompanySettingsInput { background: var(--dsw-alias-bg-module-platform, #1b1d22); } }

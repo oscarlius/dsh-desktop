@@ -325,9 +325,12 @@ function validatedVersion(version: string, channel: DesktopReleaseChannel = 'sta
 function validatedReleaseVersion(version: string): string {
   const parsed = parseSemVer(version)
   const isStable = parsed?.prerelease.length === 0
-  const isBeta = parsed?.prerelease.length === 2
+  const isBeta = parsed !== null
     && parsed.prerelease[0] === 'beta'
-    && /^[0-9]+$/u.test(parsed.prerelease[1]!)
+    && /^[0-9]+$/u.test(parsed.prerelease[1] ?? '')
+    && (parsed.prerelease.length === 2 || (parsed.prerelease.length === 4
+      && parsed.prerelease[2] === 'build'
+      && /^[1-9][0-9]*$/u.test(parsed.prerelease[3]!)))
   const isNext = parseCanonicalChannelVersion(version, 'next') !== null
   if (parsed === null || parsed.version !== version || (!isStable && !isBeta && !isNext)) {
     throw new UpdateDownloadError('invalid-options', 'The update version must belong to a supported release channel.')

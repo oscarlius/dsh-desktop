@@ -11,6 +11,7 @@ import { installCompanySettingsStyles } from '../src/client/company-settings-sty
 const READY: CompanyStatus = {
   phase: 'ready', origin: 'https://models.example.com', revision: 'r7', lastSyncedAt: 1_700_000_000_000,
   defaultModel: 'p7-default', models: [{ id: 'p7-default', displayName: 'P7 Default' }], message: null,
+  tools: { phase: 'registered', tools: [{ name: 'mcp__p7__gildata__FinQuery' }, { name: 'mcp__p7__search__web_search' }] },
 }
 const ACCOUNT_PROFILE = { userId: 'u1', organizationId: 'o1', displayName: 'Ada', role: 'employee', deviceId: 'd1', sessionId: 's1', scopes: [] }
 const SIGNED_IN = { phase: 'signed-in' as const, profile: ACCOUNT_PROFILE, expiresAt: Date.now() + 60_000, authorizationUrl: null, upgradeUrl: null, message: null }
@@ -105,6 +106,20 @@ describe('P7 company-model settings section', () => {
     expect(screen.queryByDisplayValue('only-for-this-request')).toBeNull()
     expect(screen.queryByRole('textbox', { name: 'P7 Default' })).toBeNull()
     expect(screen.getByText('r7')).toBeTruthy()
+  })
+
+  it('shows Host-registered MCP/search tools without claiming that this conversation used them', async () => {
+    const api = {
+      status: vi.fn(async () => READY), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(),
+      accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(async () => PENDING), accountLogout: vi.fn(async () => SIGNED_OUT), accountUsage: vi.fn(async () => USAGE),
+    }
+    render(<CompanySettingsSection {...({ api, t } as unknown as CompanySettingsSectionProps)} />)
+    expect(await screen.findByText('Gildata financial data query')).toBeTruthy()
+    expect(screen.getByText('Web search')).toBeTruthy()
+    expect(screen.getByText('mcp__p7__gildata__FinQuery')).toBeTruthy()
+    expect(screen.getByText('mcp__p7__search__web_search')).toBeTruthy()
+    expect(screen.getByText('Registered')).toBeTruthy()
+    expect(screen.getByText(/may not call one every turn/)).toBeTruthy()
   })
 
   it('lets the user cancel the current key input and aborts a pending request on unmount', async () => {

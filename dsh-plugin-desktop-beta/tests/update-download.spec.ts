@@ -483,6 +483,39 @@ describe('desktop update installer download', () => {
 })
 
 describe('desktop update artifact cleanup', () => {
+  it.each(['2.0.18-beta.15.build.0', '2.0.18-beta.15.build.01', '2.0.18-beta.15.build.test', '2.0.18-beta.15.build.2.extra'])(
+    'rejects malformed company internal version %s', async version => {
+      const userDataPath = await temporaryDirectory()
+      const path = join(userDataPath, 'installer.exe')
+      await writeFile(path, windowsArtifact())
+      await expectFailure(recordDesktopUpdateArtifact(userDataPath, { platform: 'win32', version, path }), 'invalid-options')
+    },
+  )
+
+  it('records and resolves company internal builds after a verified download', async () => {
+    const userDataPath = await temporaryDirectory()
+    const downloads = await temporaryDirectory()
+    const version = '2.0.18-beta.15.build.2026102102'
+    const artifact = windowsArtifact()
+    const path = join(downloads, `P7-DSH-Company-Test-${version}-x64-Setup.exe`)
+    const release = {
+      status: 'update-available' as const, version, releaseNotes: 'Internal build',
+      downloadUrl: `https://maas.zxrc.com.cn:8090/ui/downloads/dsh/companytest/${version}/P7-DSH-Company-Test-${version}-x64-Setup.exe`,
+      sha256: createHash('sha256').update(artifact).digest('hex'),
+    }
+    await downloadDesktopUpdate({ platform: 'win32', version, companyRelease: release,
+      destinationPath: path, request: async () => chunkedResponse([artifact], {}, release.downloadUrl) })
+    const record = { platform: 'win32' as const, version, path }
+    await recordDesktopUpdateArtifact(userDataPath, record)
+    for (const installed of ['2.0.18-beta.15', '2.0.18-beta.15.build.2026102101']) {
+      await expect(pendingDesktopUpdateArtifact(userDataPath, installed, 'win32')).resolves.toBeUndefined()
+    }
+    await expect(pendingDesktopUpdateArtifact(userDataPath, version, 'win32')).resolves.toEqual(record)
+    await resolveDesktopUpdateArtifact(userDataPath, record, false)
+    await expect(access(path)).resolves.toBeUndefined()
+    await expect(pendingDesktopUpdateArtifact(userDataPath, version, 'win32')).resolves.toBeUndefined()
+  })
+
   it('rejects malformed cleanup state with a typed failure', async () => {
     const userDataPath = await temporaryDirectory()
     const updates = join(userDataPath, 'updates')

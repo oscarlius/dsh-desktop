@@ -6,6 +6,7 @@ import { createSyncController, type ManagedConnection, type RecoveryFailureConte
 import { ManagedProviderStore, type SettingsPort } from './managed-provider-store.js'
 import { CompanyPersistence } from './persistence.js'
 import type { CompanyStatus } from './public-status.js'
+import { readP7McpToolStatus } from './mcp-tool-status.js'
 import type { CompanyBootstrap } from './bootstrap.js'
 
 export interface CompanyHostOptions {
@@ -276,6 +277,7 @@ export class CompanyHost {
       lastSyncedAt: state?.lastSuccessAt ?? this.snapshot?.appliedAt ?? null,
       defaultModel: this.snapshot?.config.defaultModel ?? null,
       models: this.snapshot?.config.models.map(({ id, displayName, api, contextWindow, maxOutputTokens, inputModalities }) => ({ id, displayName, api, contextWindow, maxOutputTokens, inputModalities: [...inputModalities] })) ?? [],
+      tools: readP7McpToolStatus(this.options.profileId),
       message: this.message ?? (phase === 'unauthorized' ? 'P7 access is no longer authorized. Reconnect with a valid key.' : state?.error ? 'P7 synchronization failed. The previous valid catalog is retained when available.' : null),
     }
   }

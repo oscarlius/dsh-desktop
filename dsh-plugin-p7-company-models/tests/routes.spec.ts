@@ -15,7 +15,7 @@ const createApp = async () => {
   const handlers = new Map<string, (req: IncomingMessage, res: ServerResponse) => Promise<void>>()
   let origin = ''
   const web: CompanyWebServer = { getOrigin: () => origin, register: route => { handlers.set(route.path, route.handler); return () => { handlers.delete(route.path) } } }
-  const host = { status: vi.fn(() => ({ phase: 'ready', origin: 'https://p7.example', revision: 'r1', lastSyncedAt: null, defaultModel: 'admin', models: [], message: null })), connect: vi.fn(async () => {}), sync: vi.fn(async () => {}), disconnect: vi.fn(async () => {}) }
+  const host = { status: vi.fn(() => ({ phase: 'ready', origin: 'https://p7.example', revision: 'r1', lastSyncedAt: null, defaultModel: 'admin', models: [], tools: { phase: 'registered', tools: [{ name: 'mcp__p7__search__web_search' }] }, message: null })), connect: vi.fn(async () => {}), sync: vi.fn(async () => {}), disconnect: vi.fn(async () => {}) }
   const dispose = registerCompanyRoutes(web, host as never)
   const server = createServer((req, res) => { const handler = handlers.get(req.url ?? ''); if (!handler) { res.statusCode = 404; res.end(); return }; void handler(req, res) })
   const port = await listen(server); origin = `http://127.0.0.1:${port}`
@@ -31,6 +31,7 @@ describe('company host routes', () => {
       const allowed = await call(app.port, API_PATHS.status, 'GET', { Host: `127.0.0.1:${app.port}`, Origin: app.origin })
       expect(allowed.status).toBe(200)
       expect(allowed.headers['cache-control']).toBe('no-store')
+      expect(allowed.body).toContain('mcp__p7__search__web_search')
       const method = await call(app.port, API_PATHS.status, 'POST', { Host: `127.0.0.1:${app.port}`, Origin: app.origin })
       expect(method.status).toBe(405); expect(method.headers.allow).toBe('GET')
     } finally { await app.close() }
