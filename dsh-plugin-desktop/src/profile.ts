@@ -1610,6 +1610,10 @@ export function prepareDesktopProfile(
     if (companyModels?.name !== 'dsh-plugin-p7-company-models') {
       throw new Error(`${BIN_NAME}: company Desktop profile is missing ${P7_COMPANY_MODELS_ROW_ID}`)
     }
+    const p7WebSearch = rows.get('p7-web-search')
+    if (p7WebSearch?.name !== 'dsh-plugin-p7-web-search') {
+      throw new Error(`${BIN_NAME}: company Desktop profile is missing p7-web-search`)
+    }
     patches.push(
       { id: ACCOUNT_SETTINGS_ROW_ID, config: { ...rowConfig(accountSettings), contactSource: COMPANY_CONTACT_SOURCE } },
       { id: P7_COMPANY_MODELS_ROW_ID, config: {
@@ -1681,6 +1685,12 @@ export function prepareDesktopProfile(
       // instruction to launch the operating system's default browser.
       openBrowser: false,
       trustedHosts: desktopTrustedHosts,
+      // The sealed Company build owns the P7 credential lifecycle and chooses
+      // its governed search provider. Ordinary Desktop distributions preserve
+      // the configured/default web provider.
+      ...(DESKTOP_COMPANY_SERVICE_ENABLED && webRuntimeConfig.searchProvider === undefined
+        ? { searchProvider: 'p7' }
+        : {}),
     },
   })
   const connectionPatch = connectionTrustPatch(rows.get('connection'), desktopTrustedHosts)

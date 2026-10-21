@@ -8,6 +8,12 @@
 - insert:
     - id: p7-company-models
       name: dsh-plugin-p7-company-models
+    # Registered, deliberately NOT selected: the web seam raises a hard
+    # WEB_PROVIDER_CONFIGURED_UNAVAILABLE for a selected-but-unavailable provider,
+    # so a host without a stored P7 key would lose web search entirely. Select it
+    # per profile with DSH_WEB_SEARCH_PROVIDER=p7 once the key is enrolled.
+    - id: p7-web-search
+      name: dsh-plugin-p7-web-search
     - id: desktop-shell
       name: dsh-plugin-desktop
       config:

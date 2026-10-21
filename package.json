@@ -9,6 +9,7 @@
   },
   "workspaces": [
     "dsh-plugin-p7-company-models",
+    "dsh-plugin-p7-web-search",
     "dsh-plugin-desktop",
     "dsh-plugin-desktop-beta",
     "dsh-desktop-next",
@@ -748,8 +749,8 @@
   },
   "scripts": {
     "build": "yarn market:prepare && yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop build && yarn workspace dsh-plugin-desktop-beta build && yarn workspace dsh-desktop-next build",
-    "typecheck": "yarn workspace dsh-plugin-p7-company-models typecheck && yarn workspace dsh-plugin-desktop typecheck && yarn workspace dsh-plugin-desktop-beta typecheck && yarn workspace dsh-community-market typecheck && yarn workspace dsh-desktop-next typecheck",
-    "test": "yarn workspace dsh-plugin-p7-company-models test && yarn workspace dsh-plugin-desktop test && yarn workspace dsh-plugin-desktop-beta test && yarn workspace dsh-community-market test && yarn workspace dsh-desktop-next test",
+    "typecheck": "yarn workspace dsh-plugin-p7-company-models typecheck && yarn workspace dsh-plugin-p7-web-search typecheck && yarn workspace dsh-plugin-desktop typecheck && yarn workspace dsh-plugin-desktop-beta typecheck && yarn workspace dsh-community-market typecheck && yarn workspace dsh-desktop-next typecheck",
+    "test": "yarn workspace dsh-plugin-p7-company-models test && yarn workspace dsh-plugin-p7-web-search test && yarn workspace dsh-plugin-desktop test && yarn workspace dsh-plugin-desktop-beta test && yarn workspace dsh-community-market test && yarn workspace dsh-desktop-next test",
     "test:bilingual-docs": "node --test scripts/bilingual-docs.test.mjs",
     "check:bilingual-docs": "yarn test:bilingual-docs && node scripts/verify-bilingual-docs.mjs",
     "test:architecture-gates": "node --test scripts/market-dependency-direction.test.mjs",
@@ -757,7 +758,7 @@
     "check:vendored-runtime": "node scripts/sync-vendored-runtime.mjs --check --channel stable && node scripts/sync-vendored-runtime.mjs --check --channel beta",
     "check:desktop-variants": "node scripts/verify-desktop-variants.mjs",
     "check:layout": "node scripts/run-parallel.mjs \"node --test scripts/prepare-dsh-market.test.mjs scripts/agents-anywhere-release-policy.test.mjs scripts/bilingual-docs.test.mjs scripts/market-dependency-direction.test.mjs scripts/inspector-compat.test.mjs scripts/export-app-icons.test.mjs\" \"node scripts/verify-bilingual-docs.mjs\" \"node scripts/verify-market-dependency-direction.mjs\" \"node scripts/sync-vendored-runtime.mjs --check --channel stable\" \"node scripts/sync-vendored-runtime.mjs --check --channel beta\" \"node scripts/verify-desktop-variants.mjs\" \"node scripts/export-app-icons.mjs --check\" \"node scripts/verify-layout.mjs\"",
-    "check": "yarn workspace dsh-plugin-p7-company-models check && node scripts/run-parallel.mjs \"yarn check:layout\" \"yarn test:aa-connector\" \"yarn workspace dsh-community-fabric check\" \"yarn workspace dsh-community-market check\" && node scripts/run-parallel.mjs \"yarn workspace dsh-plugin-desktop check\" \"yarn workspace dsh-plugin-desktop-beta check\" \"yarn workspace dsh-desktop-next check\"",
+    "check": "yarn workspace dsh-plugin-p7-company-models check && yarn workspace dsh-plugin-p7-web-search check && node scripts/run-parallel.mjs \"yarn check:layout\" \"yarn test:aa-connector\" \"yarn workspace dsh-community-fabric check\" \"yarn workspace dsh-community-market check\" && node scripts/run-parallel.mjs \"yarn workspace dsh-plugin-desktop check\" \"yarn workspace dsh-plugin-desktop-beta check\" \"yarn workspace dsh-desktop-next check\"",
     "dev": "yarn market:prepare && yarn aa:prepare-release && yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dev",
     "start": "yarn market:prepare && yarn workspace dsh-plugin-p7-company-models build && yarn workspace dsh-plugin-desktop start",
     "package:dir": "yarn market:prepare && yarn aa:prepare-release && yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop package:dir",

@@ -11234,6 +11234,7 @@ __metadata:
     clsx: "npm:^2.1.1"
     dsh-community-market: "npm:0.1.0-dev.0"
     dsh-plugin-p7-company-models: "workspace:*"
+    dsh-plugin-p7-web-search: "workspace:*"
     dshmarket: "npm:1.66.45"
     electron: "npm:44.0.0"
     electron-builder: "npm:26.15.7"
@@ -11474,6 +11475,7 @@ __metadata:
     clsx: "npm:^2.1.1"
     dsh-community-market: "npm:0.1.0-dev.0"
     dsh-plugin-p7-company-models: "workspace:*"
+    dsh-plugin-p7-web-search: "workspace:*"
     dshmarket: "npm:1.66.45"
     electron: "npm:44.0.0"
     electron-builder: "npm:26.15.7"
@@ -11562,6 +11564,31 @@ __metadata:
     "@deepseek-ai/dsh-settings": 0.2.1-rc.2
     "@deepseek-ai/schemastery": ^3.18.5
     react: 18.3.1
+  languageName: unknown
+  linkType: soft
+
+"dsh-plugin-p7-web-search@workspace:*, dsh-plugin-p7-web-search@workspace:dsh-plugin-p7-web-search":
+  version: 0.0.0-use.local
+  resolution: "dsh-plugin-p7-web-search@workspace:dsh-plugin-p7-web-search"
+  dependencies:
+    "@deepseek-ai/cordis": "npm:4.0.5"
+    "@deepseek-ai/dsh-app-boot": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-credentials": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-http-proxy": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-launch-environment": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-llm": "npm:0.2.1-rc.2"
+    "@deepseek-ai/dsh-web": "npm:0.2.1-rc.2"
+    "@deepseek-ai/schemastery": "npm:^3.18.5"
+    "@types/node": "npm:^22.20.0"
+    typescript: "npm:6.0.3"
+    vitest: "npm:4.1.8"
+  peerDependencies:
+    "@deepseek-ai/cordis": 4.0.5
+    "@deepseek-ai/dsh-app-boot": 0.2.1-rc.2
+    "@deepseek-ai/dsh-credentials": 0.2.1-rc.2
+    "@deepseek-ai/dsh-launch-environment": 0.2.1-rc.2
+    "@deepseek-ai/dsh-llm": 0.2.1-rc.2
+    "@deepseek-ai/dsh-web": 0.2.1-rc.2
   languageName: unknown
   linkType: soft
 
