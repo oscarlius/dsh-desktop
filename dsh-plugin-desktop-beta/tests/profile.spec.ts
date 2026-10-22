@@ -489,6 +489,25 @@ virtualStoreDirMaxLength: 60
     }
   })
 
+  it('requires personal login for fresh and legacy Company profiles', async () => {
+    await withCompanyProfileModule(profile => {
+      const home = temporaryHome()
+      const prepared = profile.prepareDesktopProfile(undefined, home, 'win32')
+      const company = (patches: typeof prepared.patches) => composeEntries([patches]).find(row => row.id === 'p7-company-models')
+      expect(company(prepared.patches)?.config).toEqual(expect.objectContaining({ requirePersonalLogin: true }))
+
+      const dir = profile.ensureDesktopProfile(home)
+      writeFileSync(join(dir, 'cordis.patch.yml'), [
+        '- id: p7-company-models',
+        '  config:',
+        '    requirePersonalLogin: false',
+        '',
+      ].join('\n'))
+      expect(company(profile.prepareDesktopProfile(undefined, home, 'win32').patches)?.config)
+        .toEqual(expect.objectContaining({ requirePersonalLogin: true }))
+    })
+  })
+
   it('merges a frozen LAN IPv4 snapshot into existing Web runtime trust', () => {
     const home = temporaryHome()
     writeFileSync(join(home, 'cordis.patch.yml'), [

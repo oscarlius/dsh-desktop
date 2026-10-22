@@ -5,6 +5,15 @@ const profile = { userId: 'u1', organizationId: 'o1', displayName: 'Ada', role: 
 const token = (accessToken: string, refreshToken = 'refresh-1') => ({ accessToken, refreshToken, expiresAt: Date.now() + 120_000, tokenType: 'Bearer', profile })
 
 describe('AccountBroker', () => {
+  it('keeps the personal-token resolver mandatory when the company profile requires login', async () => {
+    const broker = new AccountBroker({ origin: () => 'https://p7.example', profileId: 'required-profile', requirePersonalLogin: true })
+    try {
+      broker.setPersonalMode(false)
+      expect(broker.usesPersonalToken()).toBe(true)
+      expect(broker.connection().usesPersonalToken()).toBe(true)
+      await expect(broker.connection().getValidAccessToken()).rejects.toThrow('sign-in is required')
+    } finally { await broker.dispose() }
+  })
   it('accepts the actual P7 ISO timestamp response shape for login and tokens', async () => {
     let start: Record<string, unknown> | undefined
     const broker = new AccountBroker({ origin: () => 'https://p7.example', profileId: 'iso-profile', openBrowser: () => {}, fetch: async (input, init) => {

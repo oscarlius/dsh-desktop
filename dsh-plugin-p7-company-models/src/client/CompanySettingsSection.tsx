@@ -199,6 +199,17 @@ export function CompanySettingsSection({ api: suppliedApi, t }: CompanySettingsS
   }
 
   const phase = status?.phase ?? 'syncing'
+  const loginGate = status?.loginRequired === true && account?.phase !== 'signed-in'
+  if (loginGate) return <section className="dshP7CompanySettings dshP7CompanyLoginGate" aria-labelledby="p7-company-login-title">
+    <header className="dshP7CompanySettingsHeader"><h2 id="p7-company-login-title">{t('loginRequiredTitle')}</h2><p className="dshP7CompanySettingsIntro">{t('loginRequiredIntro')}</p></header>
+    {error !== undefined && <p className="dshP7CompanySettingsAlert" role="alert">{error}</p>}
+    <section className="dshP7CompanySettingsCard" aria-label={t('accountTitle')}>
+      <div className="dshP7CompanySettingsStatusHeader"><h3>{t('accountTitle')}</h3><span className="dshP7CompanySettingsBadge" data-phase={account?.phase ?? 'signed-out'}>{accountBadge(account, t)}</span></div>
+      <p>{account?.message ?? t('loginRequiredStatus')}</p>
+      {account?.phase === 'upgrade-required' && account.upgradeUrl && <p><a href={account.upgradeUrl} target="_blank" rel="noreferrer">{t('downloadUpdate')}</a></p>}
+      <div className="dshP7CompanySettingsActions"><button className="dshP7CompanySettingsButton" type="button" disabled={accountBusy || account?.phase === 'pending'} onClick={() => { void signIn() }}>{t(account?.phase === 'pending' ? 'accountPending' : 'signIn')}</button><button className="dshP7CompanySettingsButton dshP7CompanySettingsButtonSecondary" type="button" disabled={accountBusy} onClick={() => { void refreshAccount(false) }}>{t('refreshLoginStatus')}</button></div>
+    </section>
+  </section>
   return <section className="dshP7CompanySettings" aria-labelledby="p7-company-models-title">
     <header className="dshP7CompanySettingsHeader">
       <h2 id="p7-company-models-title">{t('title')}</h2>

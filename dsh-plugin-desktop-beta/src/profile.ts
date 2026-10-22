@@ -1630,6 +1630,7 @@ export function prepareDesktopProfile(
       { id: ACCOUNT_SETTINGS_ROW_ID, config: { ...rowConfig(accountSettings), contactSource: COMPANY_CONTACT_SOURCE } },
       { id: P7_COMPANY_MODELS_ROW_ID, config: {
         ...rowConfig(companyModels),
+        requirePersonalLogin: true,
         bootstrapFile: process.env.DSH_P7_BOOTSTRAP_FILE ?? join(dirname(INSTALL_ANCHOR), '..', 'p7-company-connection.json'),
       } },
     )

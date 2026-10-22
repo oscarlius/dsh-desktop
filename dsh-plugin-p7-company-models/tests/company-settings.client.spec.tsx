@@ -4,11 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CompanyStatus } from '../src/public-status.js'
 import { createCompanyModelsApi } from '../src/client/api.js'
 import { CompanySettingsSection, type CompanySettingsSectionProps } from '../src/client/CompanySettingsSection.js'
+import { CompanyLoginGate } from '../src/client/CompanyLoginGate.js'
 import { apply, NS } from '../src/client/index.js'
 import { en, type CompanySettingsLocaleKey } from '../src/client/locales.js'
 import { installCompanySettingsStyles } from '../src/client/company-settings-styles.js'
 
 const READY: CompanyStatus = {
+  loginRequired: false,
   phase: 'ready', origin: 'https://models.example.com', revision: 'r7', lastSyncedAt: 1_700_000_000_000,
   defaultModel: 'p7-default', models: [{ id: 'p7-default', displayName: 'P7 Default' }], message: null,
   tools: { phase: 'registered', tools: [{ name: 'mcp__p7__gildata__FinQuery' }, { name: 'mcp__p7__search__web_search' }] },
@@ -25,7 +27,7 @@ function json(value: unknown, status = 200): Response {
 
 const t = (key: CompanySettingsLocaleKey): string => en[key]
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); document.getElementById('dsh-p7-company-models-settings-styles')?.remove() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); globalThis.__DSH_COMPANY_POLICY__ = undefined; document.getElementById('dsh-p7-company-models-settings-styles')?.remove() })
 
 describe('P7 company-model settings API', () => {
   it('uses only same-origin endpoints and does not turn an error body into a user message', async () => {
@@ -62,6 +64,7 @@ describe('P7 company-model settings registration', () => {
     apply(ctx as never)
     expect(localeRegister).toHaveBeenCalledWith(NS, expect.objectContaining({ en, zh: expect.any(Object) }))
     expect(inject).toHaveBeenCalledWith('settings.section', expect.any(Function))
+    expect(inject).toHaveBeenCalledWith('shell.overlay', expect.any(Function))
     expect(register).toHaveBeenCalledWith(expect.objectContaining({
       name: 'settings.section', id: 'p7-company-models', order: 60, locale: NS,
     }), CompanySettingsSection)
@@ -76,6 +79,68 @@ describe('P7 company-model settings registration', () => {
     expect(style?.textContent).toContain('@media (max-width: 640px)')
     dispose()
     expect(document.getElementById('dsh-p7-company-models-settings-styles')).toBeNull()
+  })
+})
+
+describe('P7 company login shell gate', () => {
+  it('blocks the shell before Host status returns when the company policy requires personal login', () => {
+    globalThis.__DSH_COMPANY_POLICY__ = { requirePersonalLogin: true }
+    const api = { status: vi.fn(() => new Promise<CompanyStatus>(() => {})), accountStatus: vi.fn(() => new Promise<typeof SIGNED_OUT>(() => {})), accountLogin: vi.fn() }
+    render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.getByText('Sign in to your company Feishu account')).toBeTruthy()
+  })
+
+  it('keeps the policy gate when an older Host status omits loginRequired', async () => {
+    globalThis.__DSH_COMPANY_POLICY__ = { requirePersonalLogin: true }
+    const api = {
+      status: vi.fn(async () => ({ ...READY, loginRequired: undefined } as unknown as CompanyStatus)), accountStatus: vi.fn(async () => SIGNED_OUT), accountLogin: vi.fn(),
+    }
+    render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+  })
+
+  it('focuses and traps keyboard navigation inside the login gate', async () => {
+    globalThis.__DSH_COMPANY_POLICY__ = { requirePersonalLogin: true }
+    const underlying = document.createElement('button')
+    let underlyingKeys = 0
+    underlying.addEventListener('keydown', () => { underlyingKeys++ })
+    document.body.append(underlying)
+    const api = { status: vi.fn(() => new Promise<CompanyStatus>(() => {})), accountStatus: vi.fn(() => new Promise<typeof SIGNED_OUT>(() => {})), accountLogin: vi.fn() }
+    try {
+      render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
+      const signIn = await screen.findByRole('button', { name: 'Sign in to company account' })
+      const refresh = screen.getByRole('button', { name: 'Refresh sign-in status' })
+      await waitFor(() => expect(document.activeElement).toBe(signIn))
+      fireEvent.keyDown(signIn, { key: 'Tab' })
+      expect(document.activeElement).toBe(refresh)
+      fireEvent.keyDown(refresh, { key: 'Tab', shiftKey: true })
+      expect(document.activeElement).toBe(signIn)
+      fireEvent.keyDown(underlying, { key: 'Enter' })
+      expect(underlyingKeys).toBe(0)
+      expect(document.activeElement).toBe(signIn)
+      fireEvent.keyDown(signIn, { key: 'Escape' })
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    } finally { underlying.remove() }
+  })
+  it('keeps the policy gate blocking when the Host status request fails', async () => {
+    globalThis.__DSH_COMPANY_POLICY__ = { requirePersonalLogin: true }
+    const api = {
+      status: vi.fn(async () => { throw new Error('offline') }), accountStatus: vi.fn(async () => { throw new Error('offline') }), accountLogin: vi.fn(),
+    }
+    render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toContain('temporarily unavailable')
+  })
+  it('uses the Host loginRequired status and removes the overlay only after sign-in', async () => {
+    const api = {
+      status: vi.fn(async () => ({ ...READY, loginRequired: true })), accountStatus: vi.fn(async () => SIGNED_OUT), accountLogin: vi.fn(async () => SIGNED_IN),
+    }
+    render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to company account' }))
+    await waitFor(() => expect(api.accountLogin).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 })
 

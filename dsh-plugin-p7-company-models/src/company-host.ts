@@ -8,6 +8,7 @@ import { CompanyPersistence } from './persistence.js'
 import type { CompanyStatus } from './public-status.js'
 import { readP7McpToolStatus } from './mcp-tool-status.js'
 import type { CompanyBootstrap } from './bootstrap.js'
+import { DEFAULT_P7_PUBLIC_ORIGIN } from './defaults.js'
 
 export interface CompanyHostOptions {
   profileId: string
@@ -19,6 +20,8 @@ export interface CompanyHostOptions {
   saveDefault(provider: string, model: string, reasoningEffort?: string): Promise<void>
   fetch?: P7Fetch
   bootstrap?(): Promise<CompanyBootstrap | undefined>
+  /** Require a personal Feishu session and disable all shared-key fallback for this profile. */
+  requirePersonalLogin?: boolean
   personalMode?(): boolean
   resolvePersonalAccessToken?(): Promise<string>
   restorePersonalSession?(): Promise<void>
@@ -51,17 +54,19 @@ export class CompanyHost {
     let corruptPersistence = false
     try {
       const saved = await this.options.persistence.load()
-      this.origin = saved.origin
+      this.origin = saved.origin ?? (this.options.requirePersonalLogin === true ? DEFAULT_P7_PUBLIC_ORIGIN : null)
       this.snapshot = saved.snapshot
       ownedIds = saved.ownedIds
       this.bootstrapDisabled = saved.bootstrapDisabled === true
-      this.personalMode = saved.personalMode === true
+      this.personalMode = this.options.requirePersonalLogin === true || saved.personalMode === true
       if (saved.deviceId !== undefined) this.deviceId = saved.deviceId
       this.options.onPersonalModeLoaded?.(this.personalMode)
     } catch {
       corruptPersistence = true
-      this.origin = null
+      this.origin = this.options.requirePersonalLogin === true ? DEFAULT_P7_PUBLIC_ORIGIN : null
       this.snapshot = undefined
+      this.personalMode = this.options.requirePersonalLogin === true
+      this.options.onPersonalModeLoaded?.(this.personalMode)
     }
     this.owned = new ManagedProviderStore(this.options.settings, this.options.modelNamespace, ownedIds)
     this.controller = createSyncController({
@@ -90,7 +95,7 @@ export class CompanyHost {
       return
     }
     if (!this.origin && ownedIds.length === 0) await this.recoverOrphanedPersistence()
-    if (!this.origin && !this.bootstrapDisabled && !this.message) {
+    if (!this.options.requirePersonalLogin && !this.origin && !this.bootstrapDisabled && !this.message) {
       try {
         const bootstrap = await this.options.bootstrap?.()
         if (bootstrap) { await this.connect(bootstrap.origin, bootstrap.key); return }
@@ -107,7 +112,8 @@ export class CompanyHost {
       await this.persist()
       await this.options.restorePersonalSession?.()
       try {
-        await this.options.resolvePersonalAccessToken?.()
+        const token = await this.options.resolvePersonalAccessToken?.()
+        if (!token) throw new Error('P7 personal sign-in is required.')
         this.controller.start()
         await this.controller.restore({ origin: this.origin, key: '', credentialRef: this.credentialRef })
       } catch { this.authorizationFailed = true }
@@ -163,6 +169,7 @@ export class CompanyHost {
     return next
   }
   connect(origin: string, apiKey: string): Promise<void> {
+    if (this.options.requirePersonalLogin === true) throw new Error('Company sign-in is required.')
     const normalized = validateP7Origin(origin)
     const key = apiKey.trim()
     if (!/^p7k_[\x21-\x7e]+$/.test(key) || key.length > 4096) throw new Error('Enter a valid dedicated P7 access key.')
@@ -194,10 +201,16 @@ export class CompanyHost {
       const next = this.options.personalMode?.() === true
       if (!next) return
       this.personalMode = true
-      await this.persist()
       await this.controller!.disconnect()
+      await this.owned!.apply([])
+      this.snapshot = undefined
+      this.authorizationFailed = false
+      await this.persist()
       if (!this.origin) return
-      try { await this.options.resolvePersonalAccessToken?.() } catch { return }
+      try {
+        const token = await this.options.resolvePersonalAccessToken?.()
+        if (!token) throw new Error('P7 personal sign-in is required.')
+      } catch { this.authorizationFailed = true; return }
       this.controller!.start()
       await this.controller!.restore({ origin: this.origin, key: '', credentialRef: this.credentialRef })
     })
@@ -238,7 +251,7 @@ export class CompanyHost {
   }
   private async handleRecoveryFailure(_context: RecoveryFailureContext): Promise<void> {
     this.authorizationFailed = true
-    this.origin = null
+    this.origin = this.options.requirePersonalLogin === true ? DEFAULT_P7_PUBLIC_ORIGIN : null
     this.snapshot = undefined
     this.defaultAlias = null
     const failures: unknown[] = []
@@ -256,6 +269,14 @@ export class CompanyHost {
       if (intent !== this.connectionIntent) return
       this.controller!.stop()
       await this.controller!.disconnect()
+      if (this.options.requirePersonalLogin === true) {
+        await this.owned!.apply([])
+        this.origin = DEFAULT_P7_PUBLIC_ORIGIN
+        this.snapshot = undefined
+        this.authorizationFailed = true
+        await this.persist()
+        return
+      }
       await this.options.credentials.unset(this.credentialRef)
       this.origin = null
       this.bootstrapDisabled = true
@@ -273,7 +294,7 @@ export class CompanyHost {
         : state?.status === 'ready' ? 'ready' : state?.status === 'stale' ? 'stale'
           : state?.error ? 'error' : 'disconnected'
     return {
-      phase, origin: this.origin, revision: this.snapshot?.config.revision ?? null,
+      loginRequired: this.options.requirePersonalLogin === true, phase, origin: this.origin, revision: this.snapshot?.config.revision ?? null,
       lastSyncedAt: state?.lastSuccessAt ?? this.snapshot?.appliedAt ?? null,
       defaultModel: this.snapshot?.config.defaultModel ?? null,
       models: this.snapshot?.config.models.map(({ id, displayName, api, contextWindow, maxOutputTokens, inputModalities }) => ({ id, displayName, api, contextWindow, maxOutputTokens, inputModalities: [...inputModalities] })) ?? [],

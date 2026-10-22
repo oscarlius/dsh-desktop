@@ -35,6 +35,7 @@ export const zh = {
   unavailable: '暂时无法读取公司模型状态。',
   never: '尚未成功同步',
   accountTitle: '公司账号与我的用量', accountIntro: '登录公司账号后可查看个人用量。', signedIn: '已登录', signedOut: '未登录', accountPending: '等待登录完成', accountApprovalRequired: '需要批准', accountUpgradeRequired: '需要更新', accountExpired: '登录已过期', accountError: '登录异常', signIn: '登录公司账号', signOut: '退出登录', refreshUsage: '刷新用量', downloadUpdate: '下载所需版本', monthRequests: '本月调用', monthSearches: '本月搜索', monthInput: '本月输入 Token', monthOutput: '本月输出 Token',
+  loginRequiredTitle: '请先登录公司飞书账号', loginRequiredIntro: '此公司客户端需要有效的公司飞书登录后才能使用聊天、模型、MCP 和联网搜索。', loginRequiredStatus: '登录后将自动恢复公司模型和工具。', refreshLoginStatus: '刷新登录状态',
 } as const
 
 export type CompanySettingsLocaleKey = keyof typeof zh
@@ -76,4 +77,5 @@ export const en: Record<CompanySettingsLocaleKey, string> = {
   unavailable: 'Company model status is temporarily unavailable.',
   never: 'No successful sync yet',
   accountTitle: 'Company account and my usage', accountIntro: 'Sign in to view your personal usage.', signedIn: 'Signed in', signedOut: 'Signed out', accountPending: 'Sign-in pending', accountApprovalRequired: 'Approval required', accountUpgradeRequired: 'Update required', accountExpired: 'Sign-in expired', accountError: 'Sign-in error', signIn: 'Sign in to company account', signOut: 'Sign out', refreshUsage: 'Refresh usage', downloadUpdate: 'Download required version', monthRequests: 'Month requests', monthSearches: 'Month searches', monthInput: 'Month input tokens', monthOutput: 'Month output tokens',
+  loginRequiredTitle: 'Sign in to your company Feishu account', loginRequiredIntro: 'This company client requires a valid company Feishu sign-in before chat, models, MCP, or web search are available.', loginRequiredStatus: 'Company models and tools will be restored automatically after sign-in.', refreshLoginStatus: 'Refresh sign-in status',
 }

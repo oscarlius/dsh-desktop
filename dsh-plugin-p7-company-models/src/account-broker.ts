@@ -31,13 +31,13 @@ export class AccountBroker {
   private authGeneration = 0
   private upgradeUrl: string | null = null
   private storeQueue: Promise<void> = Promise.resolve()
-  constructor(private readonly options: { origin(): string | null; profileId: string; deviceFingerprint?(): string; clientVersion?: string; store?: P7AccountStore; fetch?: P7Fetch; openBrowser?(url: string): Promise<void> | void; now?(): number }) { this.browserLauncher = options.openBrowser; registry().set(options.profileId, this) }
+  constructor(private readonly options: { origin(): string | null; profileId: string; requirePersonalLogin?: boolean; deviceFingerprint?(): string; clientVersion?: string; store?: P7AccountStore; fetch?: P7Fetch; openBrowser?(url: string): Promise<void> | void; now?(): number }) { this.personalMode = options.requirePersonalLogin === true; this.browserLauncher = options.openBrowser; registry().set(options.profileId, this) }
   status(): P7AccountStatus { return { phase: this.phase, profile: this.session?.profile ?? null, expiresAt: this.session?.expiresAt ?? null, authorizationUrl: this.pending?.authorizationUrl ?? null, upgradeUrl: this.upgradeUrl, message: this.message } }
   /** Gateway origin and a per-operation token getter for MCP/runtime consumers. */
-  connection(): { origin: string | null; getValidAccessToken: () => Promise<string>; usesPersonalToken: () => boolean } { return { origin: this.options.origin(), getValidAccessToken: () => this.getValidAccessToken(), usesPersonalToken: () => this.personalMode } }
+  connection(): { origin: string | null; getValidAccessToken: () => Promise<string>; usesPersonalToken: () => boolean } { return { origin: this.options.origin(), getValidAccessToken: () => this.getValidAccessToken(), usesPersonalToken: () => this.usesPersonalToken() } }
   /** Once a personal sign-in starts, downstream calls must never fall back to a legacy shared key. */
-  usesPersonalToken(): boolean { return this.personalMode }
-  setPersonalMode(value: boolean): void { this.personalMode = value }
+  usesPersonalToken(): boolean { return this.options.requirePersonalLogin === true || this.personalMode }
+  setPersonalMode(value: boolean): void { this.personalMode = this.options.requirePersonalLogin === true || value }
   subscribe(listener: (status: P7AccountStatus) => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   setBrowserLauncher(launcher: ((url: string) => Promise<void> | void) | undefined): void { this.browserLauncher = launcher }
   /** Restore only through the OS-backed refresh store; no token is read from profile files. */

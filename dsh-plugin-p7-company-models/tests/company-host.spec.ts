@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CompanyHost } from '../src/company-host.js'
+import { CompanyHost, type CompanyHostOptions } from '../src/company-host.js'
 import type { SettingsPort } from '../src/managed-provider-store.js'
 import type { PersistedCompanyState } from '../src/persistence.js'
 import { P7_PROVIDER_IDS } from '../src/map-providers.js'
@@ -19,11 +19,12 @@ const settings = (): SettingsPort & { mutations: unknown[]; data: { providers: R
 const response = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { ETag: '"revision-1"', ...headers } })
 const activeHosts = new Set<CompanyHost>()
 afterEach(async () => { await Promise.all([...activeHosts].map(host => host.dispose())); activeHosts.clear() })
-const createHost = (fetch: typeof globalThis.fetch, persisted = state(), port = settings(), bootstrap?: () => Promise<{ origin: string; key: string } | undefined>) => {
+type HostOptions = Pick<CompanyHostOptions, 'requirePersonalLogin' | 'personalMode' | 'resolvePersonalAccessToken' | 'restorePersonalSession' | 'onPersonalModeLoaded'>
+const createHost = (fetch: typeof globalThis.fetch, persisted = state(), port = settings(), bootstrap?: () => Promise<{ origin: string; key: string } | undefined>, options: HostOptions = {}) => {
   const credentials = { read: vi.fn(async () => undefined), set: vi.fn(async () => {}), unset: vi.fn(async () => {}) }
   const saveDefault = vi.fn(async (_provider: string, _model: string, _reasoningEffort?: string) => {})
   const readDefault = vi.fn((): { provider: string; model: string; reasoningEffort?: string } => ({ provider: 'local-provider', model: 'local-model', reasoningEffort: 'high' }))
-  const host = new CompanyHost({ profileId: 'profile-a', persistence: persisted, settings: port, modelNamespace: () => 'models', credentials, readDefault, saveDefault, fetch, ...(bootstrap ? { bootstrap } : {}) })
+  const host = new CompanyHost({ profileId: 'profile-a', persistence: persisted, settings: port, modelNamespace: () => 'models', credentials, readDefault, saveDefault, fetch, ...(bootstrap ? { bootstrap } : {}), ...options })
   activeHosts.add(host)
   return { host, persisted, port, credentials, readDefault, saveDefault }
 }
@@ -35,6 +36,78 @@ describe('CompanyHost integration', () => {
     expect(app.host.status()).toMatchObject({ phase: 'ready', origin: DEFAULT_P7_PUBLIC_ORIGIN })
     expect(app.credentials.set).toHaveBeenCalledWith(app.host.credentialRef, 'p7k_packaged-test-only')
     expect(JSON.stringify([app.host.status(), app.persisted.value])).not.toContain('p7k_packaged-test-only')
+  })
+  it('requires a personal session for an upgraded shared-key profile and removes its company catalog before any key read', async () => {
+    const persisted = state()
+    persisted.value = { version: 1, origin: 'https://legacy.example', ownedIds: [P7_PROVIDER_IDS['openai-completions']], snapshot: { config: config() as import('../src/contracts.js').ModelConfigV1, etag: 'legacy', appliedAt: 1 } }
+    const app = createHost(vi.fn(), persisted, settings(), undefined, { requirePersonalLogin: true })
+    await app.host.initialize()
+    expect(app.credentials.read).not.toHaveBeenCalled()
+    expect(app.port.data.providers[P7_PROVIDER_IDS['openai-completions']]).toBeUndefined()
+    expect(app.host.status()).toMatchObject({ loginRequired: true, origin: 'https://legacy.example', models: [] })
+    expect(app.persisted.value.snapshot).toBeUndefined()
+  })
+  it('uses the public P7 origin and never bootstraps a shared key for a first required-login installation', async () => {
+    const bootstrap = vi.fn(async () => ({ origin: DEFAULT_P7_PUBLIC_ORIGIN, key: 'p7k_bootstrap-must-not-run' }))
+    const app = createHost(vi.fn(), state(), settings(), bootstrap, { requirePersonalLogin: true })
+    await app.host.initialize()
+    expect(bootstrap).not.toHaveBeenCalled()
+    expect(app.credentials.read).not.toHaveBeenCalled()
+    expect(app.host.status()).toMatchObject({ loginRequired: true, origin: DEFAULT_P7_PUBLIC_ORIGIN, models: [] })
+  })
+  it('restores a signed-in personal session into the company catalog without reading a legacy shared key', async () => {
+    const persisted = state()
+    persisted.value = { version: 1, origin: DEFAULT_P7_PUBLIC_ORIGIN, ownedIds: [P7_PROVIDER_IDS['openai-completions']], snapshot: { config: config() as import('../src/contracts.js').ModelConfigV1, etag: 'legacy', appliedAt: 1 } }
+    const fetch = vi.fn(async () => response(config())) as unknown as typeof globalThis.fetch
+    const restorePersonalSession = vi.fn(async () => {})
+    const resolvePersonalAccessToken = vi.fn(async () => 'p7d_personal-access-token')
+    const app = createHost(fetch, persisted, settings(), undefined, {
+      requirePersonalLogin: true, personalMode: () => true, restorePersonalSession, resolvePersonalAccessToken,
+    })
+
+    await app.host.initialize()
+
+    expect(restorePersonalSession).toHaveBeenCalledOnce()
+    expect(resolvePersonalAccessToken).toHaveBeenCalled()
+    expect(app.credentials.read).not.toHaveBeenCalled()
+    expect(fetch).toHaveBeenCalledWith(DEFAULT_P7_PUBLIC_ORIGIN + '/v1/desktop/model-config', expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer p7d_personal-access-token' }),
+    }))
+    expect(app.port.data.providers[P7_PROVIDER_IDS['openai-completions']]).toBeDefined()
+    expect(app.host.status()).toMatchObject({ loginRequired: true, phase: 'ready', models: [expect.objectContaining({ id: 'admin-alias' })] })
+  })
+
+  it('removes the catalog after personal logout, expiry, or revocation without reviving a shared snapshot', async () => {
+    const persisted = state()
+    persisted.value = { version: 1, origin: DEFAULT_P7_PUBLIC_ORIGIN, ownedIds: [], snapshot: { config: config() as import('../src/contracts.js').ModelConfigV1, etag: 'legacy', appliedAt: 1 } }
+    let signedIn = true
+    const resolvePersonalAccessToken = vi.fn(async () => signedIn ? 'p7d_personal-access-token' : '')
+    const fetch = vi.fn(async () => response(config())) as unknown as typeof globalThis.fetch
+    const app = createHost(fetch, persisted, settings(), undefined, {
+      requirePersonalLogin: true, personalMode: () => true, resolvePersonalAccessToken,
+    })
+    await app.host.initialize()
+    expect(app.port.data.providers[P7_PROVIDER_IDS['openai-completions']]).toBeDefined()
+
+    signedIn = false
+    await app.host.personalSessionChanged()
+
+    expect(app.credentials.read).not.toHaveBeenCalled()
+    expect(app.port.data.providers[P7_PROVIDER_IDS['openai-completions']]).toBeUndefined()
+    expect(app.persisted.value.snapshot).toBeUndefined()
+    expect(app.host.status()).toMatchObject({ loginRequired: true, phase: 'unauthorized', models: [] })
+  })
+  it('keeps the sign-in gate after corrupt state or a disconnect and rejects a shared-key reconnect', async () => {
+    const persisted = state()
+    persisted.load = vi.fn(async () => { throw new Error('corrupt') })
+    const onPersonalModeLoaded = vi.fn()
+    const app = createHost(vi.fn(), persisted, settings(), undefined, { requirePersonalLogin: true, onPersonalModeLoaded })
+    await app.host.initialize()
+    expect(onPersonalModeLoaded).toHaveBeenCalledWith(true)
+    expect(app.host.status()).toMatchObject({ loginRequired: true, origin: DEFAULT_P7_PUBLIC_ORIGIN })
+    await app.host.disconnect()
+    expect(app.host.status()).toMatchObject({ loginRequired: true, origin: DEFAULT_P7_PUBLIC_ORIGIN, models: [] })
+    expect(() => app.host.connect(DEFAULT_P7_PUBLIC_ORIGIN, 'p7k_shared-key')).toThrow('sign-in is required')
   })
   it('initializes a previously unconnected installation when its later company update supplies bootstrap material', async () => {
     const persisted = state(); const port = settings()

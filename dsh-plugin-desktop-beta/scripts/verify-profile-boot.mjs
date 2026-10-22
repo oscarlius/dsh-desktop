@@ -470,7 +470,7 @@ try {
     },
   })
   const html = await response.text()
-  if (process.argv.includes('--company-bootstrap')) {
+  if (process.argv.includes('--company-bootstrap') || process.argv.includes('--company-login-required')) {
     const deadline = Date.now() + 30_000
     let statusResponse, status
     do {
@@ -481,10 +481,16 @@ try {
       if (status.phase === 'ready' || status.phase === 'unauthorized' || status.phase === 'error') break
       await delay(200)
     } while (Date.now() < deadline)
-    if (statusResponse.status !== 200 || status.phase !== 'ready' || status.origin !== 'https://maas.zxrc.com.cn:8090'
+    if (process.argv.includes('--company-login-required')) {
+      if (statusResponse.status !== 200 || status.loginRequired !== true || status.phase !== 'unauthorized'
+        || status.origin !== 'https://maas.zxrc.com.cn:8090' || status.models.length !== 0 || status.defaultModel !== null) {
+        throw new Error('Fresh company Profile must require personal sign-in before loading models: ' + JSON.stringify(status))
+      }
+      console.log('Company personal login gate HTTP passed: no pre-authentication company models.')
+    } else if (statusResponse.status !== 200 || status.phase !== 'ready' || status.origin !== 'https://maas.zxrc.com.cn:8090'
       || !status.models.length || !status.defaultModel) throw new Error('The fresh company Profile did not automatically load its public P7 catalog: ' + JSON.stringify({ httpStatus: statusResponse.status, phase: status.phase, origin: status.origin, message: status.message, modelCount: status.models?.length }))
     if (!html.includes('__DSH_COMPANY_POLICY__')) throw new Error('The company browser policy is missing from the actual served page')
-    console.log(`Company bootstrap passed: ${status.models.length} public P7 model(s), default ${status.defaultModel}; no key input.`)
+    if (process.argv.includes('--company-bootstrap')) console.log(`Company bootstrap passed: ${status.models.length} public P7 model(s), default ${status.defaultModel}; no key input.`)
   }
   if (process.argv.includes('--onboarding')) {
     const { verifyDesktopOnboardingBrowser } = await import('../../scripts/verify-desktop-onboarding-browser.mjs')

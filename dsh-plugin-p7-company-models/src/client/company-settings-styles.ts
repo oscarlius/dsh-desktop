@@ -6,11 +6,19 @@ const STYLES = `
 .dshP7CompanySettings { box-sizing: border-box; width: 100%; max-width: 960px; min-width: 0; display: grid; gap: 24px; color: var(--dsw-alias-label-primary, #1f2329); }
 .dshP7CompanySettings *, .dshP7CompanySettings *::before, .dshP7CompanySettings *::after { box-sizing: border-box; }
 .dshP7CompanySettingsHeader { display: grid; gap: 6px; }
+.dshP7CompanyLoginGate { min-height: min(560px, 100%); align-content: center; }
+.dshP7CompanyLoginGate > .dshP7CompanySettingsHeader, .dshP7CompanyLoginGate > .dshP7CompanySettingsCard { max-width: 560px; width: 100%; justify-self: center; }
 .dshP7CompanySettings h2, .dshP7CompanySettings h3, .dshP7CompanySettings p { margin: 0; }
 .dshP7CompanySettings h2 { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; }
 .dshP7CompanySettings h3 { font-size: 14px; line-height: 20px; font-weight: 600; }
 .dshP7CompanySettingsIntro, .dshP7CompanySettingsNotice, .dshP7CompanySettingsEmpty { color: var(--dsw-alias-label-secondary, #5d6470); font-size: 13px; line-height: 20px; }
 .dshP7CompanySettingsAlert { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary, #d14343) 35%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #d14343) 8%, transparent); color: var(--dsw-alias-state-error-primary, #b42318); font-size: 13px; line-height: 20px; }
+.dshP7CompanyLoginOverlay { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 24px; overflow: auto; pointer-events: auto; background: color-mix(in srgb, var(--dsw-alias-bg-page, #f7f8fa) 94%, #000); color: var(--dsw-alias-label-primary, #1f2329); }
+.dshP7CompanyLoginOverlayCard { display: grid; gap: 16px; width: min(100%, 480px); padding: 28px; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); border-radius: 14px; background: var(--dsw-alias-bg-module-platform, #fff); box-shadow: 0 12px 32px rgb(15 23 42 / 16%); }
+.dshP7CompanyLoginOverlayCard h2, .dshP7CompanyLoginOverlayCard p { margin: 0; }
+.dshP7CompanyLoginOverlayCard h2 { font-size: 20px; line-height: 28px; }
+.dshP7CompanyLoginOverlayCard p { color: var(--dsw-alias-label-secondary, #5d6470); font-size: 14px; line-height: 21px; }
+.dshP7CompanyLoginOverlayStatus { padding: 10px 12px; border-radius: 8px; background: var(--dsw-alias-interactive-bg-hover, #f3f4f6); }
 .dshP7CompanySettingsCard { display: grid; gap: 16px; padding: 18px; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); border-radius: 12px; background: var(--dsw-alias-bg-module-platform, #fff); box-shadow: 0 1px 2px rgb(15 23 42 / 4%); }
 .dshP7CompanySettingsCardHeader { display: grid; gap: 4px; }
 .dshP7CompanySettingsForm { display: grid; gap: 14px; }

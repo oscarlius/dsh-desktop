@@ -14,6 +14,7 @@ import { CompanyPersistence } from './persistence.js'
 import { registerCompanyRoutes } from './routes.js'
 import { AccountBroker, type P7AccountStore } from './account-broker.js'
 import { installPersonalCredentialOverlay } from './personal-credential-overlay.js'
+import { DEFAULT_P7_PUBLIC_ORIGIN } from './defaults.js'
 
 interface P7AccountBrowser { open(url: string): Promise<void> | void }
 
@@ -23,15 +24,17 @@ declare module '@deepseek-ai/cordis' {
 
 export const name = 'p7-company-models'
 export const inject = ['loader', 'webServer', 'settings', 'credentials', 'profileContext', 'llm', 'agentDefaultModel']
-export const Config = Schema.object({ bootstrapFile: Schema.string().default('') })
+export const Config = Schema.object({ bootstrapFile: Schema.string().default(''), requirePersonalLogin: Schema.boolean().default(false) })
 
 /** Compose beside the official adapters without modifying the upstream runtime. */
-export function apply(ctx: Context, config: { bootstrapFile?: string } = {}): void {
+export function apply(ctx: Context, config: { bootstrapFile?: string; requirePersonalLogin?: boolean } = {}): void {
   let host: CompanyHost | undefined
   const accountStore = ctx.get('p7AccountStore')
-  const account = new AccountBroker({ origin: () => host?.currentOrigin() ?? null, deviceFingerprint: () => host?.currentDeviceId() ?? '', clientVersion: accountStore?.clientVersion ?? '2.0.18-beta.15', profileId: ctx.profileContext.dir, ...(accountStore ? { store: accountStore } : {}) })
+  const requirePersonalLogin = config.requirePersonalLogin === true
+  const account = new AccountBroker({ origin: () => host?.currentOrigin() ?? (requirePersonalLogin ? DEFAULT_P7_PUBLIC_ORIGIN : null), requirePersonalLogin, deviceFingerprint: () => host?.currentDeviceId() ?? '', clientVersion: accountStore?.clientVersion ?? '2.0.18-beta.15', profileId: ctx.profileContext.dir, ...(accountStore ? { store: accountStore } : {}) })
   host = new CompanyHost({
     profileId: ctx.profileContext.dir,
+    requirePersonalLogin,
     bootstrap: () => readCompanyBootstrap(config.bootstrapFile ?? ''),
     personalMode: () => account.usesPersonalToken(),
     resolvePersonalAccessToken: () => account.getValidAccessToken(),

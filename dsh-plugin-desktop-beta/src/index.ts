@@ -225,6 +225,7 @@ export function apply(ctx: Context, config: DesktopShellConfig): void {
     table.push(...desktopBootRecoveryInjections())
     if (DESKTOP_COMPANY_SERVICE_ENABLED) table.push({ kind: 'global', name: '__DSH_COMPANY_POLICY__', value: {
       accountOnboardingEnabled: false,
+      requirePersonalLogin: true,
       browserSearch: new URL(desktopRendererUrl(webServerPort, resolved.mode, runtime.platform, runtime.updates.currentVersion, 'off')).search,
     } })
   })
