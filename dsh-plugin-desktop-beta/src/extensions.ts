@@ -11,6 +11,7 @@ import { HostPermissions } from './host-permissions.ts'
 import { NEXT_PACKAGE, profileName } from './profiles.ts'
 import { PNPM_IGNORE_MINIMUM_RELEASE_AGE } from './pnpm-policy.ts'
 import { unpackedPath } from './asar-archive-policy.ts'
+import { COMPANY_TRANSPORT_VERSION } from './product-identity.ts'
 
 export const name = 'desktop-next-capabilities'
 export const inject = ['profileContext']
@@ -89,7 +90,7 @@ function installCompanyIdentityBridge(ctx: Context): void {
   }
   process.on('message', onMessage)
   ctx.provide('p7AccountStore', {
-    clientVersion: process.env.DSH_COMPANY_TRANSPORT_VERSION ?? '2.0.20-beta.15',
+    clientVersion: COMPANY_TRANSPORT_VERSION || process.env.DSH_COMPANY_TRANSPORT_VERSION,
     load: async (origin: string) => (await request({ action: 'load', origin })).refreshToken,
     save: async (origin: string, refreshToken: string) => { await request({ action: 'save', origin, refreshToken }) },
     clear: async (origin: string) => { await request({ action: 'clear', origin }) },

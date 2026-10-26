@@ -75,6 +75,12 @@
       "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
     },
     {
+      "path": "scripts/packaged-host-smoke.mjs",
+      "betaSha256": "2018b043a66eead6eb622a4cb4b9f0409fcc39b6b87537d2b708ef2afe6d7c95",
+      "nextSha256": "07152d5bcfb278217d0fa085137f0ce531c94df8a9108601a068c94e9a8467b9",
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
       "path": "scripts/verify-company-host.mjs",
       "betaSha256": "63f4e49ae8f71f8c91daddf96449b2ead3658c7b9aaa02b63fcd3e500c1f6abb",
       "nextSha256": null,
@@ -172,13 +178,13 @@
     },
     {
       "path": "src/desktop-runtime.ts",
-      "betaSha256": "9c213034976e66d54b235e69f327b825c309a4a9eef89efb4eab13eecf747014",
+      "betaSha256": "76d6b1e29f2318ec6caa2b556d8e488434223ee973e292fb77ced00bbced2f8b",
       "nextSha256": "2c0975667e593f92a412b30e12ba63a59d066d4599ec8f40d34eb2aa01e32afe",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },
     {
       "path": "src/extensions.ts",
-      "betaSha256": "8b7ac045fca762ebc9b42501f99d248365ec5adb91b14d44ec24afd269535e29",
+      "betaSha256": "9529597979ae3dfec97efec26d74ddf19696d7ecb54cd87f1a34f394eebe3030",
       "nextSha256": "653e39bb476e6545976e242dfac5ed21e0b469adaf3795cd85dc146754f6f8d5",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },

@@ -18,6 +18,7 @@ import type { DesktopLanHttpsCertificate } from './lan-https-certificate.ts'
 import type { DesktopPermission, DesktopPermissionAction, DesktopPermissionSnapshot } from './permissions.ts'
 import { SYSTEM_PROXY_ENV, type DesktopSystemProxyProbe } from './system-proxy.ts'
 import type { P7SessionVaultRequest, P7SessionVaultResult } from './p7-session-vault.ts'
+import { COMPANY_TRANSPORT_VERSION } from './product-identity.ts'
 
 interface RuntimeOptions {
   home: string
@@ -287,7 +288,7 @@ export class NextDesktopRuntime {
       { ...process.env, DSH_HOME: actualHome, DSH_NEXT_NATIVE_TOKEN: token,
         DSH_NEXT_PREFERENCES: JSON.stringify(effective), DSH_NEXT_TRUSTED_HOSTS: JSON.stringify(addresses),
         [SYSTEM_PROXY_ENV]: JSON.stringify(options.systemProxy?.() ?? {}),
-        ...(options.companyMode ? { DSH_COMPANY_MODE: '1', DSH_COMPANY_TRANSPORT_VERSION: '2.0.20-beta.15' } : {}),
+        ...(options.companyMode ? { DSH_COMPANY_MODE: '1', DSH_COMPANY_TRANSPORT_VERSION: COMPANY_TRANSPORT_VERSION } : {}),
         ...(this.safeMode ? { DSH_TELEMETRY_DISABLED: '1' } : {}) },
       onFailure, options.primaryRuntime, undefined, join(options.root, 'lib', 'host.js'), options.onRestart, options.onNotification,
       (chunk, stream, pid) => this.diagnostics.hostChunk(chunk, stream, pid), options.onTerminal, options.onPermission, undefined, options.onPlatformLogin,
