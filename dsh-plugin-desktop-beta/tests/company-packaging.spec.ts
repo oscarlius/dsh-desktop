@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import companyBeforePack from '../scripts/company-update-before-pack.ts'
-import { companyWindowsBuilderArguments } from '../scripts/company-package-options.ts'
+import { companyPayloadExtraMetadata, companyWindowsBuilderArguments } from '../scripts/company-package-options.ts'
 import { applyCompanyBootstrapResources } from '../scripts/company-prepare-pack.ts'
 
 const output = 'C:/build/company'
 
 describe('company installer distributions', () => {
+  it('places company distribution and source provenance in the payload before sealing', () => {
+    const commit = 'a'.repeat(40)
+    expect(companyPayloadExtraMetadata({ DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit })
+    expect(companyPayloadExtraMetadata({ DSH_COMPANY_UPDATE_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit, dshDesktopUpdateDistribution: true })
+    expect(companyPayloadExtraMetadata({})).toBeUndefined()
+    expect(() => companyPayloadExtraMetadata({ DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_UPDATE_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toThrow('exactly one')
+    expect(() => companyPayloadExtraMetadata({ DSH_COMPANY_UPDATE_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: 'not-a-commit' })).toThrow('40-character')
+  })
   it('makes the Full installer the only builder mode that receives the protected bootstrap', () => {
     const arguments_ = companyWindowsBuilderArguments({
       distribution: 'full', output, bootstrapFile: 'C:/sealed/p7-company-connection.json', sourceCommit: 'a'.repeat(40),

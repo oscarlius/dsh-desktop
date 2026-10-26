@@ -34,7 +34,7 @@
     },
     {
       "path": "scripts/company-package-options.ts",
-      "betaSha256": "43c487430464644ab1d0d7ce75758290c04bd4949f5e53e01262cd322dc54196",
+      "betaSha256": "a47da35b530f0206f6513c5e3b988fd4c1f787b7b378ccbc81086087e5c69f28",
       "nextSha256": null,
       "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
     },
@@ -78,6 +78,12 @@
       "path": "scripts/packaged-host-smoke.mjs",
       "betaSha256": "2018b043a66eead6eb622a4cb4b9f0409fcc39b6b87537d2b708ef2afe6d7c95",
       "nextSha256": "07152d5bcfb278217d0fa085137f0ce531c94df8a9108601a068c94e9a8467b9",
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/prepare-payload.ts",
+      "betaSha256": "5147dfac9c8ec9a2b64f25a0c391b9b0ec14ad96d8f4c24b7ceffd65c3fe19cd",
+      "nextSha256": "fccb0ddd093577a9c324299cd74bd46d722e93f74dbcb8a6db7fc6163d58c3b2",
       "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
     },
     {
@@ -280,7 +286,7 @@
     },
     {
       "path": "tests/company-packaging.spec.ts",
-      "betaSha256": "3fa5c185a9fc681b88292e6f1e5d8e3ac8096ee114fd33510d935033a91d9a4c",
+      "betaSha256": "01133cb0a6bc38204ee1d31d7dd483cb61d720457e1957651df247b00f9f3a23",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

@@ -9,6 +9,19 @@ export interface CompanyPackageOptions {
   readonly sourceCommit?: string
 }
 
+const SOURCE_COMMIT = /^[0-9a-f]{40}$/u
+
+/** Metadata that must enter package.json before the prepared payload is sealed. */
+export function companyPayloadExtraMetadata(environment: NodeJS.ProcessEnv = process.env): Readonly<Record<string, unknown>> | undefined {
+  const initial = environment.DSH_COMPANY_INITIAL_DISTRIBUTION === '1'
+  const update = environment.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
+  const sourceCommit = environment.DSH_COMPANY_RELEASE_SOURCE_COMMIT
+  if (!initial && !update && sourceCommit === undefined) return undefined
+  if (initial === update) throw new Error('Select exactly one company package distribution')
+  if (sourceCommit === undefined || !SOURCE_COMMIT.test(sourceCommit)) throw new Error('Company payload requires a 40-character lowercase source commit')
+  return { dshCompanyReleaseSourceCommit: sourceCommit, ...(update ? { dshDesktopUpdateDistribution: true } : {}) }
+}
+
 /**
  * Keep the protected first-install artifact and the credential-free update artifact
  * distinct at the builder boundary. This function is intentionally side-effect free
@@ -19,6 +32,7 @@ export function companyWindowsBuilderArguments(options: CompanyPackageOptions): 
   if (initial && (options.bootstrapFile === undefined || options.bootstrapFile.length === 0)) {
     throw new Error('Company Full packaging requires DSH_P7_BOOTSTRAP_FILE')
   }
+  if (options.sourceCommit !== undefined && !SOURCE_COMMIT.test(options.sourceCommit)) throw new Error('Company package source commit must be a 40-character lowercase hexadecimal value')
   return [
     '--config.beforePack=scripts/company-prepare-pack.ts',
     '--config.appId=ai.deepseek.dsh.desktop.companytest',

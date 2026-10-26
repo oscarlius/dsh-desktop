@@ -9,6 +9,7 @@ import { nextPackagingTarget, nextPayloadRelease, PAYLOAD_DIR, verifyNextPayload
 import { DESKTOP_RUNTIME_FILE, physicalPayload, sealPayloadAsync, type DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 import { packagingStep, packagingStepSync } from './packaging-step.ts'
 import { windowsCodePayload, writeWindowsCodeFiles } from './windows-asar-unpack.ts'
+import { companyPayloadExtraMetadata } from './company-package-options.ts'
 
 /** Shell entries copied beside the dependency tree; `package.json` is written separately. */
 const SHELL_ENTRIES = ['lib', 'assets', 'build/app-icon.ico', 'build/app-icon.png', 'build/app-icon-mac.png',
@@ -287,11 +288,13 @@ function electronVersion(desktopRoot: string): string {
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const { values } = parseArgs({ options: { platform: { type: 'string' }, version: { type: 'string' } }, allowPositionals: false })
   const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+  const companyMetadata = companyPayloadExtraMetadata()
+  const extraMetadata = { ...(values.version === undefined ? {} : { version: values.version }), ...(companyMetadata ?? {}) }
   await preparePayload({
     desktopRoot, output: join(desktopRoot, ...PAYLOAD_DIR.split('/')),
     target: nextPackagingTarget((values.platform ?? process.platform) as NodeJS.Platform),
     electronVersion: electronVersion(desktopRoot),
-    ...(values.version === undefined ? {} : { extraMetadata: { version: values.version } }),
+    ...(Object.keys(extraMetadata).length === 0 ? {} : { extraMetadata }),
     log: message => console.log(message),
   })
 }
