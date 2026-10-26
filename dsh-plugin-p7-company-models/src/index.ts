@@ -15,6 +15,7 @@ import { registerCompanyRoutes } from './routes.js'
 import { AccountBroker, type P7AccountStore } from './account-broker.js'
 import { installPersonalCredentialOverlay } from './personal-credential-overlay.js'
 import { DEFAULT_P7_PUBLIC_ORIGIN } from './defaults.js'
+import { installInlineThinkingNormalizer } from './inline-thinking.js'
 
 interface P7AccountBrowser { open(url: string): Promise<void> | void }
 
@@ -28,6 +29,7 @@ export const Config = Schema.object({ bootstrapFile: Schema.string().default('')
 
 /** Compose beside the official adapters without modifying the upstream runtime. */
 export function apply(ctx: Context, config: { bootstrapFile?: string; requirePersonalLogin?: boolean } = {}): void {
+  installInlineThinkingNormalizer(ctx)
   let host: CompanyHost | undefined
   const accountStore = ctx.get('p7AccountStore')
   const requirePersonalLogin = config.requirePersonalLogin === true

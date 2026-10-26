@@ -8,11 +8,29 @@ and the unmodified Harness submodule `1f81c047fc48fa190a683e469daa699857e9afe8`
 The independent `dsh-desktop-next` package retains its upstream product identity
 and update service.
 
-The Beta manifest seals transport version `2.0.20-beta.15` and build
-`2026102601`. `company-build-version.ts` maps the transport version to the agreed
+The Beta manifest seals transport version `2.0.21-beta.15` and build
+`2026102602`. The earlier `.20` / `2026102601` acceptance artifacts remain
+immutable; `.21` adds inline-thinking compatibility after the real Qwen report.
+`company-build-version.ts` maps the transport version to the agreed
 UI label `2.0.18-beta.15`; Desktop state exposes these as separate fields. P7
 requests and installer checks continue to use the transport version. Release
 notes must include the UI label and internal build from this contract.
+
+The `.21` company model middleware translates leading inline `<think>`
+preambles into native reasoning deltas as they arrive. Ordinary answer text,
+including Markdown examples of the tag, remains text. Truncated thinking
+stays in the reasoning disclosure. Auxiliary title requests use the same
+middleware and retain only the actual title as visible text. Official and
+personal provider routes are outside this transformation.
+
+Historical completed replies are adapted in memory by the company client.
+The rc.3 Slot API has no decorator primitive; this compatibility adapter wraps
+the writable component field of the existing assistant entry, retaining its
+identity, owned children and authorized rendering props. It restores only its
+own wrapper when unloaded. Do not replace this with a shadow entry that
+redeclares the shipped child slots. The saved session events remain untouched;
+the real shipped-UI fixture must exercise collapsed and expanded legacy text
+whenever the upstream renderer changes.
 
 App identity remains `ai.deepseek.dsh.desktop.companytest`, product name
 `P7 DSH Company Test`, Electron user data `P7 DSH Company Test`, and company

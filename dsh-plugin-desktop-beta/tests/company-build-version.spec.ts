@@ -6,6 +6,7 @@ describe('beta15 compatibility bridge', () => {
   it('keeps the product label and build separate from the legacy-compatible transport version', () => {
     expect(companyBuildVersion('2.0.20-beta.15', '2026102601')).toEqual({ visible: '2.0.18-beta.15', build: '2026102601' })
     expect(companyBuildLabel('2.0.20-beta.15', '2026102601')).toBe('2.0.18-beta.15（构建 2026102601）')
+    expect(companyBuildLabel('2.0.21-beta.15', '2026102602')).toBe('2.0.18-beta.15（构建 2026102602）')
     expect(companyBuildVersion('2.0.18-beta.15.build.2026102102')).toEqual({ visible: '2.0.18-beta.15', build: '2026102102' })
     expect(companyBuildVersion('2.0.20')).toEqual({ visible: '2.0.20' })
   })

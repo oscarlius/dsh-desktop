@@ -55,16 +55,21 @@ describe('P7 company-model settings registration', () => {
   it('registers zh/en copy and a settings.section surface', () => {
     const register = vi.fn(() => () => {})
     const inject = vi.fn((_slot: string, mount: () => unknown) => mount())
+    const entriesOfSlot = vi.fn(() => [])
+    const subscribe = vi.fn(() => () => {})
     const localeRegister = vi.fn(() => () => {})
     const ctx = {
       locale: { bind: (namespace: string) => (key: string) => `${namespace}:${key}`, register: localeRegister },
       effect: vi.fn((effect: () => unknown) => effect()),
-      slots: { inject, register },
+      slots: { inject, register, entriesOfSlot, subscribe },
     }
     apply(ctx as never)
     expect(localeRegister).toHaveBeenCalledWith(NS, expect.objectContaining({ en, zh: expect.any(Object) }))
     expect(inject).toHaveBeenCalledWith('settings.section', expect.any(Function))
     expect(inject).toHaveBeenCalledWith('shell.overlay', expect.any(Function))
+    expect(inject).toHaveBeenCalledWith('conversation.chat.node', expect.any(Function))
+    expect(entriesOfSlot).toHaveBeenCalledWith('conversation.chat.node')
+    expect(subscribe).toHaveBeenCalledWith('conversation.chat.node', expect.any(Function))
     expect(register).toHaveBeenCalledWith(expect.objectContaining({
       name: 'settings.section', id: 'p7-company-models', order: 60, locale: NS,
     }), CompanySettingsSection)

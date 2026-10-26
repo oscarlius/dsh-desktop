@@ -4,6 +4,7 @@ import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 const root=resolve(import.meta.dirname,'..');
+const {version}=JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
 const output=mkdtempSync(join(tmpdir(),'dsh-company-host-verification-'));
 const {DesktopHostProcess}=await import(pathToFileURL(join(root,'lib/host-process.js')).href);
 const {NextProfiles}=await import(pathToFileURL(join(root,'lib/profiles.js')).href);
@@ -14,14 +15,14 @@ const entry=join(home,'isolated-host.mjs');
 writeFileSync(entry,`
 import {appendFileSync} from 'node:fs';
 const nativeFetch=globalThis.fetch;
-globalThis.fetch=(input,init)=>{const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url);if(url.origin==='https://maas.zxrc.com.cn:8090'&&url.pathname==='/api/v1/desktop-auth/policy'){if(url.searchParams.get('clientVersion')!=='2.0.20-beta.15')throw Error('Fixture client version mismatch');return Promise.resolve(new Response(JSON.stringify({upgradeRequired:false}),{headers:{'content-type':'application/json'}}));}if(!['127.0.0.1','localhost','[::1]'].includes(url.hostname)){appendFileSync(${JSON.stringify(egress)},url.origin+'\\n');return Promise.reject(Error('Fixture blocks external egress'));}return nativeFetch(input,init);};
+globalThis.fetch=(input,init)=>{const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url);if(url.origin==='https://maas.zxrc.com.cn:8090'&&url.pathname==='/api/v1/desktop-auth/policy'){if(url.searchParams.get('clientVersion')!==${JSON.stringify(version)})throw Error('Fixture client version mismatch');return Promise.resolve(new Response(JSON.stringify({upgradeRequired:false}),{headers:{'content-type':'application/json'}}));}if(!['127.0.0.1','localhost','[::1]'].includes(url.hostname)){appendFileSync(${JSON.stringify(egress)},url.origin+'\\n');return Promise.reject(Error('Fixture blocks external egress'));}return nativeFetch(input,init);};
 await import(${JSON.stringify(pathToFileURL(join(root,'scripts/fixtures/isolated-user-host.mjs')).href)});
 `);
 const report={companyHost:true,isolatedHome:home,checks:[],vaultRequests:0,externalBrowserRequests:0,failures:[]};
 let host;
 try{
  const logger=chunk=>{writeFileSync(join(home,'host.log'),chunk,{flag:'a'});};
- host=new DesktopHostProcess(process.execPath,root,dir,undefined,{...process.env,DSH_HOME:home,DSH_COMPANY_MODE:'1',DSH_COMPANY_TRANSPORT_VERSION:'2.0.20-beta.15',DSH_TELEMETRY_DISABLED:'1'},e=>report.failures.push(e.message),join(root,'.desktop-build/runtime/x64/primary-runtime'),undefined,entry,undefined,undefined,logger,undefined,undefined,undefined,undefined,undefined,async request=>{report.vaultRequests++;assert.equal(request.action,'load');return {};},()=>{report.externalBrowserRequests++;throw Error('No browser authentication in cold boot fixture');});
+ host=new DesktopHostProcess(process.execPath,root,dir,undefined,{...process.env,DSH_HOME:home,DSH_COMPANY_MODE:'1',DSH_COMPANY_TRANSPORT_VERSION:version,DSH_TELEMETRY_DISABLED:'1'},e=>report.failures.push(e.message),join(root,'.desktop-build/runtime/x64/primary-runtime'),undefined,entry,undefined,undefined,logger,undefined,undefined,undefined,undefined,undefined,async request=>{report.vaultRequests++;assert.equal(request.action,'load');return {};},()=>{report.externalBrowserRequests++;throw Error('No browser authentication in cold boot fixture');});
  const ready=await Promise.race([host.start(),new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('Cold Host boot timeout')),30000);timer.unref();})]);
  const auth=await fetch(ready.url,{redirect:'manual'});const cookie=auth.headers.get('set-cookie')?.split(';')[0];await auth.body?.cancel();assert.ok(cookie);
  const origin=new URL(ready.url).origin;
