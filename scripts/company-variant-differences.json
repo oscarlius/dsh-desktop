@@ -81,6 +81,12 @@
       "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
     },
     {
+      "path": "scripts/verify-fuses.ts",
+      "betaSha256": "670f2640816f9207778e9ddd4637318f2a2ee0db3f37bb27f056251e30fb9ef6",
+      "nextSha256": "aa3fb6108658ebd5ec0f61646d91553bb55cb926933ca4c4f0687e557018b9e7",
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
       "path": "scripts/verify-p7-search-live-profile.mjs",
       "betaSha256": "1b42576915970b718db18990be38925cb1ebcc5cbd10324fe4dc080b305983fe",
       "nextSha256": null,
@@ -396,6 +402,12 @@
       "path": "tests/updates.spec.ts",
       "betaSha256": "93de11eb73e1a028637f2e656a4ee663a8e3f3761cbbe177ce001e6c81db075a",
       "nextSha256": "9b326370aa0789a39a776f85345efd8460ddc985f908ac7f0de1bebbcb70d9a3",
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/verify-fuses.spec.ts",
+      "betaSha256": "7b510e553691c881117117c8f3490a6cb8610488d7d3c0f2fde9b71ea1f45ba6",
+      "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
     {

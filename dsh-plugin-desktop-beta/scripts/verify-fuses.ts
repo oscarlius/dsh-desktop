@@ -1,5 +1,5 @@
 /** Verify every final Next executable: fuses, the sealed archive, a RunAsNode import smoke and a real Host boot. */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +12,24 @@ import { verifiedPackagedResources } from './verify-packaged.ts'
 import { packagingStep } from './packaging-step.ts'
 
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url))
+
+export function finalArtifactExecutablePaths(outDir: string, productName: string): string[] {
+  return [
+    `mac/${productName}.app/Contents/MacOS/${productName}`,
+    `mac-arm64/${productName}.app/Contents/MacOS/${productName}`,
+    `mac-universal/${productName}.app/Contents/MacOS/${productName}`,
+    `win-unpacked/${productName}.exe`,
+    'linux-unpacked/dsh-desktop-beta',
+  ].map(path => join(outDir, path))
+}
+
+function packagedProductName(root: string): string {
+  const product = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  if (typeof product?.build?.productName !== 'string' || product.build.productName.length === 0) {
+    throw new Error('Package build.productName is required for final executable verification')
+  }
+  return product.build.productName
+}
 
 function runPackagedNode(path: string, args: readonly string[], timeout: number, failure: string): Promise<void> {
   return packagingStep(`smoke:${failure.replace(/ failed$/u, '')}`, () => new Promise<void>((resolve, reject) => {
@@ -52,9 +70,7 @@ function runPackagedNode(path: string, args: readonly string[], timeout: number,
 }
 
 async function verifyFinalArtifacts(result: { outDir: string }): Promise<string[]> {
-  const paths = ['mac/DSH Desktop Beta.app/Contents/MacOS/DSH Desktop Beta', 'mac-arm64/DSH Desktop Beta.app/Contents/MacOS/DSH Desktop Beta',
-    'mac-universal/DSH Desktop Beta.app/Contents/MacOS/DSH Desktop Beta', 'win-unpacked/DSH Desktop Beta.exe', 'linux-unpacked/dsh-desktop-beta']
-  const executables = paths.map(path => join(result.outDir, path)).filter(existsSync)
+  const executables = finalArtifactExecutablePaths(result.outDir, packagedProductName(desktopRoot)).filter(existsSync)
   if (!executables.length) throw new Error('No packaged Next executable to verify')
   const expectedVersion = expectedNextVersion(desktopRoot)
   for (const path of executables) {
