@@ -21,7 +21,10 @@ export function companyTranscriptDefaultsScript(): string {
 /** Shared by the native Host and isolated real-Agent renderer acceptance. */
 export function installCompanyTranscriptBoot(ctx: Pick<Context, 'on'>): void {
   ctx.on('webserver/index-inject', table => {
-    table.push({ kind: 'script', placement: 'head', text: companyTranscriptDefaultsScript() })
+    // The upstream module registry emits a classic head script that evaluates
+    // plugin factories immediately. Prepend ahead of that script, not merely
+    // ahead of the deferred application entry.
+    table.unshift({ kind: 'script', placement: 'head', text: companyTranscriptDefaultsScript() })
   })
 }
 

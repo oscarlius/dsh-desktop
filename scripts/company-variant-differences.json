@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "package.json",
-      "betaSha256": "a99480a55c7fda7a569a4c5fc6c0e7c009bbfb24fff3a083c79b1bfc6ed79981",
-      "nextSha256": "f245185a191b78dffd57ec81665bf2146378ef47212a3e8908f57fa0314868df",
+      "betaSha256": "9e782423cd7a292ca1063e771f453237481370dc80a6d059e0d6236c196c164c",
+      "nextSha256": "c46ab6d1b6babd6de9575219dfa78f3a6399a6022aab50eaf6fceea592f775a6",
       "reason": "Company transport/build metadata, P7 workspaces and release commands; ordinary Next keeps upstream identity."
     },
     {
@@ -106,7 +106,7 @@
     },
     {
       "path": "src/client/company-transcript-defaults.ts",
-      "betaSha256": "44099f1a515d2fd0da996060cf183043540c69256b58fab56195a3d3c5af158f",
+      "betaSha256": "f3f37563cb2ad2b209a6dccccc6b6b8064b83bcb5e49b73d5ecc030ed2a64073",
       "nextSha256": null,
       "reason": "Company first-run StreamFold preferences and client integration, preserving saved preferences."
     },
@@ -292,7 +292,7 @@
     },
     {
       "path": "tests/company-transcript-defaults.spec.ts",
-      "betaSha256": "b9be6d1117718bb9c64ca05a5f72e62f8b25ff43d186994e267367d8a18cda80",
+      "betaSha256": "eaef16c0496207d1a58f2328b43e9bb3bee83609bd0f6299cce4dded75942bf3",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -346,7 +346,7 @@
     },
     {
       "path": "tests/main-lifecycle.spec.ts",
-      "betaSha256": "1bb2309d06f4111876e80ee520386f566e6edbf15e4ab9ca5c156f760abaa57d",
+      "betaSha256": "4c5ed20522729100991c4dbd731b98113b3c9a18472ae4e2a52c05a6c0b3534a",
       "nextSha256": "c3cb4b923491a1d123fb62789c4c6cd3d8b30194a9fca5add0f119595b5de7fe",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

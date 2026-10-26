@@ -838,7 +838,7 @@ it.each(['complete', 'official', 'skip'] as const)('shows first-run onboarding w
     fixture.start.mockImplementationOnce(async () => {
       expect(manager.onboardingRequired('desktop')).toBe(false)
       expect(manager.features('desktop')).toEqual(outcome === 'skip'
-        ? { market: false, remoteControl: false }
+        ? { market: true, remoteControl: false }
         : outcome === 'official'
           ? { market: false, officialMarket: true, remoteControl: false }
           : { market: false, dshMarket: true, remoteControl: true })
@@ -863,7 +863,7 @@ it.each(['complete', 'official', 'skip'] as const)('shows first-run onboarding w
       required: false,
       accountPending: outcome !== 'skip',
       input: {
-        market: outcome === 'skip' ? 'disabled' : outcome === 'official' ? 'official-market' : 'dsh-market',
+        market: outcome === 'skip' ? 'community-market' : outcome === 'official' ? 'official-market' : 'dsh-market',
         openBrowser: outcome === 'complete',
         networkExposure: outcome === 'complete' ? 'lan' : 'loopback',
       },
