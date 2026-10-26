@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import {
   COMPANY_TRANSCRIPT_DEFAULTS,
   COMPANY_TRANSCRIPT_SETTINGS_KEY,
+  companyTranscriptDefaultsScript,
   installCompanyTranscriptDefaults,
 } from '../src/client/company-transcript-defaults.ts'
 
@@ -32,4 +33,14 @@ it('preserves every existing StreamFold preference without parsing or rewriting 
 
 it('does nothing outside a renderer storage environment', () => {
   expect(installCompanyTranscriptDefaults(undefined)).toBe(false)
+})
+
+it('emits a first-frame script that seeds before StreamFold reads storage', () => {
+  const storage = storageWith()
+  const execute = new Function('localStorage', companyTranscriptDefaultsScript())
+  execute(storage)
+  expect(JSON.parse(storage.values.get(COMPANY_TRANSCRIPT_SETTINGS_KEY)!)).toEqual(COMPANY_TRANSCRIPT_DEFAULTS)
+  storage.values.set(COMPANY_TRANSCRIPT_SETTINGS_KEY, '{"windowHeight":360}')
+  execute(storage)
+  expect(storage.values.get(COMPANY_TRANSCRIPT_SETTINGS_KEY)).toBe('{"windowHeight":360}')
 })

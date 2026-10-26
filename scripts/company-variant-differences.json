@@ -34,13 +34,13 @@
     },
     {
       "path": "scripts/company-package-options.ts",
-      "betaSha256": "6fc34ff29b2f44c35cf68fcc8dfe97d6ff2e649b51ffb87b69ae8a0a516e7057",
+      "betaSha256": "43c487430464644ab1d0d7ce75758290c04bd4949f5e53e01262cd322dc54196",
       "nextSha256": null,
       "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
     },
     {
       "path": "scripts/company-prepare-pack.ts",
-      "betaSha256": "ee175f1fa2e5dd19bd1dc4fd3e2a2e1b37d1ce8174c33c2d9f3a6ec8368ed081",
+      "betaSha256": "f5f278f283ecb8894287934b7beb05bd7c6b7f63e4349b8c26b8f4778bb6affd",
       "nextSha256": null,
       "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
     },
@@ -106,7 +106,7 @@
     },
     {
       "path": "src/client/company-transcript-defaults.ts",
-      "betaSha256": "a0c817fb07ffa32e07fe6ef8aac577dd187d350b9e6dfe030859abf2d6324d14",
+      "betaSha256": "87593e55526da7692b55e03e731775fe44102534a3849c043e0f5b30231d69a1",
       "nextSha256": null,
       "reason": "Company first-run StreamFold preferences and client integration, preserving saved preferences."
     },
@@ -190,7 +190,7 @@
     },
     {
       "path": "src/host/index.ts",
-      "betaSha256": "c9c61c5ae703c6bddfb07f2b0481165f2d3a51ab33ff7468eb32861f41c486d2",
+      "betaSha256": "c66afa1b12fc3aa07bbe629e8c497e02d1f2d118eb5a1168a5fadb9e727f159f",
       "nextSha256": "c39ffd72adf17d713d23d80dc414b7bae6e1546847b9732f5d244cd1a0c0de2a",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },
@@ -268,7 +268,7 @@
     },
     {
       "path": "tests/company-packaging.spec.ts",
-      "betaSha256": "dfd25b7b9af3e2689fcec61ee2029ba9dda6f4f6d3956d723de70447f4815273",
+      "betaSha256": "3fa5c185a9fc681b88292e6f1e5d8e3ac8096ee114fd33510d935033a91d9a4c",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -292,7 +292,7 @@
     },
     {
       "path": "tests/company-transcript-defaults.spec.ts",
-      "betaSha256": "8b08c5b775b6fe2ecfedca35b85db3dbb2be4a1669e2abe9188691131cbefd36",
+      "betaSha256": "b9be6d1117718bb9c64ca05a5f72e62f8b25ff43d186994e267367d8a18cda80",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

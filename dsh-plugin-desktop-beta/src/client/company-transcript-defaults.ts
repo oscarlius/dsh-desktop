@@ -10,6 +10,12 @@ export const COMPANY_TRANSCRIPT_DEFAULTS = Object.freeze({
   keepUserQuestions: true,
 })
 
+/** Parser-blocking Host bootstrap for the first document, before client modules load. */
+export function companyTranscriptDefaultsScript(): string {
+  const value = JSON.stringify(COMPANY_TRANSCRIPT_DEFAULTS)
+  return `try{const k=${JSON.stringify(COMPANY_TRANSCRIPT_SETTINGS_KEY)};if(localStorage.getItem(k)===null)localStorage.setItem(k,${JSON.stringify(value)})}catch{}`
+}
+
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
 /** Seeds company defaults once without changing any existing user preference. */

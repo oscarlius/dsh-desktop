@@ -28,8 +28,6 @@ export function companyWindowsBuilderArguments(options: CompanyPackageOptions): 
     `--config.directories.output=${options.output}`,
     `--config.nsis.artifactName=${initial ? 'P7-DSH-Company-Full-${version}-${arch}-Setup.${ext}' : 'P7-DSH-Company-Test-${version}-${arch}-Setup.${ext}'}`,
     ...(options.sourceCommit === undefined ? [] : [`--config.extraMetadata.dshCompanyReleaseSourceCommit=${options.sourceCommit}`]),
-    ...(initial
-      ? [`--config.extraResources[1].from=${options.bootstrapFile}`, '--config.extraResources[1].to=p7-company-connection.json']
-      : ['--config.extraMetadata.dshDesktopUpdateDistribution=true']),
+    ...(initial ? [] : ['--config.extraMetadata.dshDesktopUpdateDistribution=true']),
   ]
 }

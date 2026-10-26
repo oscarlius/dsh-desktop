@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import companyBeforePack from '../scripts/company-update-before-pack.ts'
 import { companyWindowsBuilderArguments } from '../scripts/company-package-options.ts'
+import { applyCompanyBootstrapResources } from '../scripts/company-prepare-pack.ts'
 
 const output = 'C:/build/company'
 
@@ -17,11 +18,10 @@ describe('company installer distributions', () => {
       '--config.nsis.differentialPackage=true',
       '--config.directories.output=C:/build/company',
       '--config.nsis.artifactName=P7-DSH-Company-Full-${version}-${arch}-Setup.${ext}',
-      '--config.extraResources[1].from=C:/sealed/p7-company-connection.json',
-      '--config.extraResources[1].to=p7-company-connection.json',
       `--config.extraMetadata.dshCompanyReleaseSourceCommit=${'a'.repeat(40)}`,
     ]))
     expect(arguments_.some(value => value.includes('dshDesktopUpdateDistribution'))).toBe(false)
+    expect(arguments_.some(value => value.includes('extraResources['))).toBe(false)
   })
 
   it('makes the differential update credential-free while preserving the ASAR beforePack path', () => {
@@ -38,6 +38,19 @@ describe('company installer distributions', () => {
 
   it('rejects a Full build without its protected bootstrap before Electron Builder runs', () => {
     expect(() => companyWindowsBuilderArguments({ distribution: 'full', output })).toThrow('DSH_P7_BOOTSTRAP_FILE')
+  })
+
+  it('adds the protected resource as a real FileSet only in the Full beforePack context', () => {
+    const full = { extraMetadata: { dshDesktopFlavor: 'companytest' }, extraResources: [{ from: 'runtime', to: 'runtime' }] }
+    const env = { DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_P7_BOOTSTRAP_FILE: 'C:/sealed/p7-company-connection.json' }
+    applyCompanyBootstrapResources(full, env)
+    expect(full.extraResources).toEqual([{ from: 'runtime', to: 'runtime' }, { from: env.DSH_P7_BOOTSTRAP_FILE, to: 'p7-company-connection.json' }])
+    const update = { extraMetadata: { dshDesktopFlavor: 'companytest', dshDesktopUpdateDistribution: true }, extraResources: [{ from: 'runtime', to: 'runtime' }] }
+    applyCompanyBootstrapResources(update, env)
+    expect(update.extraResources).toEqual([{ from: 'runtime', to: 'runtime' }])
+    expect(() => applyCompanyBootstrapResources(full, env)).toThrow('more than once')
+    expect(() => applyCompanyBootstrapResources({ ...update, extraResources: full.extraResources }, env)).toThrow('Public update')
+    expect(() => applyCompanyBootstrapResources({ extraMetadata: { dshDesktopFlavor: 'companytest' } }, {})).toThrow('explicit protected bootstrap')
   })
 })
 
