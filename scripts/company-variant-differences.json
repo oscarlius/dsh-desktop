@@ -106,7 +106,7 @@
     },
     {
       "path": "src/client/company-transcript-defaults.ts",
-      "betaSha256": "87593e55526da7692b55e03e731775fe44102534a3849c043e0f5b30231d69a1",
+      "betaSha256": "44099f1a515d2fd0da996060cf183043540c69256b58fab56195a3d3c5af158f",
       "nextSha256": null,
       "reason": "Company first-run StreamFold preferences and client integration, preserving saved preferences."
     },
@@ -190,7 +190,7 @@
     },
     {
       "path": "src/host/index.ts",
-      "betaSha256": "c66afa1b12fc3aa07bbe629e8c497e02d1f2d118eb5a1168a5fadb9e727f159f",
+      "betaSha256": "8f88019344884d6581f3ec804a368939866a37b7bac6377ced4d7c646b676dda",
       "nextSha256": "c39ffd72adf17d713d23d80dc414b7bae6e1546847b9732f5d244cd1a0c0de2a",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },
@@ -400,7 +400,7 @@
     },
     {
       "path": "tsdown.config.ts",
-      "betaSha256": "7f479d1c55b08d1834153f7b19520d16f5d7e555622c9f6b02a0f7f805c22c10",
+      "betaSha256": "fa023020225d03e05e2946f79542ce131a8f75ea9729bda2cfa9ce5a49bb5a8e",
       "nextSha256": "2a8c36736f3054d9b44f0d359787140e612d1f45b2eabe60e4083d7f64444b4d",
       "reason": "Stable product-identity runtime entry required by the packaged company smoke verifier."
     }

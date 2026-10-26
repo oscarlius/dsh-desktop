@@ -26,7 +26,7 @@ import { installSkillBadgeResolution } from './skill-badge.ts'
 import * as desktopOffice from './office.ts'
 import { resolveOfficeConfig } from './office.ts'
 import { DESKTOP_COMPANY_SERVICE_ENABLED } from '../product-identity.ts'
-import { companyTranscriptDefaultsScript } from '../client/company-transcript-defaults.ts'
+import { installCompanyTranscriptBoot } from '../client/company-transcript-defaults.ts'
 
 export async function main(): Promise<void> {
   // The Host lists and reads user workspaces; see asar-archive-policy.ts.
@@ -132,13 +132,11 @@ export async function main(): Promise<void> {
   process.once('disconnect', () => { void stop().catch(fatal) })
   const { ctx } = await application
   if (DESKTOP_COMPANY_SERVICE_ENABLED) {
+    installCompanyTranscriptBoot(ctx)
     // This is a Host-owned boot injection, so native and loopback documents
     // receive the same first-frame gate.  It intentionally grants no browser
     // or token capability; the connection/origin fence remains unchanged.
     ctx.on('webserver/index-inject', table => {
-      // This parser-blocking head script precedes the module graph, including
-      // StreamFold, so its first renderer observes the 180px defaults.
-      table.push({ kind: 'script', placement: 'head', text: companyTranscriptDefaultsScript() })
       table.push({ kind: 'global', name: '__DSH_COMPANY_POLICY__', value: {
         accountOnboardingEnabled: false,
         requirePersonalLogin: true,

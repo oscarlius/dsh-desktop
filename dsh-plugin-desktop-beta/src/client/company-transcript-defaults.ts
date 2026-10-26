@@ -1,4 +1,6 @@
 /** Company-only first-run defaults for the optional StreamFold transcript plugin. */
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-host-webserver'
 export const COMPANY_TRANSCRIPT_SETTINGS_KEY = 'dsh-streamfold'
 
 export const COMPANY_TRANSCRIPT_DEFAULTS = Object.freeze({
@@ -14,6 +16,13 @@ export const COMPANY_TRANSCRIPT_DEFAULTS = Object.freeze({
 export function companyTranscriptDefaultsScript(): string {
   const value = JSON.stringify(COMPANY_TRANSCRIPT_DEFAULTS)
   return `try{const k=${JSON.stringify(COMPANY_TRANSCRIPT_SETTINGS_KEY)};if(localStorage.getItem(k)===null)localStorage.setItem(k,${JSON.stringify(value)})}catch{}`
+}
+
+/** Shared by the native Host and isolated real-Agent renderer acceptance. */
+export function installCompanyTranscriptBoot(ctx: Pick<Context, 'on'>): void {
+  ctx.on('webserver/index-inject', table => {
+    table.push({ kind: 'script', placement: 'head', text: companyTranscriptDefaultsScript() })
+  })
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
