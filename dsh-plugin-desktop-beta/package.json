@@ -40,6 +40,7 @@
     "dist:mac": "node scripts/package.ts mac",
     "dist:mac-smoke": "node scripts/package.ts mac-smoke",
     "dist:win": "node scripts/package.ts win",
+    "dist:win:company-release": "node scripts/package-company-release.mjs",
     "dist:win-portable": "node scripts/package.ts win-portable",
     "dist:linux": "node scripts/package.ts linux",
     "check:mac-package:platform": "yarn workspace dsh-community-market build && yarn build && yarn verify:frontend",

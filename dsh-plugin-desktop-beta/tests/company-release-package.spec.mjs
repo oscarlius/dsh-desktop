@@ -1,6 +1,6 @@
 import { after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { releaseManifest } from '../scripts/package-company-release.mjs'
@@ -8,6 +8,13 @@ import { releaseManifest } from '../scripts/package-company-release.mjs'
 describe('company release manifest', () => {
   let output
   after(() => rmSync(output, { recursive: true, force: true }))
+
+  it('connects the root company command to the paired workspace packager', () => {
+    const root = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
+    const workspace = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    assert(root.scripts['dist:win-company-release'].endsWith('yarn workspace dsh-plugin-desktop-beta dist:win:company-release'))
+    assert.equal(workspace.scripts['dist:win:company-release'], 'node scripts/package-company-release.mjs')
+  })
 
   it('publishes exactly the Full installer, update installer, and update blockmap', () => {
     output = mkdtempSync(join(tmpdir(), 'dsh-company-release-'))
