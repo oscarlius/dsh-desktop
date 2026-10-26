@@ -1,6 +1,12 @@
 import { expect, it } from 'vitest'
 import { desktopManifestUrl } from '../src/product-identity.ts'
 
+it('prefers the sealed archive root for a Next Host module', () => {
+  const resources = 'file:///C:/Program%20Files/P7%20DSH/resources/'
+  expect(desktopManifestUrl(resources + 'app.asar/lib/product-identity.js', resources).href)
+    .toBe(resources + 'app.asar/package.json')
+})
+
 it('reads sealed root metadata for installed modules including nested CLI packages', () => {
   const resources = 'file:///C:/P7/resources/'
   expect(desktopManifestUrl(resources + 'app/lib/identity.js', resources).href).toBe(resources + 'app/package.json')

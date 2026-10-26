@@ -31,11 +31,13 @@ describe('company differential updater', () => {
     expect(backend.listenerCount('download-progress')).toBe(0)
   })
   it('passes the newer raw beta15 build through the unmodified NSIS updater', async () => {
-    const internal = { ...release, version: '2.0.18-beta.15.build.2026102102' }
+    const version = '2.0.18-beta.15.build.2026102102'
+    const downloadUrl = `https://maas.zxrc.com.cn:8090/ui/downloads/dsh/companytest/${version}/P7-DSH-Company-Test-${version}-x64-Setup.exe`
+    const internal = { ...release, version, downloadUrl }
     const backend = updater({
       ...result(),
-      updateInfo: { ...result().updateInfo, version: internal.version },
-      versionInfo: { ...result().versionInfo, version: internal.version },
+      updateInfo: { ...result().updateInfo, version, path: downloadUrl, files: [{ url: downloadUrl, size: release.size!, sha512: release.sha512! }] },
+      versionInfo: { ...result().versionInfo, version, path: downloadUrl, files: [{ url: downloadUrl, size: release.size!, sha512: release.sha512! }] },
     })
     await expect(downloadCompanyDifferentialUpdate({ release: internal, signal: new AbortController().signal, onProgress: () => {}, createUpdater: async () => backend as unknown as NsisUpdater })).resolves.toBe('C:/private/pending/update.exe')
     expect(backend).toMatchObject({ allowDowngrade: false })

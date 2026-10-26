@@ -10,7 +10,7 @@ const roots: string[] = []
 const artifact = Buffer.alloc(512)
 artifact.write('MZ'); artifact.writeUInt32LE(128, 0x3c); artifact.write('PE\0\0', 128)
 const release: PublishedCompanyRelease = { status: 'update-available', version: '2.0.18-beta.4',
-  releaseNotes: 'Update', downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/dsh/setup.exe',
+  releaseNotes: 'Update', downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/dsh/companytest/2.0.18-beta.4/P7-DSH-Company-Test-2.0.18-beta.4-x64-Setup.exe',
   sha256: createHash('sha256').update(artifact).digest('hex') }
 
 async function options() {
@@ -39,12 +39,16 @@ describe('company installer transport', () => {
     await expect(downloadDesktopUpdate({ ...config, companyRelease: { ...release, sha256: '' } })).rejects.toThrow('digest')
     expect(config.request).not.toHaveBeenCalled()
   })
-  it('rejects redirects, unsupported platforms, mismatched versions and foreign URLs', async () => {
+  it('rejects redirects, Full installers, version drift, unsupported platforms, and foreign URLs', async () => {
     const config = await options()
     await expect(downloadDesktopUpdate({ ...config, request: async () => ({ response: new Response(artifact), finalUrl: 'https://attacker.example/setup.exe' }) })).rejects.toThrow()
     await expect(downloadDesktopUpdate({ ...config, platform: 'darwin' })).rejects.toThrow('platform or version')
     await expect(downloadDesktopUpdate({ ...config, version: '2.0.18-beta.5' })).rejects.toThrow('platform or version')
     await expect(downloadDesktopUpdate({ ...config, companyRelease: { ...release, downloadUrl: 'https://attacker.example/setup.exe' } })).rejects.toThrow()
+    await expect(downloadDesktopUpdate({ ...config, companyRelease: { ...release,
+      downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/dsh/companytest/2.0.18-beta.4/P7-DSH-Company-Full-2.0.18-beta.4-x64-Setup.exe' } })).rejects.toThrow()
+    await expect(downloadDesktopUpdate({ ...config, request: async () => ({ response: new Response(artifact),
+      finalUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/dsh/companytest/2.0.18-beta.5/P7-DSH-Company-Test-2.0.18-beta.5-x64-Setup.exe' }) })).rejects.toThrow()
     expect(config.request).not.toHaveBeenCalled()
   })
 })

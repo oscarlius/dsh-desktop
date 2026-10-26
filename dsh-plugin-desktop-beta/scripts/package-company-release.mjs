@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { companyBuildVersion } from '../src/company-build-version.ts'
 
 const packageRoot = resolve(dirname(fileURLToPath(new URL('../package.json', import.meta.url))))
 const workspaceRoot = resolve(packageRoot, '..')
@@ -51,6 +52,9 @@ function artifact(component, base, path) {
 }
 
 export function releaseManifest(version, sourceCommit, output) {
+  const product = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
+  if (product.version !== version) throw new Error('Release manifest version differs from its source package')
+  const presentation = companyBuildVersion(version, product.dshCompanyCompatibilityBuild)
   const full = `full/P7-DSH-Company-Full-${version}-x64-Setup.exe`
   const update = `update/P7-DSH-Company-Test-${version}-x64-Setup.exe`
   const blockmap = `${update}.blockmap`
@@ -58,6 +62,8 @@ export function releaseManifest(version, sourceCommit, output) {
     schemaVersion: 1,
     channel: 'companytest',
     version,
+    displayVersion: presentation.visible,
+    build: presentation.build,
     sourceCommit,
     artifacts: [
       artifact('initial-exe', output, full),
@@ -81,7 +87,7 @@ function packageDistribution(staging, name, sourceCommit, updateDistribution) {
   })
   if (updateDistribution) env.DSH_COMPANY_UPDATE_DISTRIBUTION = '1'
   else env.DSH_COMPANY_INITIAL_DISTRIBUTION = '1'
-  command(process.execPath, [join(packageRoot, 'scripts', 'package-win.ts'), ...(updateDistribution ? ['--company-update'] : [])], packageRoot, env)
+  command(process.execPath, [join(packageRoot, 'scripts', 'package.ts'), 'company-win'], packageRoot, env)
 }
 
 export function runCompanyRelease() {

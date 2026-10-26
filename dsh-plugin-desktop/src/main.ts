@@ -1440,6 +1440,11 @@ async function start(): Promise<void> {
         preparationHooks,
       )
     }
+    if (prepared.legacyWebRuntimeSources !== undefined) {
+      electronLogger.info(
+        `${BIN_NAME}: re-targeted Connection from the retired webRuntime service to webStartup; outdated layers: ${prepared.legacyWebRuntimeSources.join(', ')}`,
+      )
+    }
     // Desktop setup has its own per-Profile trigger, independent of account state.
     // The official page checks that trigger before showing its own account flow.
     const setupWizardState = safeModePaths === undefined

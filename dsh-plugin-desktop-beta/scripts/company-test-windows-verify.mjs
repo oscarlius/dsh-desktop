@@ -17,7 +17,8 @@ const installer = join(dist, initialDistribution
   ? `P7-DSH-Company-Full-${version}-x64-Setup.exe`
   : `P7-DSH-Company-Test-${version}-x64-Setup.exe`)
 const application = join(dist, 'win-unpacked', 'P7 DSH Company Test.exe')
-const manifest = join(dist, 'win-unpacked', 'resources', 'app', 'package.json')
+const resources = join(dist, 'win-unpacked', 'resources')
+const archive = join(resources, 'app.asar')
 const require = createRequire(import.meta.url)
 
 function assertPortableExecutable(path, label) {
@@ -107,15 +108,13 @@ function verifyPackagedRuntime() {
     "import { readFileSync, readdirSync } from 'node:fs'",
     "import { join } from 'node:path'",
     "import { pathToFileURL } from 'node:url'",
-    "const app = join(process.resourcesPath, 'app')",
-    "const identityName = readdirSync(join(app, 'lib')).find(name => /^product-identity-.*\\.js$/u.test(name))",
-    "if (identityName === undefined) throw new Error('missing bundled product identity module')",
-    "const identity = await import(pathToFileURL(join(app, 'lib', identityName)).href)",
+    "const app = join(process.resourcesPath, 'app.asar')",
+    "const identity = await import(pathToFileURL(join(app, 'lib', 'product-identity.js')).href)",
     "const product = Object.values(identity).find(value => value && typeof value === 'object' && value.appId === 'ai.deepseek.dsh.desktop.companytest')",
     "if (!product) throw new Error('missing sealed company product identity')",
     "const p7 = await import(pathToFileURL(join(app, 'node_modules', 'dsh-plugin-p7-company-models', 'lib', 'index.js')).href)",
     "const value = { packageName: product.packageName, productName: product.productName, appId: product.appId, homeDirectoryName: product.homeDirectoryName, updatesEnabled: product.updatesEnabled, accountOnboardingEnabled: product.accountOnboardingEnabled, bundledP7: typeof p7.CompanyHost === 'function' }",
-    "if (value.packageName !== JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).name || value.productName !== 'P7 DSH Company Test' || value.appId !== 'ai.deepseek.dsh.desktop.companytest' || value.homeDirectoryName !== '.p7-dsh-companytest' || value.updatesEnabled !== false || value.accountOnboardingEnabled !== false || !value.bundledP7) process.exitCode = 1",
+    "if (value.packageName !== JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).name || value.productName !== 'P7 DSH Company Test' || value.appId !== 'ai.deepseek.dsh.desktop.companytest' || value.homeDirectoryName !== '.p7-dsh-companytest' || value.updatesEnabled !== true || value.accountOnboardingEnabled !== false || !value.bundledP7) process.exitCode = 1",
     'console.log(JSON.stringify(value))',
   ].join('; ')
   const result = spawnSync(application, ['--input-type=module', '-e', program], {
@@ -135,7 +134,9 @@ for (const [path, label] of [[installer, 'Company test NSIS installer'], [applic
   if (state.status !== 'NotSigned') throw new Error(`${label} must be unsigned; received Authenticode status ${state.status}`)
   console.log(`${label}: sha256=${createHash('sha256').update(readFileSync(path)).digest('hex')} signature=${state.status}`)
 }
-const packaged = JSON.parse(readFileSync(manifest, 'utf8'))
+if (!existsSync(archive)) throw new Error(`Company package must ship app.asar: ${archive}`)
+if (existsSync(join(resources, 'app'))) throw new Error('Windows company package must not ship a legacy resources/app manifest directory')
+const packaged = JSON.parse(require('@electron/asar').extractFile(archive, 'package.json').toString('utf8'))
 const connectionPath = join(dist, 'win-unpacked', 'resources', 'p7-company-connection.json')
 if (packaged.dshDesktopUpdateDistribution === true) {
   if (existsSync(connectionPath)) throw new Error('Public update packages must not carry a reusable P7 credential')
@@ -156,6 +157,6 @@ if (sourceCommit !== undefined && packaged.dshCompanyReleaseSourceCommit !== sou
 }
 if (packaged.dshDesktopFlavor !== 'companytest') throw new Error('packaged runtime does not carry the companytest flavor marker')
 if (packaged.dependencies?.['dsh-plugin-p7-company-models'] !== 'workspace:*') throw new Error('packaged runtime does not declare the bundled P7 dependency')
-console.log(`Company test packaged runtime verified: ${manifest}`)
+console.log(`Company test packaged runtime verified: ${archive}`)
 verifyPackagedRuntime()
 verifyInstallerPayload(!updateDistribution)

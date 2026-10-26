@@ -2,17 +2,18 @@
 import { CSPProvider } from '@base-ui/react/csp-provider'
 import { createRoot } from 'react-dom/client'
 import { useEffect, useMemo, useState } from 'react'
-import { RecoveryApp, type RecoveryState } from '../../../dsh-plugin-desktop-beta/src/native-ui/recovery/App.tsx'
-import { ProfileCreateApp } from '../../../dsh-plugin-desktop-beta/src/native-ui/profile-create/App.tsx'
-import { ProfileSelectorApp } from '../../../dsh-plugin-desktop-beta/src/native-ui/profile-selector/App.tsx'
-import { DesktopFrame } from '../../../dsh-plugin-desktop-beta/src/native-ui/shared/DesktopFrame.tsx'
-import { Alert, AlertDescription } from '../../../dsh-plugin-desktop-beta/src/native-ui/components/ui/alert.tsx'
-import { desktopRecoveryCopy } from '../../../dsh-plugin-desktop-beta/src/recovery-copy.ts'
+import { RecoveryApp, type RecoveryState } from '../../../dsh-plugin-desktop/src/native-ui/recovery/App.tsx'
+import { ProfileCreateApp } from '../../../dsh-plugin-desktop/src/native-ui/profile-create/App.tsx'
+import { ProfileSelectorApp } from '../../../dsh-plugin-desktop/src/native-ui/profile-selector/App.tsx'
+import { DesktopFrame } from '../../../dsh-plugin-desktop/src/native-ui/shared/DesktopFrame.tsx'
+import { Alert, AlertDescription } from '../../../dsh-plugin-desktop/src/native-ui/components/ui/alert.tsx'
+import { desktopRecoveryCopy } from '../../../dsh-plugin-desktop/src/recovery-copy.ts'
 import { useDesktopState } from '../client/desktop-state.ts'
 import { NextSettingsAdapter } from '../client/settings-adapter.ts'
 import type { DesktopCommand } from '../desktop-contract.ts'
 import { recoverySupport } from '../recovery-support.ts'
 import './theme.css'
+import { Onboarding } from './onboarding.tsx'
 
 function App() {
   const adapter = useMemo(() => window.desktopNext ? new NextSettingsAdapter(window.desktopNext) : undefined, [])
@@ -67,7 +68,8 @@ function NativePages({ adapter }: { adapter: NextSettingsAdapter }) {
     document.addEventListener('click', navigate)
     return () => document.removeEventListener('click', navigate)
   }, [adapter, busy, state])
-  if (!state) return <><DesktopFrame /><main className="dshNativeContent p-6"><Alert><AlertDescription>{t('正在读取桌面状态…', 'Loading Desktop state…')}</AlertDescription></Alert></main></>
+  if (!state) return <><DesktopFrame /><main className={page === 'onboarding' ? 'next-onboarding dshNativeContent p-6' : 'dshNativeContent p-6'} data-platform={new URLSearchParams(location.search).get('platform') ?? undefined} data-material="transparent"><Alert><AlertDescription>{t('正在读取桌面状态…', 'Loading Desktop state…')}</AlertDescription></Alert></main></>
+  if (page === 'onboarding') return <Onboarding key={state.selected} state={state} locale={locale} bridge={adapter.bridge} />
   if (page === 'create-profile') return <ProfileCreateApp onCancel={() => { void perform({ type: 'close-controls' }) }} onCreate={async name => {
     await adapter.command({ type: 'create', name })
     await adapter.command({ type: 'switch', name })

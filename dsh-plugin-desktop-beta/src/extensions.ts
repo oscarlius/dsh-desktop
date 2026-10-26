@@ -1,0 +1,185 @@
+/** Narrow Host capabilities consumed by the existing plugin markets. */
+import { installComputerUseCommand } from './host/computer-use-command.ts'
+import { installHostLogging } from './host/logging.ts'
+import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { basename, dirname, isAbsolute, join } from 'node:path'
+import type { Context } from '@deepseek-ai/cordis'
+import type { ProfilePnpmInvocation } from '@deepseek-ai/dsh-app-boot'
+import { installNotifications } from './notifications.ts'
+import { HostPermissions } from './host-permissions.ts'
+import { NEXT_PACKAGE, profileName } from './profiles.ts'
+import { PNPM_IGNORE_MINIMUM_RELEASE_AGE } from './pnpm-policy.ts'
+import { unpackedPath } from './asar-archive-policy.ts'
+
+export const name = 'desktop-next-capabilities'
+export const inject = ['profileContext']
+
+export function apply(ctx: Context): void {
+  installHostLogging(ctx)
+  if (process.send) {
+    const permissions = new HostPermissions(process)
+    ctx.provide('desktopPermissions', permissions)
+    ctx.effect(() => permissions.dispose, 'Next Host permission bridge')
+  }
+  if (process.send) installNotifications(ctx, notification => {
+    if (process.connected) process.send?.({ type: 'notification', notification }, () => {})
+  })
+  if (process.env.DSH_COMPANY_MODE === '1') installCompanyIdentityBridge(ctx)
+  const profile = ctx.profileContext
+  const invocation = profile.packageManager
+  if (!invocation) throw new Error('Next requires its bundled pnpm invocation')
+  const runner = createPackageRunner(invocation, profile.dir)
+  // dshmarket installs through the bundled pnpm; Community Market manages
+  // packages through the official pluginManager service and needs no Desktop
+  // inventory or restart capability.
+  ctx.provide('desktopProfiles', { current: { name: profile.name, dir: profile.dir } })
+  ctx.provide('desktopPnpm', runner)
+  installComputerUseCommand(ctx, profile.dir)
+  if (process.send) ctx.provide('desktopActions', {
+    ...(process.platform === 'darwin' || process.platform === 'win32' ? { openTerminal: () => {
+      if (!process.connected || !process.send) throw new Error('Next shell is unavailable')
+      process.send({ type: 'desktop-action', action: 'terminal' }, () => {})
+    } } : {}),
+    requestRestart: () => new Promise<void>((resolve, reject) => {
+      if (!process.connected || !process.send) { reject(new Error('Next shell is unavailable')); return }
+      process.send({ type: 'desktop-action', action: 'restart' }, error => error ? reject(error) : resolve())
+    }),
+  })
+  ctx.effect(() => () => runner.dispose(), 'Next package process disposal')
+}
+
+/**
+ * Host-only bridge for the Company P7 plugin.  Refresh credentials are never
+ * serialized into the renderer, environment, profile patch, or diagnostics:
+ * the Host can only ask the Electron parent to load/save/clear an opaque token.
+ */
+function installCompanyIdentityBridge(ctx: Context): void {
+  if (!process.send || !process.connected) throw new Error('Company identity requires the native Desktop Host')
+  let nextId = 1
+  const pending = new Map<number, { resolve(value: { refreshToken?: string }): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>()
+  const request = (value: { action: 'load' | 'save' | 'clear'; origin: string; refreshToken?: string }): Promise<{ refreshToken?: string }> => {
+    const id = nextId++
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (pending.delete(id)) reject(new Error('P7 encrypted storage request timed out'))
+      }, 10_000)
+      timer.unref()
+      pending.set(id, { resolve, reject, timer })
+      process.send?.({ type: 'p7-session-vault', requestId: id, request: value }, error => {
+        if (error) { const current = pending.get(id); if (current) clearTimeout(current.timer); pending.delete(id); reject(error) }
+      })
+    })
+  }
+  const onMessage = (value: unknown): void => {
+    if (!value || typeof value !== 'object' || !('type' in value) || value.type !== 'p7-session-vault-result') return
+    const result = value as { requestId?: unknown; error?: unknown; result?: unknown }
+    const requestId = result.requestId
+    if (typeof requestId !== 'number' || !Number.isSafeInteger(requestId)) return
+    const current = pending.get(requestId)
+    if (!current) return
+    pending.delete(requestId)
+    clearTimeout(current.timer)
+    if (typeof result.error === 'string') { current.reject(new Error(result.error)); return }
+    const payload = result.result
+    if (!payload || typeof payload !== 'object' || (Reflect.get(payload, 'refreshToken') !== undefined && typeof Reflect.get(payload, 'refreshToken') !== 'string')) {
+      current.reject(new Error('Invalid native P7 vault response')); return
+    }
+    current.resolve(payload as { refreshToken?: string })
+  }
+  process.on('message', onMessage)
+  ctx.provide('p7AccountStore', {
+    clientVersion: process.env.DSH_COMPANY_TRANSPORT_VERSION ?? '2.0.20-beta.15',
+    load: async (origin: string) => (await request({ action: 'load', origin })).refreshToken,
+    save: async (origin: string, refreshToken: string) => { await request({ action: 'save', origin, refreshToken }) },
+    clear: async (origin: string) => { await request({ action: 'clear', origin }) },
+  })
+  ctx.provide('p7AccountBrowser', { open: (url: string) => {
+    const target = new URL(url)
+    if (target.protocol !== 'https:' || target.username || target.password) throw new Error('Invalid P7 authorization URL')
+    process.send?.({ type: 'p7-account-browser', url: target.href }, () => {})
+  } })
+  ctx.effect(() => () => {
+    process.off('message', onMessage)
+    for (const value of pending.values()) { clearTimeout(value.timer); value.reject(new Error('Company identity Host is stopping')) }
+    pending.clear()
+  }, 'Company native identity bridge')
+}
+
+/** Own each process handle so a stale cancellation cannot kill its successor. */
+export function createPackageRunner(invocation: ProfilePnpmInvocation, directory: string, forceKillDelayMs = 2_000) {
+  let active: { cancel(): void; done: Promise<unknown> } | undefined
+  let disposed = false
+  function start(args: readonly string[], cwd: string, signal?: AbortSignal, env: NodeJS.ProcessEnv = {}) {
+    if (disposed) throw new Error('Package runner has been disposed')
+    if (active) throw new Error('A profile package operation is already active')
+    if (signal?.aborted) throw signal.reason ?? new Error('Package operation cancelled')
+    if (!args.length || args.some(arg => typeof arg !== 'string' || arg.includes('\0'))) throw new Error('Invalid package arguments')
+    if (!isAbsolute(cwd) || cwd.includes('\0')) throw new Error('Package invoking directory must be absolute')
+    const child = spawn(invocation.command, [...args], {
+      cwd, env: { ...process.env, ...invocation.env, ...env },
+      windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let settled = false
+    let killTimer: NodeJS.Timeout | undefined
+    const kill = (kind: NodeJS.Signals): void => {
+      if (settled || !child.pid) return
+      if (process.platform === 'win32') {
+        const killer = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' })
+        killer.on('error', () => { if (!settled) child.kill(kind) })
+      } else {
+        try { process.kill(-child.pid, kind) } catch { child.kill(kind) }
+      }
+    }
+    const cancel = (): void => {
+      if (settled || killTimer) return
+      kill('SIGTERM')
+      killTimer = setTimeout(() => kill('SIGKILL'), forceKillDelayMs)
+      killTimer.unref()
+    }
+    const done = new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+      child.once('error', reject)
+      child.once('close', (exitCode, exitSignal) => { resolve({ exitCode, signal: exitSignal }) })
+    }).finally(() => {
+      settled = true
+      clearTimeout(killTimer)
+      signal?.removeEventListener('abort', cancel)
+      if (active?.done === done) active = undefined
+    })
+    active = { cancel, done }
+    void done.catch(() => {})
+    signal?.addEventListener('abort', cancel, { once: true })
+    return { stdout: child.stdout!, stderr: child.stderr!, done, cancel }
+  }
+  return {
+    run(argv: readonly string[], signal?: AbortSignal) {
+      if (!argv.length) throw new Error('Invalid pnpm arguments')
+      // The Host invocation also serves the official manager; apply its policy only once here.
+      const args = [...invocation.args, ...argv].filter(arg => arg !== PNPM_IGNORE_MINIMUM_RELEASE_AGE)
+      return start([...args, PNPM_IGNORE_MINIMUM_RELEASE_AGE], directory, signal)
+    },
+    /** dshmarket uses the official CLI so installs/removals also reconcile Profile bundles. */
+    runPlugin(argv: readonly string[], invokingDir: string, signal?: AbortSignal) {
+      if (!argv.length) throw new Error('Invalid plugin arguments')
+      return start(['--expose-internals', join(dirname(NEXT_PACKAGE), 'lib', 'plugin-cli.js'),
+        profileName(basename(directory)), ...argv], invokingDir, signal, { DSH_HOME: dirname(dirname(directory)) })
+    },
+    async dispose(): Promise<void> {
+      disposed = true
+      const current = active
+      current?.cancel()
+      await current?.done.catch(() => {})
+    },
+  }
+}
+
+/**
+ * Entry of the pnpm this installation carries. Electron runs it as a separate Node-mode process
+ * with its own workers, so a packaged Next uses the copy unpacked beside app.asar.
+ * @param anchor - Manifest the installation resolves packages from.
+ * @returns Absolute physical path of `pnpm.mjs`.
+ */
+export function bundledPnpmEntry(anchor: string): string {
+  const require = createRequire(anchor)
+  return unpackedPath(join(dirname(require.resolve('pnpm')), 'bin', 'pnpm.mjs'))
+}

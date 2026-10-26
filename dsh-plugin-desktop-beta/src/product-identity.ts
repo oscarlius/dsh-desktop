@@ -28,7 +28,8 @@ export const DESKTOP_RELEASE_IDENTITIES = Object.freeze({
     productName: 'P7 DSH Company Test',
     appId: 'ai.deepseek.dsh.desktop.companytest',
     homeDirectoryName: '.p7-dsh-companytest',
-    updatesEnabled: false,
+    // Company releases use the company adapter, never the public updater.
+    updatesEnabled: true,
     accountOnboardingEnabled: false,
   }),
 })
@@ -59,6 +60,11 @@ export function desktopProductIdentityForManifest(manifestText: string | undefin
 
 /** Electron also exposes resourcesPath in development and RUN_AS_NODE CLI mode. */
 export function desktopManifestUrl(moduleUrl: string, resourcesUrl?: string): URL {
+  // Next packages the Desktop Host in app.asar/lib. Its sealed package
+  // manifest is adjacent to that module, rather than resources/app.
+  if (/\.asar\//iu.test(moduleUrl)) {
+    return new URL('../package.json', moduleUrl)
+  }
   if (resourcesUrl && moduleUrl.toLowerCase().startsWith(resourcesUrl.toLowerCase())) {
     return new URL('app/package.json', resourcesUrl)
   }
@@ -82,7 +88,8 @@ function packagedManifestText(): string | undefined {
 }
 
 /** Beta is the normal identity; the internal test identity is sealed by electron-builder metadata. */
-export const DESKTOP_PRODUCT_IDENTITY = desktopProductIdentityForManifest(packagedManifestText())
+const SEALED_MANIFEST_TEXT = packagedManifestText()
+export const DESKTOP_PRODUCT_IDENTITY = desktopProductIdentityForManifest(SEALED_MANIFEST_TEXT)
 export const OTHER_DESKTOP_PRODUCT_IDENTITY = DESKTOP_RELEASE_IDENTITIES.stable
 export const DESKTOP_PACKAGE_NAME = DESKTOP_PRODUCT_IDENTITY.packageName
 export const STABLE_DESKTOP_PACKAGE_NAME = OTHER_DESKTOP_PRODUCT_IDENTITY.packageName
@@ -92,7 +99,23 @@ export const DESKTOP_RELEASE_CHANNEL = DESKTOP_PRODUCT_IDENTITY.releaseChannel
 export const DESKTOP_HOME_DIRECTORY_NAME = DESKTOP_PRODUCT_IDENTITY.homeDirectoryName
 export const DESKTOP_ACCOUNT_ONBOARDING_ENABLED = DESKTOP_PRODUCT_IDENTITY.accountOnboardingEnabled
 export const DESKTOP_COMPANY_SERVICE_ENABLED = DESKTOP_PRODUCT_IDENTITY === DESKTOP_RELEASE_IDENTITIES.companytest
-export const DESKTOP_UPDATES_ENABLED = DESKTOP_PRODUCT_IDENTITY.updatesEnabled !== false
+export const DESKTOP_UPDATES_ENABLED = DESKTOP_PRODUCT_IDENTITY.updatesEnabled
+
+/** Immutable Company transport/build values are sealed in the Beta manifest. */
+export function companyVersionContract(manifestText: string | undefined): { readonly transport: string; readonly build: string } {
+  if (manifestText === undefined) throw new Error('Company product manifest is unavailable')
+  const value = JSON.parse(manifestText) as { version?: unknown; dshCompanyCompatibilityBuild?: unknown }
+  if (typeof value.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[\w.]+)?$/u.test(value.version)
+    || typeof value.dshCompanyCompatibilityBuild !== 'string' || !/^\d{10}$/u.test(value.dshCompanyCompatibilityBuild)) {
+    throw new Error('Invalid sealed Company version contract')
+  }
+  return { transport: value.version, build: value.dshCompanyCompatibilityBuild }
+}
+const COMPANY_VERSION_CONTRACT = DESKTOP_COMPANY_SERVICE_ENABLED
+  ? companyVersionContract(SEALED_MANIFEST_TEXT)
+  : { transport: '', build: '' }
+export const COMPANY_TRANSPORT_VERSION = COMPANY_VERSION_CONTRACT.transport
+export const COMPANY_COMPATIBILITY_BUILD = COMPANY_VERSION_CONTRACT.build
 
 /** Both Desktop package identities are launcher-owned, never Profile plugins. */
 export const DESKTOP_PACKAGE_NAMES: ReadonlySet<string> = new Set([

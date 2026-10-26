@@ -7,23 +7,24 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import { installDesktopSettingsStyles } from '../../../dsh-plugin-desktop-beta/src/client/desktop-settings-styles.ts'
-import { installSidebarFooterStyles } from '../../../dsh-plugin-desktop-beta/src/client/sidebar-footer-styles.ts'
+import { installDesktopSettingsStyles } from './desktop-settings-styles.ts'
+import { installSidebarFooterStyles, setSidebarFooterBalanced, setSidebarFooterCompat } from './sidebar-footer-styles.ts'
 import { NextSettingsAdapter } from './settings-adapter.ts'
 import { NextDesktopSettings, NextDesktopActions } from './settings.tsx'
 import { installWindowStyles } from './styles.ts'
-import { registerDesktopOnboarding } from '../../../dsh-plugin-desktop-beta/src/client/onboarding.tsx'
-import { Onboarding } from '../native-ui/onboarding.tsx'
-import '../../../dsh-plugin-desktop-beta/src/client/onboarding.css'
+import { registerDesktopOnboarding } from '../../../dsh-plugin-desktop/src/client/onboarding.tsx'
+import '../../../dsh-plugin-desktop/src/client/onboarding.css'
 import { registerPluginControls } from './plugin-controls.tsx'
 import { installPluginControlsStyles } from './plugin-controls-styles.ts'
+import { registerComputerUseCommandUi } from './computer-use-command-ui.tsx'
 import { desktopDirectoryPicker, registerDesktopDirectoryPicker } from './directory-picker.ts'
 import { SettingsRequests } from './settings-requests.tsx'
-import type { DesktopSettingsLocaleKey } from '../../../dsh-plugin-desktop-beta/src/client/desktop-settings-locales.ts'
+import type { DesktopSettingsLocaleKey } from '../../../dsh-plugin-desktop/src/client/desktop-settings-locales.ts'
+import { installRendererRecovery } from './renderer-recovery.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    'desktop.settings': DesktopSettingsLocaleKey
+    'desktop.settings': DesktopSettingsLocaleKey | 'sidebarFooterCompat' | 'sidebarFooterCompatBody' | 'sidebarFooterBalanced' | 'sidebarFooterBalancedBody'
     'desktop-next': 'settings' | 'language' | 'safeMode' | 'safeModeDetail' | 'recovery' | 'dismiss'
   }
 }
@@ -39,40 +40,17 @@ export function apply(ctx: Context): void {
   ctx.effect(() => installDesktopSettingsStyles('dsh-desktop-next'), 'Shared Desktop settings styles')
   ctx.effect(installPluginControlsStyles, 'Plugin controls and permission dialog styles')
   registerPluginControls(ctx)
+  registerComputerUseCommandUi(ctx)
   // The Desktop window adds workspaces through the system folder dialog like upstream
   // Desktop, whatever directory flow the Host mounted; ordinary browsers have no bridge.
   const directoryPicker = desktopDirectoryPicker()
   if (directoryPicker) registerDesktopDirectoryPicker(ctx, directoryPicker)
-  registerDesktopOnboarding(ctx, (snapshot, locale, finish, renderNavigation) => createElement(Onboarding, {
-    embedded: true,
-    renderNavigation,
-    locale,
-    state: {
-      selected: snapshot.profile,
-      features: {
-        market: snapshot.input.market === 'community-market',
-        dshMarket: snapshot.input.market === 'dsh-market',
-        ...((snapshot.input.market as string) === 'official-market' ? { officialMarket: true } : {}),
-        remoteControl: snapshot.input.aaEnabled ?? false,
-      },
-      onboardingComputerUse: snapshot.computerUse ?? false,
-    },
-    bridge: {
-      permissions: window.desktopNext?.permissions,
-      command: async command => {
-        if (command.type === 'onboarding-skip') return finish(snapshot.profile)
-        if (command.type !== 'onboarding-complete') throw new Error('Unexpected onboarding command')
-        const { appVersion: _version, profileName: _profile, platform: _platform, ...selection } = snapshot.input
-        await finish(snapshot.profile, {
-          ...selection,
-          market: (command.features.market ? 'community-market' : command.features.dshMarket ? 'dsh-market' : command.features.officialMarket ? 'official-market' : 'disabled') as typeof selection.market,
-          aaEnabled: command.features.remoteControl,
-          computerUse: command.computerUse,
-        })
-      },
-    },
-  }))
-  if (window.desktopNext) {
+  registerDesktopOnboarding(ctx, () => null)
+  if (window.desktopNext?.state) {
+    ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+      name: 'shell.overlay', id: 'desktop-next-renderer-health', order: 0,
+      inject: () => ({ ctx }),
+    }, RendererHealth))
     const permissions = window.desktopNext.permissions
     if (permissions) ctx.effect(() => {
       const dispose = ctx.reflect.provide('desktopPermissions', permissions)
@@ -80,6 +58,15 @@ export function apply(ctx: Context): void {
     }, 'Native Desktop permissions')
     ctx.effect(installSidebarFooterStyles, 'Shared Desktop sidebar footer layout')
     const adapter = new NextSettingsAdapter(window.desktopNext)
+    ctx.effect(() => {
+      const syncSidebarFooterCompat = (): void => {
+        const value = adapter.desktopSettings.getSnapshot().value
+        setSidebarFooterCompat(value?.sidebarFooterCompat !== false)
+        setSidebarFooterBalanced(value?.sidebarFooterBalanced !== false)
+      }
+      syncSidebarFooterCompat()
+      return adapter.desktopSettings.subscribe(syncSidebarFooterCompat)
+    }, 'Sync Desktop sidebar footer compatibility setting')
     const t = ctx.locale.bind('desktop-next')
     // The shared settings shell maps the legacy section ID to our display icon.
     ctx.slots.inject('settings.section', () => ctx.slots.register({
@@ -97,6 +84,15 @@ export function apply(ctx: Context): void {
     }, SafeModeNotice))
   }
   ctx.effect(installWindowStyles, 'Next native materials and recovery notice')
+}
+
+/** The effect runs only after React mounts the assembled shell. */
+function RendererHealth({ ctx }: { ctx: Context }) {
+  useEffect(() => {
+    const bridge = window.desktopNext?.renderer
+    if (bridge) return installRendererRecovery(ctx, bridge)
+  }, [ctx])
+  return null
 }
 
 /** Temporary, metadata-only trace for the AA dialog and its sibling Plugins UI. */

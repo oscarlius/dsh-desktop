@@ -1,0 +1,101 @@
+diff --git a/lib/index.js b/lib/index.js
+index 4b1e5adba9..d1b5168332 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -1071,6 +1071,7 @@ const profile = z.object({
+ 		"websocket-cached",
+ 		"auto"
+ 	]),
++	rejectRedirects: z.boolean(),
+ 	timeoutMs: z.natural(),
+ 	websocketConnectTimeoutMs: z.natural(),
+ 	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
+@@ -1124,6 +1125,16 @@ function resolveProfiles(providers, validation = "strict") {
+ 		if (source.baseURL !== void 0 && source.baseURL.length === 0) throw new Error(`llm-pi-ai: provider "${provider}" has an empty baseURL`);
+ 		if (source.displayName !== void 0 && source.displayName.length === 0) throw new Error(`llm-pi-ai: provider "${provider}" has an empty displayName`);
+ 		assertValidHeaders(provider, source.headers);
++		if (source.rejectRedirects === true) {
++			if (source.baseURL === void 0) throw new Error(`llm-pi-ai: provider "${provider}" must configure an HTTPS baseURL when rejectRedirects is enabled`);
++			let baseURL;
++			try {
++				baseURL = new URL(source.baseURL);
++			} catch {
++				throw new Error(`llm-pi-ai: provider "${provider}" must configure an HTTPS baseURL when rejectRedirects is enabled`);
++			}
++			if (baseURL.protocol !== "https:" || baseURL.origin === "null") throw new Error(`llm-pi-ai: provider "${provider}" must configure an HTTPS baseURL when rejectRedirects is enabled`);
++		}
+ 		const streamIdleTimeoutMs = source.streamIdleTimeoutMs ?? 3e5;
+ 		if (!Number.isFinite(streamIdleTimeoutMs) || streamIdleTimeoutMs <= 0 || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) throw new Error(`llm-pi-ai: provider "${provider}" streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`);
+ 		const maxRequestImageBytes = source.maxRequestImageBytes ?? 20971520;
+@@ -1751,6 +1762,18 @@ const ANTHROPIC_TOOL_UPDATE_PLACEHOLDER = {
+ 	}
+ };
+ /** Copy profile stream knobs into pi-ai's common option vocabulary. */
++function rejectRedirectsFetch(baseURL) {
++	const origin = new URL(baseURL).origin;
++	return (input, init) => {
++		const request = new Request(input, init);
++		if (new URL(request.url).origin !== origin) throw new Error(`llm-pi-ai: redirect-safe provider request escaped configured origin ${origin}`);
++		return fetch(request, { redirect: "error" });
++	};
++}
++/**
++* Opt-in request-local transport protection for routes with an explicit HTTPS
++* origin. This never changes the process-global Fetch implementation.
++*/
+ function profileOptions(profile, reasoning, apiKey) {
+ 	const enabledReasoning = reasoning === "off" ? void 0 : reasoning;
+ 	return {
+@@ -1760,6 +1783,7 @@ function profileOptions(profile, reasoning, apiKey) {
+ 		...profile.cacheRetention === void 0 ? {} : { cacheRetention: profile.cacheRetention },
+ 		...profile.transport === void 0 ? {} : { transport: profile.transport },
+ 		...profile.timeoutMs === void 0 ? {} : { timeoutMs: profile.timeoutMs },
++		...profile.rejectRedirects === true ? { fetch: rejectRedirectsFetch(profile.baseURL) } : {},
+ 		...profile.websocketConnectTimeoutMs === void 0 ? {} : { websocketConnectTimeoutMs: profile.websocketConnectTimeoutMs },
+ 		maxRetries: 0
+ 	};
+diff --git a/lib/types/config.d.ts b/lib/types/config.d.ts
+index f45d7d97a5..4b41ec25bc 100644
+--- a/lib/types/config.d.ts
++++ b/lib/types/config.d.ts
+@@ -120,6 +120,8 @@ export interface PiAiProviderProfile {
+     cacheRetention?: CacheRetention;
+     /** Streaming transport preference. */
+     transport?: Transport;
++    /** Reject HTTP redirects for this route using a request-local Fetch implementation. Requires an explicit HTTPS baseURL. */
++    rejectRedirects?: boolean;
+     /** HTTP/provider SDK timeout in milliseconds. */
+     timeoutMs?: number;
+     /** WebSocket connection timeout in milliseconds. */
+@@ -213,6 +215,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+         } & import("@deepseek-ai/cosmokit").Dict) | null;
+         cacheRetention?: "none" | "short" | "long" | null;
+         transport?: "auto" | "sse" | "websocket" | "websocket-cached" | null;
++        rejectRedirects?: boolean | null;
+         timeoutMs?: number | null;
+         websocketConnectTimeoutMs?: number | null;
+         streamIdleTimeoutMs?: number | null;
+@@ -246,6 +249,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+         }>>, "plain">;
+         cacheRetention: z<"none" | "short" | "long", "none" | "short" | "long", "plain">;
+         transport: z<"auto" | "sse" | "websocket" | "websocket-cached", "auto" | "sse" | "websocket" | "websocket-cached", "plain">;
++        rejectRedirects: z<boolean, boolean, "plain">;
+         timeoutMs: z<number, number, "plain">;
+         websocketConnectTimeoutMs: z<number, number, "plain">;
+         streamIdleTimeoutMs: z<number, number, "defined">;
+@@ -276,6 +280,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+         } & import("@deepseek-ai/cosmokit").Dict) | null;
+         cacheRetention?: "none" | "short" | "long" | null;
+         transport?: "auto" | "sse" | "websocket" | "websocket-cached" | null;
++        rejectRedirects?: boolean | null;
+         timeoutMs?: number | null;
+         websocketConnectTimeoutMs?: number | null;
+         streamIdleTimeoutMs?: number | null;
+@@ -309,6 +314,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+         }>>, "plain">;
+         cacheRetention: z<"none" | "short" | "long", "none" | "short" | "long", "plain">;
+         transport: z<"auto" | "sse" | "websocket" | "websocket-cached", "auto" | "sse" | "websocket" | "websocket-cached", "plain">;
++        rejectRedirects: z<boolean, boolean, "plain">;
+         timeoutMs: z<number, number, "plain">;
+         websocketConnectTimeoutMs: z<number, number, "plain">;
+         streamIdleTimeoutMs: z<number, number, "defined">;

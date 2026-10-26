@@ -25,6 +25,8 @@ export interface DesktopPreferences {
   lanPort: number
   logLevel: 'debug' | 'info' | 'warn' | 'error'
   developerLogging: boolean
+  sidebarFooterCompat: boolean
+  sidebarFooterBalanced: boolean
   notifications: boolean
   turnCompleted: boolean
   turnFailed: boolean
@@ -38,7 +40,7 @@ export interface DesktopPreferences {
 export const DEFAULT_PREFERENCES: Readonly<DesktopPreferences> = Object.freeze({
   closeToTray: true, macosMaterial: 'transparent', windowsMaterial: 'off', linuxMaterial: 'off',
   browserAccess: false, networkExposure: 'loopback', port: 0, lanPort: 0, logLevel: 'info', developerLogging: false,
-  notifications: true, turnCompleted: true, turnFailed: true, jobCompleted: false, jobFailed: false,
+  sidebarFooterCompat: true, sidebarFooterBalanced: true, notifications: true, turnCompleted: true, turnFailed: true, jobCompleted: false, jobFailed: false,
   scheduleCompleted: true, scheduleFailed: true,
 })
 
@@ -46,7 +48,7 @@ export const DEFAULT_PREFERENCES: Readonly<DesktopPreferences> = Object.freeze({
 export const SAFE_MODE_PREFERENCES: Readonly<DesktopPreferences> = Object.freeze({
   ...DEFAULT_PREFERENCES, macosMaterial: 'off', windowsMaterial: 'off', linuxMaterial: 'off',
   browserAccess: false, networkExposure: 'loopback', port: 0, lanPort: 0, logLevel: 'info', developerLogging: false,
-  notifications: false, turnCompleted: false, turnFailed: false, jobCompleted: false, jobFailed: false,
+  sidebarFooterCompat: true, sidebarFooterBalanced: true, notifications: false, turnCompleted: false, turnFailed: false, jobCompleted: false, jobFailed: false,
   scheduleCompleted: false, scheduleFailed: false,
 })
 
@@ -94,8 +96,9 @@ export interface DesktopBrowserLinks {
 export type DesktopCommand =
   | { type: 'check-updates' | 'download-update' | 'install-update' }
   | { type: 'recovery-action'; action: string; id?: string }
-  | ({ type: 'onboarding-complete'; profile: string } & OnboardingChoices)
+  | ({ type: 'onboarding-complete'; profile: string; browserAccess?: boolean; networkExposure?: 'loopback' | 'lan' } & OnboardingChoices)
   | { type: 'onboarding-skip'; profile: string }
+  | { type: 'confirm-lan' }
   | { type: 'open-browser-url' | 'copy-browser-url'; url: string }
   | { type: 'create' | 'switch' | 'delete'; name: string }
   | { type: 'features'; features: Features }
@@ -107,12 +110,19 @@ export type DesktopCommand =
     | 'diagnostics' | 'open-browser' | 'open-lan' | 'copy-browser' | 'copy-lan' | 'export-ca' | 'quit' }
 
 export interface DesktopBridge {
+  readonly renderer?: DesktopRendererBridge
   readonly permissions?: DesktopPermissions
   /** Native menu/Host requests, delivered only to the main app. */
   onOpenSettings?(listener: (page: DesktopSettingsPage) => void): () => void
   state(): Promise<DesktopState>
   browserLinks(): Promise<DesktopBrowserLinks>
-  command(command: DesktopCommand): Promise<void>
+  command(command: DesktopCommand): Promise<boolean | void>
+}
+
+/** Metadata-only health reports from the mounted Next client. */
+export interface DesktopRendererBridge {
+  profile(): string
+  report(status: import('./renderer-recovery.ts').DesktopRendererStatus): Promise<void>
 }
 
 declare global { interface Window { desktopNext?: DesktopBridge } }

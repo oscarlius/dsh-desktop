@@ -11,7 +11,7 @@ import { DEFAULT_PROFILE } from './desktop-contract.ts'
 import { computerUsePatch } from './profile-computer-use.ts'
 import { pluginMarketPatch } from './profile-plugin-market.ts'
 import { RETIRED_SCHEDULE_BUNDLE, retiredSchedulePatch } from './profile-schedule.ts'
-import { removeLinkProjectionsSafely } from '../../dsh-plugin-desktop-beta/src/link-projections.ts'
+import { removeLinkProjectionsSafely } from '../../dsh-plugin-desktop/src/link-projections.ts'
 import { insideArchive, unpackedPath } from './asar-archive-policy.ts'
 
 export const NEXT_PACKAGE = fileURLToPath(new URL('../package.json', import.meta.url))
@@ -35,8 +35,6 @@ interface ProfileManifest {
      */
     desktopNextScheduleBundle?: number
     desktopNextOnboarding?: { version: number; outcome: 'completed' | 'skipped'; accountPending?: boolean }
-    /** Names recovery removed from `profile.bundles`; a UI ledger, never a policy. */
-    desktopNextDeselectedBundles?: string[]
     profile: { bundles: string[] }
   }
   [key: string]: unknown
@@ -189,7 +187,7 @@ export class NextProfiles {
         || Object.keys(value).some(key => !['features', 'computerUse'].includes(key))) throw new Error('Invalid onboarding choices')
       const choices = value as Record<string, unknown>
       const features = parseFeatures(choices.features)
-      if ([features.market, features.dshMarket, features.officialMarket].filter(Boolean).length > 1) throw new Error('Select only one plugin market')
+      if (features.market && features.dshMarket) throw new Error('Select only one plugin market')
       if (typeof choices.computerUse !== 'boolean') throw new Error('Invalid Computer Use choice')
       originalPatch = readPrivateFile(patchPath)
       nextPatch = computerUsePatch(originalPatch ?? '[]\n', choices.computerUse).text

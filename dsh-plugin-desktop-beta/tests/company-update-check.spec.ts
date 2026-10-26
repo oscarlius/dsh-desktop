@@ -24,7 +24,8 @@ describe('company release metadata', () => {
   it('keeps the raw internal build identifier for release comparison and request headers', async () => {
     const current = '2.0.18-beta.15.build.2026102101'
     const newer = '2.0.18-beta.15.build.2026102102'
-    const request = vi.fn(async () => Response.json({ ...release(), version: newer }))
+    const request = vi.fn(async () => Response.json({ ...release(), version: newer,
+      downloadUrl: `https://maas.zxrc.com.cn:8090/ui/downloads/P7-DSH-Company-Test-${newer}-x64-Setup.exe` }))
     await expect(checkCompanyRelease(current, request)).resolves.toMatchObject({ status: 'update-available', version: newer })
     expect(request).toHaveBeenCalledWith(COMPANY_RELEASE_ENDPOINT, expect.objectContaining({
       headers: expect.objectContaining({ 'X-DSH-Desktop-Version': current }),
@@ -37,6 +38,9 @@ describe('company release metadata', () => {
     { downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/setup.exe?key=secret' },
     { downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/%2e%2e/setup.exe' },
     { downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/setup.js' },
+    { downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/P7-DSH-Company-Full-2.0.18-beta.4-x64-Setup.exe' },
+    { downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/P7-DSH-Company-Test-2.0.18-beta.5-x64-Setup.exe' },
+    { downloadUrl: 'https://maas.zxrc.com.cn:8090/ui/downloads/P7-DSH-Company-Test-2.0.18-beta.4-x64-%53etup.exe' },
   ])('rejects a malformed or foreign release %j', async override => {
     await expect(checkCompanyRelease('2.0.18-beta.3', async () => Response.json({ ...release(), ...override }))).rejects.toThrow()
   })

@@ -1,5 +1,5 @@
 /** Manual release metadata reads from the company's public P7 gateway. */
-import { compareSemVerVersions, parseSemVer, type UpdateRequest } from './update-checker.ts'
+import { compareSemVerVersions, parseSemVer, type UpdateRequest } from '../../dsh-plugin-desktop/src/update-checker.ts'
 import { DEFAULT_P7_PUBLIC_ORIGIN } from 'dsh-plugin-p7-company-models/defaults'
 
 export const COMPANY_RELEASE_ENDPOINT = `${DEFAULT_P7_PUBLIC_ORIGIN}/v1/desktop/releases/latest`
@@ -19,12 +19,14 @@ export type CompanyReleaseResult = { status: 'not-published' } | {
 
 export type PublishedCompanyRelease = Exclude<CompanyReleaseResult, { status: 'not-published' }>
 
-/** Validate the fixed company origin before either checking or downloading a release. */
-export function companyInstallerUrl(value: string): string {
+/** Validate the one credential-free update installer published for a release version. */
+export function companyInstallerUrl(value: string, version: string): string {
+  if (parseSemVer(version)?.version !== version) throw new Error('Invalid P7 installer version')
   const url = new URL(value)
+  const filename = `P7-DSH-Company-Test-${version}-x64-Setup.exe`
   if (url.origin !== DEFAULT_P7_PUBLIC_ORIGIN || url.protocol !== 'https:' || url.username || url.password
     || url.search || url.hash || !url.pathname.startsWith('/ui/downloads/') || !url.pathname.endsWith('.exe')
-    || /%2f|%5c|%2e|\\|\s/iu.test(value)) throw new Error('Invalid P7 installer address')
+    || !url.pathname.endsWith(`/${filename}`) || /%|\\|\s/iu.test(value)) throw new Error('Invalid P7 installer address')
   return url.href
 }
 
@@ -62,7 +64,7 @@ export async function checkCompanyRelease(currentVersion: string, request: Updat
     || typeof release.releaseNotes !== 'string' || release.releaseNotes.length > 20000
     || typeof release.downloadUrl !== 'string' || typeof release.sha256 !== 'string'
     || !/^[a-fA-F0-9]{64}$/u.test(release.sha256)) throw new Error('Incomplete P7 release metadata')
-  const downloadUrl = companyInstallerUrl(release.downloadUrl)
+  const downloadUrl = companyInstallerUrl(release.downloadUrl, release.version)
   let differential: Pick<PublishedCompanyRelease, 'updaterFeedUrl' | 'sha512' | 'size'> = {}
   if (release.updaterFeedUrl !== undefined && release.updaterFeedUrl !== null) {
     const feed = new URL(String(release.updaterFeedUrl))

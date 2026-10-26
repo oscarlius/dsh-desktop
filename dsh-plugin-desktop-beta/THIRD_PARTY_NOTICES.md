@@ -5,7 +5,7 @@ the package names, versions, and licenses for transparency.
 | Package | Version | License |
 | --- | --- | --- |
 | @agentclientprotocol/sdk | 1.4.0 | Apache-2.0 |
-| @agents-anywhere/dsh-bridge-next | 2.1.0-desktop.cafcc8d046368.r2e406d2a | MIT |
+| @agents-anywhere/dsh-bridge-next | 2.1.0-desktop.c43434415e1d6.r2e406d2a | MIT |
 | @anthropic-ai/sdk | 0.129.0 | MIT |
 | @aws-sdk/client-bedrock-runtime | 3.1127.0 | Apache-2.0 |
 | @aws-sdk/core | 3.978.1 | Apache-2.0 |
@@ -30,8 +30,8 @@ the package names, versions, and licenses for transparency.
 | @babel/helper-validator-identifier | 7.29.7 | MIT |
 | @babel/runtime | 7.29.7 | MIT |
 | @dataiku/uv | 0.12.0 | MIT |
-| @dataiku/uv-win32-arm64 | 0.12.0 | MIT |
-| @dataiku/uv-win32-x64 | 0.12.0 | MIT |
+| @dataiku/uv-darwin-arm64 | 0.12.0 | MIT |
+| @dataiku/uv-darwin-x64 | 0.12.0 | MIT |
 | @deepseek-ai/cordis | 4.0.5 | MIT |
 | @deepseek-ai/cordis-plugin-group | 1.0.5 | MIT |
 | @deepseek-ai/cordis-plugin-include | 1.0.10 | MIT |
@@ -339,22 +339,26 @@ the package names, versions, and licenses for transparency.
 | @deepseek-ai/dsh-workspace | 0.2.1-rc.2 | MIT |
 | @deepseek-ai/dsh-workspace-changes | 0.2.1-rc.2 | MIT |
 | @deepseek-ai/libreoffice-kit | 0.1.5 | MPL-2.0 |
-| @deepseek-ai/libreoffice-kit-win32-arm64 | 0.1.5 | MPL-2.0 |
-| @deepseek-ai/libreoffice-kit-win32-x64 | 0.1.5 | MPL-2.0 |
+| @deepseek-ai/libreoffice-kit-darwin-arm64 | 0.1.5 | MPL-2.0 |
+| @deepseek-ai/libreoffice-kit-darwin-x64 | 0.1.5 | MPL-2.0 |
 | @deepseek-ai/node-addon-system | 0.1.2 | BSD-3-Clause |
+| @deepseek-ai/node-addon-system-darwin-arm64 | 0.1.2 | BSD-3-Clause |
+| @deepseek-ai/node-addon-system-darwin-x64 | 0.1.2 | BSD-3-Clause |
 | @deepseek-ai/schemastery | 3.18.5 | MIT |
-| @earendil-works/pi-ai | 1.2.0 | MIT |
-| @earendil-works/pi-telemetry | 1.2.0 | MIT |
+| @earendil-works/pi-ai | 1.1.0 | MIT |
+| @earendil-works/pi-telemetry | 1.1.0 | MIT |
 | @eslint-community/regexpp | 4.12.2 | MIT |
 | @google/genai | 2.21.0 | Apache-2.0 |
 | @img/colour | 1.1.0 | MIT |
-| @img/sharp-win32-arm64 | 0.35.5 | Apache-2.0 AND LGPL-3.0-or-later |
-| @img/sharp-win32-x64 | 0.35.5 | Apache-2.0 AND LGPL-3.0-or-later |
+| @img/sharp-darwin-arm64 | 0.35.5 | Apache-2.0 |
+| @img/sharp-darwin-x64 | 0.35.5 | Apache-2.0 |
+| @img/sharp-libvips-darwin-arm64 | 1.3.4 | LGPL-3.0-or-later |
+| @img/sharp-libvips-darwin-x64 | 1.3.4 | LGPL-3.0-or-later |
 | @joplin/turndown-plugin-gfm | 1.0.67 | MIT |
 | @js-temporal/polyfill | 0.5.1 | ISC |
 | @keyv/serialize | 1.1.1 | MIT |
-| @koromix/koffi-win32-arm64 | 3.1.5 | MIT |
-| @koromix/koffi-win32-x64 | 3.1.5 | MIT |
+| @koromix/koffi-darwin-arm64 | 3.1.1 | MIT |
+| @koromix/koffi-darwin-x64 | 3.1.1 | MIT |
 | @mixmark-io/domino | 2.2.0 | BSD-2-Clause |
 | @modelcontextprotocol/client | 2.2.0 | MIT |
 | @modelcontextprotocol/core | 2.2.0 | MIT |
@@ -406,8 +410,8 @@ the package names, versions, and licenses for transparency.
 | @types/node | 26.2.0 | MIT |
 | @types/retry | 0.12.0 | MIT |
 | @vscode/ripgrep | 1.18.0 | MIT |
-| @vscode/ripgrep-win32-arm64 | 1.18.0 | MIT |
-| @vscode/ripgrep-win32-x64 | 1.18.0 | MIT |
+| @vscode/ripgrep-darwin-arm64 | 1.18.0 | MIT |
+| @vscode/ripgrep-darwin-x64 | 1.18.0 | MIT |
 | @xterm/addon-serialize | 0.14.0 | MIT |
 | @xterm/headless | 6.0.0 | MIT |
 | adm-zip | 0.6.0 | MIT |
@@ -423,7 +427,6 @@ the package names, versions, and licenses for transparency.
 | bowser | 2.14.1 | MIT |
 | brotli | 1.3.3 | MIT |
 | buffer-equal-constant-time | 1.0.1 | BSD-3-Clause |
-| builder-util-runtime | 9.7.0 | MIT |
 | bundle-name | 4.1.0 | MIT |
 | byte-counter | 0.1.0 | MIT |
 | bytes | 3.1.2 | MIT |
@@ -455,11 +458,9 @@ the package names, versions, and licenses for transparency.
 | diff | 9.0.0 | BSD-3-Clause |
 | dijkstrajs | 1.0.3 | MIT |
 | dsh-community-market | 0.1.0-dev.0 | MIT |
-| dsh-plugin-p7-company-models | 0.1.0-dev.0 | MIT |
 | dshmarket | 1.66.45 | MIT |
 | ecdsa-sig-formatter | 1.0.11 | Apache-2.0 |
 | ee-first | 1.1.1 | MIT |
-| electron-updater | 6.8.9 | MIT |
 | emoji-regex | 8.0.0 | MIT |
 | encodeurl | 2.0.0 | MIT |
 | escape-html | 1.0.3 | MIT |
@@ -480,7 +481,6 @@ the package names, versions, and licenses for transparency.
 | formdata-polyfill | 4.0.10 | MIT |
 | fresh | 2.0.0 | MIT |
 | fs-ext | 2.1.1 | MIT |
-| fs-extra | 10.1.0 | MIT |
 | gaxios | 7.3.1 | Apache-2.0 |
 | gcp-metadata | 8.1.2 | Apache-2.0 |
 | get-caller-file | 2.0.5 | ISC |
@@ -488,7 +488,6 @@ the package names, versions, and licenses for transparency.
 | google-auth-library | 10.9.1 | Apache-2.0 |
 | google-logging-utils | 1.1.3 | Apache-2.0 |
 | got | 14.6.6 | MIT |
-| graceful-fs | 4.2.11 | ISC |
 | http-cache-semantics | 4.2.0 | BSD-2-Clause |
 | http-errors | 2.0.1 | MIT |
 | http-proxy-agent | 9.1.0 | MIT |
@@ -513,22 +512,18 @@ the package names, versions, and licenses for transparency.
 | json-bigint | 1.0.0 | MIT |
 | json-schema-to-ts | 3.1.1 | MIT |
 | json-schema-traverse | 1.0.0 | MIT |
-| jsonfile | 6.2.1 | MIT |
 | jwa | 2.0.1 | MIT |
 | jws | 4.0.1 | MIT |
 | keyv | 5.6.0 | MIT |
-| koffi | 3.1.5 | MIT |
-| lazy-val | 1.0.5 | MIT |
+| koffi | 3.1.1 | MIT |
 | locate-path | 5.0.0 | MIT |
-| lodash.escaperegexp | 4.1.2 | MIT |
-| lodash.isequal | 4.5.0 | MIT |
 | long | 5.3.2 | Apache-2.0 |
 | loose-envify | 1.4.0 | MIT |
 | lowercase-keys | 3.0.0 | MIT |
 | lucide-react | 1.41.0 | ISC |
 | meshcall | 0.3.0 | MIT |
-| meshcall-router-win32-arm64 | 0.3.0 | MIT |
-| meshcall-router-win32-x64 | 0.3.0 | MIT |
+| meshcall-router-darwin-arm64 | 0.3.0 | MIT |
+| meshcall-router-darwin-x64 | 0.3.0 | MIT |
 | mime-db | 1.54.0 | MIT |
 | mime-types | 3.0.2 | MIT |
 | mimic-response | 4.0.0 | MIT |
@@ -539,8 +534,8 @@ the package names, versions, and licenses for transparency.
 | node-addon-api | 7.1.1 | MIT |
 | node-addon-native-custom-loader | 0.1.9 | MIT |
 | node-addon-require-builtin | 0.1.9 | MIT |
-| node-addon-require-builtin-win32-arm64-msvc | 0.1.9 | MIT |
-| node-addon-require-builtin-win32-x64-msvc | 0.1.9 | MIT |
+| node-addon-require-builtin-darwin-arm64 | 0.1.9 | MIT |
+| node-addon-require-builtin-darwin-x64 | 0.1.9 | MIT |
 | node-domexception | 1.0.0 | MIT |
 | node-fetch | 3.3.2 | MIT |
 | node-pty | 1.2.0-beta.15 | MIT |
@@ -565,7 +560,7 @@ the package names, versions, and licenses for transparency.
 | pkce-challenge | 5.0.1 | MIT |
 | pkijs | 3.4.0 | BSD-3-Clause |
 | pngjs | 5.0.0 | MIT |
-| pnpm | 11.8.0 | MIT |
+| pnpm | 11.28.5 | MIT |
 | powershell-utils | 0.2.1 | MIT |
 | pretty-ms | 9.3.1 | MIT |
 | protobufjs | 7.6.5 | BSD-3-Clause |
@@ -588,7 +583,6 @@ the package names, versions, and licenses for transparency.
 | retry | 0.13.1 | MIT |
 | run-applescript | 7.1.0 | MIT |
 | safe-buffer | 5.2.1 | MIT |
-| sax | 1.6.1 | BlueOak-1.0.0 |
 | saxes | 6.0.0 | ISC |
 | selfsigned | 5.5.0 | MIT |
 | semver | 7.8.5 | ISC |
@@ -599,8 +593,9 @@ the package names, versions, and licenses for transparency.
 | sharp | 0.35.5 | Apache-2.0 |
 | shebang-command | 2.0.0 | MIT |
 | shebang-regex | 3.0.0 | MIT |
+| sherpa-onnx-darwin-arm64 | 1.13.8 | Apache-2.0 |
+| sherpa-onnx-darwin-x64 | 1.13.8 | Apache-2.0 |
 | sherpa-onnx-node | 1.13.8 | Apache-2.0 |
-| sherpa-onnx-win-x64 | 1.13.8 | Apache-2.0 |
 | signal-exit | 4.1.0 | ISC |
 | sonner | 2.0.8 | MIT |
 | standardwebhooks | 1.1.1 | MIT |
@@ -609,7 +604,6 @@ the package names, versions, and licenses for transparency.
 | strip-ansi | 6.0.1 | MIT |
 | strip-final-newline | 4.0.0 | MIT |
 | tiny-inflate | 1.0.3 | MIT |
-| tiny-typed-emitter | 2.1.0 | MIT |
 | toidentifier | 1.0.1 | MIT |
 | ts-algebra | 2.0.0 | MIT |
 | tslib | 2.8.1 | 0BSD |
@@ -622,7 +616,6 @@ the package names, versions, and licenses for transparency.
 | unicode-properties | 1.4.1 | MIT |
 | unicode-trie | 2.0.0 | MIT |
 | unicorn-magic | 0.3.0 | MIT |
-| universalify | 2.0.1 | MIT |
 | vary | 1.1.2 | MIT |
 | web-streams-polyfill | 3.3.3 | MIT |
 | which | 2.0.2 | ISC |
@@ -639,4 +632,4 @@ the package names, versions, and licenses for transparency.
 | yocto-queue | 1.2.2 | MIT |
 | yoctocolors | 2.2.0 | MIT |
 | zod | 4.4.3 | MIT |
-> Notice-required licenses in use: Apache-2.0 AND LGPL-3.0-or-later, BlueOak-1.0.0. Their license texts ship inside node_modules; see the package LICENSE files for the full terms.
+> Notice-required licenses in use: LGPL-3.0-or-later. Their license texts ship inside node_modules; see the package LICENSE files for the full terms.

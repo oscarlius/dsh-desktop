@@ -453,6 +453,9 @@ try {
     throw new Error('AA Host services did not activate in the actual Desktop profile')
   }
   if (aaEnabled) {
+    // AA 2.1.0+ publishes a fixed per-user manager lease that DSH_HOME does not
+    // move, so the isolated Profile home is not where the Connector looks.
+    const managerLock = join(userInfo().homedir, '.agents-anywhere', 'dsh-bridge', '.manager-lock.json')
     const runtimeStatus = ctx.get('agentsAnywhereRuntime').status()
     if (runtimeStatus.state !== 'ready') {
       throw new Error(`AA local runtime is ${String(runtimeStatus.state)}: ${String(runtimeStatus.message)}`)
@@ -463,6 +466,10 @@ try {
     // an authenticated Connector. The real capability here is the DSH-side
     // bridge: it mounted, served the authenticated profile, and resolved its
     // configured bundled runtime without inheriting an account.
+    if (!existsSync(managerLock)) throw new Error('AA did not publish its per-user bridge manager lock')
+    if (JSON.parse(readFileSync(managerLock, 'utf8')).pid !== process.pid) {
+      throw new Error('AA bridge manager lock belongs to another process; quit any running Desktop with AA enabled')
+    }
     const snapshot = await ctx.get('agentsAnywhereOnboarding').inspect()
     if (snapshot.account) throw new Error('A fresh Profile inherited an AA account')
     for (const [key, value] of Object.entries(aaSettings)) {

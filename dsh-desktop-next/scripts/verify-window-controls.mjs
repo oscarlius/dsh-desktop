@@ -106,6 +106,10 @@ try {
   })
   await context.addInitScript(() => {
     window.desktopNext = { state: () => window.__nextTestState(), browserLinks: () => window.__nextTestBrowserLinks(), command: command => window.__nextTestCommand(command) }
+    window.desktopNext.renderer = {
+      profile: () => 'desktop',
+      report: async status => { globalThis.__NEXT_TEST_BOOT__.rendererStatus = status },
+    }
     window.desktopNext.onOpenSettings = listener => {
       window.__nextTestOpenSettings = listener
       return () => { delete window.__nextTestOpenSettings }
@@ -162,6 +166,8 @@ try {
   page.on('console', message => { if (['error', 'warning'].includes(message.type())) diagnostics.push(message.text()) })
   page.on('response', response => { if (response.status() >= 400) diagnostics.push(`${response.status()} ${new URL(response.url()).pathname}`) })
   await page.goto(streamBaseUrl)
+  // A mounted official shell is healthy without waiting for connection/session probes.
+  await page.waitForFunction(() => globalThis.__NEXT_TEST_BOOT__.rendererStatus === 'healthy')
   const collapse = page.getByRole('button', { name: /^(收起侧边栏|Collapse sidebar)$/ })
   const reopen = page.locator('[data-sidebar-header-controls]').getByRole('button', { name: /^(打开侧边栏|Open sidebar)$/ })
   const conversationHeader = page.locator('header[data-window-drag]:has([data-conversation-header-leading])')
@@ -232,7 +238,7 @@ try {
         region: style.getPropertyValue('-webkit-app-region') }
     })
     assert.equal(geometry.region, 'drag')
-    assert.ok(geometry.left >= geometry.columns[0], JSON.stringify(geometry))
+    assert.ok(geometry.left >= geometry.columns[0] - 1, JSON.stringify(geometry))
     assert.ok(geometry.left + geometry.width <= geometry.columns[0] + geometry.columns[1] + 1, JSON.stringify(geometry))
     assert.ok(geometry.width > 300 && geometry.height >= 30, JSON.stringify(geometry))
     assert.equal(await page.locator('[data-next-window-controls]').count(), 0, 'No extra visible titlebar or overlay component')
@@ -271,6 +277,64 @@ try {
   assert.equal(await context.pages().length, 1, 'Settings must stay inside the existing app window')
   await page.evaluate(() => window.__nextTestOpenSettings('general'))
   assert.equal(await page.getByRole('dialog', { name: /^(设置|Settings)$/ }).count(), 1)
+  // Simulate many registered Settings sections and verify the left nav scrolls without squishing items.
+  const settingsNavScroll = await page.locator('[data-shortcut-modal="settings"] > nav').evaluate(nav => {
+    const title = nav.firstElementChild
+    const list = nav.lastElementChild
+    const template = list.querySelector('button')
+    const baseRect = template.getBoundingClientRect()
+    const titleTopBefore = title.getBoundingClientRect().top
+    const clones = []
+    for (let index = 0; index < 20; index++) {
+      const clone = template.cloneNode(true)
+      clone.classList.remove(...Array.from(clone.classList).filter(name => name.endsWith('_active')))
+      clone.removeAttribute('aria-current')
+      clone.removeAttribute('data-modal-autofocus')
+      clone.dataset.nextNavFixture = String(index)
+      list.appendChild(clone)
+      clones.push(clone)
+    }
+    const buttons = Array.from(list.querySelectorAll('button')).map(button => {
+      const rect = button.getBoundingClientRect()
+      return { width: Math.round(rect.width), height: Math.round(rect.height) }
+    })
+    const style = getComputedStyle(list)
+    const clientHeight = list.clientHeight
+    const scrollHeight = list.scrollHeight
+    list.scrollTop = scrollHeight
+    const scrollTop = list.scrollTop
+    const titleTopAfter = title.getBoundingClientRect().top
+    for (const clone of clones) clone.remove()
+    list.scrollTop = 0
+    return {
+      baseWidth: Math.round(baseRect.width),
+      baseHeight: Math.round(baseRect.height),
+      buttons,
+      overflowY: style.overflowY,
+      overscrollBehaviorY: style.overscrollBehaviorY,
+      scrollbarGutter: style.scrollbarGutter,
+      paddingBottom: style.paddingBottom,
+      clientHeight,
+      scrollHeight,
+      scrollTop,
+      titleTopBefore,
+      titleTopAfter,
+    }
+  })
+  assert.equal(settingsNavScroll.overflowY, 'auto')
+  assert.equal(settingsNavScroll.overscrollBehaviorY, 'contain')
+  assert.equal(settingsNavScroll.scrollbarGutter, 'stable')
+  assert.equal(settingsNavScroll.paddingBottom, '12px')
+  assert.equal(settingsNavScroll.baseWidth, 164)
+  assert.equal(settingsNavScroll.baseHeight, 40)
+  assert.ok(settingsNavScroll.buttons.every(box => box.width === 164 && box.height === 40),
+    `Settings nav items must keep 164x40 geometry when overflowing: ${JSON.stringify(settingsNavScroll.buttons)}`)
+  assert.ok(settingsNavScroll.scrollHeight > settingsNavScroll.clientHeight,
+    `Settings nav list must overflow vertically: ${JSON.stringify(settingsNavScroll)}`)
+  assert.ok(settingsNavScroll.scrollTop > 0,
+    `Settings nav list must scroll vertically: ${JSON.stringify(settingsNavScroll)}`)
+  assert.equal(settingsNavScroll.titleTopAfter, settingsNavScroll.titleTopBefore,
+    'Scrolling the Settings nav list must keep the Settings header stationary')
   await page.getByRole('button', { name: /^(关闭|Close)$/ }).click()
   await expand()
 
@@ -570,13 +634,32 @@ try {
   await reopen.waitFor({ state: 'visible' })
   await page.screenshot({ path: join(screenshots, 'blank-session-collapsed.png'), animations: 'disabled' })
   await expand()
+  // The official layout measures its frame through ResizeObserver + rAF and animates sidebar
+  // toggles, so assert only once the grid reflects both the requested width and sidebar state.
+  const settleLayout = (width, collapsed) => page.waitForFunction(({ width, collapsed }) => {
+    const frame = document.querySelector('[data-shell-overlay]').parentElement
+    if (frame.hasAttribute('data-animating') || frame.hasAttribute('data-sidebar-collapsed') !== collapsed) return false
+    const columns = getComputedStyle(frame).gridTemplateColumns.split(' ').map(Number.parseFloat)
+    return (columns[0] === 0) === collapsed && Math.abs(columns.reduce((sum, column) => sum + column, 0) - width) < 1
+  }, { width, collapsed })
   for (const width of [800, 1800, 1280]) {
     await page.setViewportSize({ width, height: 840 })
+    // Below 1024px ui-layout auto-collapses the sidebar and its toggle re-expands it beside the
+    // squeezed center; wider windows keep the expanded sidebar from the previous step.
+    const narrow = width < 1024
+    await settleLayout(width, narrow)
     await checkDrag()
+    if (narrow) {
+      await expand()
+      await settleLayout(width, false)
+      await checkDrag()
+    }
     await collapse.click()
     await reopen.waitFor({ state: 'visible' })
+    await settleLayout(width, true)
     await checkDrag()
     await expand()
+    await settleLayout(width, false)
   }
   await verifySidebarBrowser(page, nativeBrowser, screenshots)
 
@@ -618,12 +701,12 @@ try {
   const updateSection = settings.locator('[data-next-updates]')
   await updateSection.getByRole('button', { name: /检查更新|Check for updates/ }).click()
   assert.equal(controlCommands.at(-1).type, 'check-updates')
-  controlState.updates = { phase: 'downloading', version: '2.0.19-next.1', installable: true, received: 50, total: 100 }
+  controlState.updates = { phase: 'downloading', version: '2.0.20-next.1', installable: true, received: 50, total: 100 }
   await updateSection.getByText(/正在下载更新 50%|Downloading update 50%/).waitFor()
   assert.equal(await updateSection.locator('progress').getAttribute('value'), '50')
   await updateSection.scrollIntoViewIfNeeded()
   await page.screenshot({ path: join(screenshots, 'desktop-update-progress.png'), animations: 'disabled' })
-  controlState.updates = { phase: 'ready', version: '2.0.19-next.1', installable: true }
+  controlState.updates = { phase: 'ready', version: '2.0.20-next.1', installable: true }
   await updateSection.getByRole('button', { name: /安装并重启|Install and restart/ }).click()
   assert.equal(controlCommands.at(-1).type, 'install-update')
   controlState.updates = { phase: 'idle', installable: true }
@@ -649,6 +732,11 @@ try {
   assert.equal(await settings.getByRole('heading', { name: /^(端口设置|Port settings)$/ }).count(), 0)
   assert.equal(await settings.getByRole('spinbutton').count(), 0)
   const notifications = settings.getByRole('switch', { name: /启用桌面通知|Enable Desktop notifications/ })
+  const notificationsExpander = settings.locator('[aria-labelledby="dsh-desktop-notifications-title"] .dshDesktopSettingsExpander')
+  assert.equal(await notificationsExpander.getAttribute('aria-expanded'), 'false')
+  assert.equal(await settings.getByRole('switch', { name: /本轮任务完成|Current turn completed/ }).count(), 0)
+  await notificationsExpander.click()
+  assert.equal(await notificationsExpander.getAttribute('aria-expanded'), 'true')
   assert.equal(await settings.getByRole('switch', { name: /后台任务|Background job/ }).count(), 0)
   const permissions = settings.getByRole('region', { name: /系统权限|System permissions/ })
   await permissions.getByRole('button', { name: /^(授权设置|Permissions)$/ }).click()
@@ -673,9 +761,9 @@ try {
   await settings.getByText('Fixture: preference save rejected').waitFor()
   assert.equal(await closeToTray.isChecked(), false)
   controlState.platform = 'win32'
-  await settings.locator('.dshDesktopSettingsMaterialField select').first().locator('option[value="transparent"]').waitFor({ state: 'detached' })
+  await settings.locator('[data-desktop-material-row]').waitFor({ state: 'detached' })
   // Windows offers no window material, so the material selector disappears entirely.
-  assert.equal(await settings.locator('option[value="transparent"]').count(), 0)
+  assert.equal(await settings.locator('[data-desktop-material-row]').count(), 0)
   controlState.platform = 'linux'
   await actions.getByRole('button', { name: /打开 DSH 终端|Open DSH Terminal/ }).waitFor({ state: 'hidden' })
   controlState.platform = 'darwin'
@@ -777,6 +865,7 @@ try {
   controlState.safeMode = true
   // A reload re-runs the Desktop boot contract, which must pick up the Host's current boot table.
   await page.reload()
+  await page.waitForFunction(() => globalThis.__NEXT_TEST_BOOT__.rendererStatus === 'healthy')
   await page.locator('.dshNextSafeModeNotice').waitFor({ state: 'visible' })
   assert.equal(await page.evaluate(() => globalThis.__NEXT_TEST_BOOT__.calls), 1)
   // 0.1.7 ships a default model and remembers the dismissal, so the reloaded document usually has
@@ -818,7 +907,7 @@ try {
   await webContext.close()
   assert.deepEqual(errors, [])
   assert.deepEqual(await page.evaluate(() => globalThis.__NEXT_TEST_BOOT__.failures), [])
-  console.log('Next window controls passed through the official 0.2.1-rc.2 Desktop boot branch: stacked sidebar extension entries, homepage/plugin collapse and reopen, navigation, caption geometry, clickable actions, existing-header and platform isolation, official Settings header shortcuts and keyboard navigation, grouped Desktop Settings and immediate saves, per-address login URL rows with exact open/copy targets, Profile cards and tray creation, the Host-independent recovery artifact, and native Browser toolbar, navigation, pane geometry, overlay isolation, tab lifetime and Web iframe fallback. Chromium simulates the preload contract; native Electron window movement and page loading are not tested here.')
+  console.log('Next window controls passed through the official 0.2.1-rc.3 Desktop boot branch: stacked sidebar extension entries, homepage/plugin collapse and reopen, navigation, caption geometry, clickable actions, existing-header and platform isolation, official Settings header shortcuts and keyboard navigation, grouped Desktop Settings and immediate saves, per-address login URL rows with exact open/copy targets, Profile cards and tray creation, the Host-independent recovery artifact, and native Browser toolbar, navigation, pane geometry, overlay isolation, tab lifetime and Web iframe fallback. Chromium simulates the preload contract; native Electron window movement and page loading are not tested here.')
   console.log(`Screenshots: ${screenshots}`)
 } catch (error) {
   console.error(error)

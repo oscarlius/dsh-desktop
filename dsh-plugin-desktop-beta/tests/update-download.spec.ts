@@ -17,7 +17,7 @@ import {
   type UpdateArtifactRequest,
   type UpdateArtifactResponse,
 } from '../src/update-download.ts'
-import { DESKTOP_RELEASE_CHANNEL_HEADER } from '../src/update-checker.ts'
+import { DESKTOP_RELEASE_CHANNEL_HEADER } from '../../dsh-plugin-desktop/src/update-checker.ts'
 
 const temporaryRoots: string[] = []
 

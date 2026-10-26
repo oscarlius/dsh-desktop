@@ -4,12 +4,31 @@ import { createReadStream, readFileSync, realpathSync, renameSync, statSync, wri
 import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gunzipSync } from 'node:zlib'
+import { createRequire } from 'node:module'
 
 export const P7_RELEASE_ORIGIN = 'https://maas.zxrc.com.cn:8090'
 const components = ['initial-exe', 'exe', 'blockmap']
 const endpoint = '/api/v1/model-admin/desktop-release'
 const ensure = (condition, message) => { if (!condition) throw new Error(message) }
 const json = path => JSON.parse(readFileSync(path, 'utf8'))
+const packagingRequire = createRequire(new URL('../dsh-plugin-desktop-beta/package.json', import.meta.url))
+
+/** Read the actual runtime manifest; verify a legacy compatibility copy when present. */
+export function readCompanyPackagedManifest(resources) {
+  const compatibilityPath = join(resources, 'app', 'package.json')
+  const archive = join(resources, 'app.asar')
+  if (!existsSync(archive)) return json(compatibilityPath)
+  const { extractFile } = packagingRequire('@electron/asar')
+  const packaged = JSON.parse(extractFile(archive, 'package.json').toString('utf8'))
+  if (existsSync(compatibilityPath)) {
+    const compatibility = json(compatibilityPath)
+    for (const field of ['name', 'version', 'dshDesktopFlavor', 'dshDesktopUpdateDistribution',
+      'dshCompanyReleaseSourceCommit', 'dshCompanyCompatibilityBuild']) {
+      ensure(packaged[field] === compatibility[field], `ASAR compatibility manifest mismatch: ${field}`)
+    }
+  }
+  return packaged
+}
 const digest = async path => {
   const sha256 = createHash('sha256'), sha512 = createHash('sha512')
   for await (const chunk of createReadStream(path)) { sha256.update(chunk); sha512.update(chunk) }
@@ -40,9 +59,14 @@ export async function validateCompanyRelease(directory) {
   ensure(artifacts[0].sha256 !== artifacts[1].sha256, 'Full and update cannot be the same installer')
   for (const kind of ['full', 'update']) {
     const resource = join(root, kind, 'win-unpacked', 'resources')
-    const packaged = json(join(resource, 'app', 'package.json'))
+    const packaged = readCompanyPackagedManifest(resource)
     ensure(packaged.version === manifest.version && packaged.dshDesktopFlavor === 'companytest'
       && packaged.dshCompanyReleaseSourceCommit === manifest.sourceCommit, `Packaged ${kind} source/version mismatch`)
+    if (manifest.build !== undefined) {
+      ensure(typeof manifest.build === 'string' && /^\d{10}$/.test(manifest.build)
+        && typeof manifest.displayVersion === 'string'
+        && packaged.dshCompanyCompatibilityBuild === manifest.build, `Packaged ${kind} build mismatch`)
+    }
     const bootstrap = join(resource, 'p7-company-connection.json')
     if (kind === 'update') {
       ensure(packaged.dshDesktopUpdateDistribution === true && !existsSync(bootstrap), 'Public update must be credential-free')
@@ -103,13 +127,15 @@ export async function publishCompanyRelease({ directory, token, notes, reason, s
   let published = before
   if (!stageOnly && !(before.published && before.version === version)) {
     published = await checked(await call('', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expectedRevision: before.revision, published: true, version, releaseNotes: notes, reason }) }))
+      body: JSON.stringify({ expectedRevision: before.revision, published: true, version,
+        releaseNotes: bundle.manifest.build === undefined ? notes : `${bundle.manifest.displayVersion} · build ${bundle.manifest.build}\n\n${notes}`, reason }) }))
   }
   const after = await checked(await call(''))
   ensure(stageOnly ? after.revision === before.revision && after.version === before.version : after.published && after.version === version
     && after.sha256 === bundle.artifacts[1].sha256 && after.blockmapSha256 === bundle.artifacts[2].sha256 && after.revision === published.revision,
   'Publication readback failed; do not distribute until verified')
   const receipt = { schemaVersion: 1, status: stageOnly ? 'staged' : 'published', version, sourceCommit: bundle.manifest.sourceCommit,
+    displayVersion: bundle.manifest.displayVersion, build: bundle.manifest.build,
     revision: after.revision, artifacts: bundle.manifest.artifacts, verifiedAt: new Date().toISOString() }
   const receiptPath = join(bundle.root, 'publication-receipt.json'), temporary = receiptPath + '.' + randomUUID() + '.tmp'
   writeFileSync(temporary, JSON.stringify(receipt, null, 2), { mode: 0o600 }); renameSync(temporary, receiptPath)

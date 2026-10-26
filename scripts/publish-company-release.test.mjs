@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { gzipSync } from 'node:zlib'
+import { createRequire } from 'node:module'
 import { publishCompanyRelease, validateCompanyRelease } from './publish-company-release.mjs'
 
 function bundle(t) {
@@ -61,6 +62,40 @@ test('validates the paired source, role, checksums and differential coverage',as
   b.manifest.artifacts[0].path=b.manifest.artifacts[1].path;b.save()
   await assert.rejects(validateCompanyRelease(b.root),/Wrong role/)
 })
+
+test('validates actual ASAR metadata together with the old updater manifest', async t => {
+  const b = bundle(t)
+  const { createPackage } = createRequire(new URL('../dsh-plugin-desktop-beta/package.json', import.meta.url))('@electron/asar')
+  for (const mode of ['full', 'update']) {
+    const resources = join(b.root, mode, 'win-unpacked', 'resources')
+    const source = join(b.root, `asar-source-${mode}`)
+    mkdirSync(source)
+    writeFileSync(join(source, 'package.json'), readFileSync(join(resources, 'app', 'package.json')))
+    await createPackage(source, join(resources, 'app.asar'))
+  }
+  assert.equal((await validateCompanyRelease(b.root)).manifest.version, b.manifest.version)
+  const shim = join(b.root, 'update', 'win-unpacked', 'resources', 'app', 'package.json')
+  const value = JSON.parse(readFileSync(shim, 'utf8'))
+  value.dshCompanyReleaseSourceCommit = 'b'.repeat(40)
+  writeFileSync(shim, JSON.stringify(value))
+  await assert.rejects(validateCompanyRelease(b.root), /ASAR compatibility manifest mismatch/)
+})
+
+test('accepts an archived Windows payload without a loose app directory', async t => {
+  const b = bundle(t)
+  const { createPackage } = createRequire(new URL('../dsh-plugin-desktop-beta/package.json', import.meta.url))('@electron/asar')
+  for (const mode of ['full', 'update']) {
+    const resources = join(b.root, mode, 'win-unpacked', 'resources')
+    const source = join(b.root, `windows-asar-source-${mode}`)
+    mkdirSync(source)
+    const shim = join(resources, 'app', 'package.json')
+    writeFileSync(join(source, 'package.json'), readFileSync(shim))
+    await createPackage(source, join(resources, 'app.asar'))
+    rmSync(shim)
+    rmdirSync(join(resources, 'app'))
+  }
+  assert.equal((await validateCompanyRelease(b.root)).manifest.version, b.manifest.version)
+})
 test('tampering or a leaked bootstrap blocks publication before any network call',async t=>{
   const b=bundle(t),s=server(b.manifest)
   writeFileSync(join(b.root,b.manifest.artifacts[1].path),'tampered')
@@ -76,6 +111,25 @@ test('rejects a source mismatch and missing Full instead of allowing an update-o
   await assert.rejects(validateCompanyRelease(b.root),/source\/version/)
   const other=bundle(t);other.manifest.artifacts.shift();other.save()
   await assert.rejects(validateCompanyRelease(other.root),/supplied together/)
+})
+
+test('requires both packaged internal builds to match the release manifest', async t => {
+  const b = bundle(t)
+  b.manifest.displayVersion = b.manifest.version
+  b.manifest.build = '2026102601'
+  b.save()
+  for (const mode of ['full', 'update']) {
+    const path = join(b.root, mode, 'win-unpacked/resources/app/package.json')
+    const value = JSON.parse(readFileSync(path, 'utf8'))
+    value.dshCompanyCompatibilityBuild = b.manifest.build
+    writeFileSync(path, JSON.stringify(value))
+  }
+  await validateCompanyRelease(b.root)
+  const path = join(b.root, 'update/win-unpacked/resources/app/package.json')
+  const value = JSON.parse(readFileSync(path, 'utf8'))
+  value.dshCompanyCompatibilityBuild = '2026102201'
+  writeFileSync(path, JSON.stringify(value))
+  await assert.rejects(validateCompanyRelease(b.root), /build mismatch/)
 })
 test('failed upload retains old release; resume skips matching staged Full and only then publishes',async t=>{
   const b=bundle(t),s=server(b.manifest);s.fail='exe'

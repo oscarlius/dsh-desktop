@@ -14,12 +14,12 @@ describe('company test product flavor', () => {
     expect(desktopCompanyTestFlavor(undefined)).toBe(false)
   })
 
-  it('selects a distinct identity with updates disabled only for the test marker', () => {
+  it('selects a distinct identity that routes updates through the company adapter', () => {
     expect(desktopProductIdentityForManifest('{"dshDesktopFlavor":"companytest"}')).toMatchObject({
       productName: 'P7 DSH Company Test',
       appId: 'ai.deepseek.dsh.desktop.companytest',
       homeDirectoryName: '.p7-dsh-companytest',
-      updatesEnabled: false,
+      updatesEnabled: true,
       accountOnboardingEnabled: false,
     })
     expect(desktopProductIdentityForManifest(undefined)).toMatchObject({
@@ -33,7 +33,9 @@ describe('company test product flavor', () => {
     const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
     const identity = desktopProductIdentityForManifest(JSON.stringify({ ...manifest, dshDesktopFlavor: 'companytest' }))
     expect(identity.packageName).toBe(manifest.name)
-    for (const subpath of ['./webserver', './windows-pwsh-sandbox']) {
+    // Next removed the legacy PowerShell export; retain only the Host Web
+    // entry that the Company product still loads.
+    for (const subpath of ['./webserver']) {
       expect(manifest.exports[subpath]).toBeDefined()
     }
   })
@@ -56,10 +58,10 @@ describe('company test product flavor', () => {
       mkdirSync(join(directory, 'app'), { recursive: true })
       writeFileSync(join(directory, 'app/package.json'), '{not json')
       expect(invoke().status).not.toBe(0)
-      writeFileSync(join(directory, 'app/package.json'), '{"dshDesktopFlavor":"companytest"}')
+      writeFileSync(join(directory, 'app/package.json'), '{"dshDesktopFlavor":"companytest","version":"2.0.20-beta.15","dshCompanyCompatibilityBuild":"2026102601"}')
       const company = invoke()
       expect(company.status, company.stderr).toBe(0)
-      expect(company.stdout).toContain('P7 DSH Company Test false')
+      expect(company.stdout).toContain('P7 DSH Company Test true')
     } finally { rmSync(directory, { recursive: true, force: true }) }
   })
 
@@ -71,10 +73,10 @@ describe('company test product flavor', () => {
       writeFileSync(source, readFileSync(new URL('../src/product-identity.ts', import.meta.url)))
       const invoke = () => spawnSync(process.execPath, ['--input-type=module', '-e', `delete process.resourcesPath; const m = await import(${JSON.stringify(pathToFileURL(source).href)}); console.log(m.DESKTOP_PRODUCT_NAME, m.DESKTOP_UPDATES_ENABLED)`], { encoding: 'utf8' })
       expect(invoke().status).not.toBe(0)
-      writeFileSync(join(directory, 'package.json'), '{"type":"module","dshDesktopFlavor":"companytest"}')
+      writeFileSync(join(directory, 'package.json'), '{"type":"module","dshDesktopFlavor":"companytest","version":"2.0.20-beta.15","dshCompanyCompatibilityBuild":"2026102601"}')
       const company = invoke()
       expect(company.status, company.stderr).toBe(0)
-      expect(company.stdout).toContain('P7 DSH Company Test false')
+      expect(company.stdout).toContain('P7 DSH Company Test true')
     } finally { rmSync(directory, { recursive: true, force: true }) }
   })
 })

@@ -22,7 +22,7 @@ export function assertCompanyUpdateInfo(result: UpdateCheckResult | null, releas
   if (release.updaterFeedUrl !== COMPANY_UPDATER_FEED || !release.sha512 || !release.size
     || !result?.isUpdateAvailable || info?.version !== release.version || info.files.length !== 1
     || file === undefined || ('packages' in info && info.packages !== undefined)
-    || companyInstallerUrl(new URL(file.url, COMPANY_UPDATER_FEED).href) !== release.downloadUrl
+    || companyInstallerUrl(new URL(file.url, COMPANY_UPDATER_FEED).href, release.version) !== release.downloadUrl
     || file.sha512 !== release.sha512 || file.size !== release.size) {
     throw new Error('P7 differential manifest changed after confirmation')
   }

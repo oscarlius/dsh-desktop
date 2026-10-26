@@ -11,7 +11,7 @@ import {
   parseSemVer,
   parseCanonicalChannelVersion,
   type DesktopReleaseChannel,
-} from './update-checker.ts'
+} from '../../dsh-plugin-desktop/src/update-checker.ts'
 
 /** Desktop platforms with a fixed installer download endpoint. */
 export type DesktopDownloadPlatform = 'darwin' | 'win32'
@@ -146,7 +146,7 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
     if (platform !== 'win32' || company.version !== options.version) {
       throw new UpdateDownloadError('invalid-options', 'The company installer does not match the requested platform or version.')
     }
-    companyInstallerUrl(company.downloadUrl)
+    companyInstallerUrl(company.downloadUrl, company.version)
     if (!/^[a-fA-F0-9]{64}$/u.test(company.sha256)) {
       throw new UpdateDownloadError('invalid-options', 'Company installers require a SHA-256 digest.')
     }
@@ -190,7 +190,7 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
   }
   try {
     if (company === undefined) assertSecureDownloadUrl(finalUrl)
-    else if (companyInstallerUrl(finalUrl) !== company.downloadUrl) {
+    else if (companyInstallerUrl(finalUrl, company.version) !== company.downloadUrl) {
       throw new UpdateDownloadError('redirect-origin', 'The company download changed its immutable address.')
     }
     assertDeclaredSize(response)
