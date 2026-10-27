@@ -31,6 +31,10 @@ try{
  for(const moduleName of ['dsh-plugin-p7-company-models','dsh-plugin-p7-web-search','dsh-plugin-p7-mcp','dsh-streamfold']){
    const row=rows.find(row=>row.moduleName===moduleName);assert.equal(row?.fiberPhase,'active',JSON.stringify(row));report.checks.push({name:moduleName+' active',pass:true});
  }
+ const httpFetch=rows.find(row=>row.moduleName==='@deepseek-ai/dsh-web-fetch-http');
+ assert.equal(httpFetch?.fiberPhase,'active','Company HTTP fetch provider must be active');
+ assert.ok(!rows.some(row=>row.moduleName==='@deepseek-ai/dsh-web-deepseek-api'&&row.fiberPhase==='active'),'Unused DeepSeek API must not be active in a fresh Company profile');
+ report.checks.push({name:'company fetch uses the HTTP provider without DeepSeek API',pass:true});
  const statusResponse=await fetch(origin+'/p7-company-models/status',{headers:{cookie,origin}});assert.equal(statusResponse.status,200);const status=await statusResponse.json();assert.equal(status.loginRequired,true);assert.equal(status.models.length,0);report.checks.push({name:'unauthenticated company model gate',pass:true});
  assert.ok(ready.injections.some(value=>value.name==='__DSH_COMPANY_POLICY__'&&value.value.requirePersonalLogin===true));
  report.checks.push({name:'first frame company policy',pass:true});
@@ -44,6 +48,9 @@ try{
  const hmrDeadline=Date.now()+5000;let hmrActive=false;
  while(!hmrActive&&Date.now()<hmrDeadline){hmrActive=(await rpc('listPlugins')).some(row=>row.entryId.endsWith('company-hmr-fixture')&&row.fiberPhase==='active');if(!hmrActive)await new Promise(resolve=>setTimeout(resolve,50));}
  assert.ok(hmrActive,'Profile change must reach the real Loader');
+ const reloadedRows=await rpc('listPlugins');
+ assert.ok(!reloadedRows.some(row=>row.moduleName==='@deepseek-ai/dsh-web-deepseek-api'&&row.fiberPhase==='active'),'Profile HMR must retain Company fetch defaults');
+ report.checks.push({name:'real Profile HMR retains Company fetch policy',pass:true});
  const reloadedStatus=await fetch(origin+'/p7-company-models/status',{headers:{cookie,origin}}).then(response=>response.json());
  assert.equal(reloadedStatus.loginRequired,true);report.checks.push({name:'real Profile HMR retains sealed company login requirement',pass:true});
  try{report.blockedEgress=readFileSync(egress,'utf8').trim().split('\n').filter(Boolean);}catch{report.blockedEgress=[];}

@@ -298,7 +298,10 @@ try {
   assert.ok(recoveredHtml.includes('"id":"dsh-plugin-desktop-beta"'), 'Recovery must retain basic window controls')
   await stop()
   manager.create('work')
-  assert.deepEqual(manager.features('work'), { remoteControl: false, market: false }, 'New Profiles must leave markets off')
+  const companyDefaults = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).dshDesktopFlavor === 'companytest'
+  assert.deepEqual(manager.features('work'), { remoteControl: false, market: companyDefaults }, 'New Profile defaults must match the product policy')
+  // The remainder verifies that a user can keep both markets off explicitly.
+  manager.setFeatures('work', { remoteControl: false, market: false })
   manager.select('work')
   const switched = await boot(manager.active)
   ;({ origin, cookie } = switched)
