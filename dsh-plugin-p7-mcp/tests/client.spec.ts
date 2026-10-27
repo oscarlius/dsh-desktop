@@ -35,6 +35,27 @@ describe('P7 managed MCP client', () => {
     await expect(client.call(tool.name, {})).rejects.toMatchObject({ status: 401 })
     expect(wire.calls).toHaveLength(before)
   })
+  it('cancels initialization notification without dispatching the tool call', async () => {
+    const controller = new AbortController()
+    const methods: string[] = []
+    let notificationStarted!: () => void
+    const started = new Promise<void>(resolve => { notificationStarted = resolve })
+    const client = new P7McpClient(async () => ({ origin: 'https://p7.example', apiKey: 'test' }), async (_url, init) => {
+      const request = JSON.parse(String(init?.body)) as { method: string; id?: string }
+      methods.push(request.method)
+      if (request.method === 'initialize') return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: { protocolVersion: '2025-06-18' } }), { headers: { 'content-type': 'application/json' } })
+      notificationStarted()
+      return await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => { reject(init.signal?.reason) }, { once: true })
+      })
+    })
+    const call = client.call(tool.name, {}, controller.signal)
+    const rejection = expect(call).rejects.toMatchObject({ name: 'AbortError' })
+    await started
+    controller.abort()
+    await rejection
+    expect(methods).toEqual(['initialize', 'notifications/initialized'])
+  })
   it('rejects duplicate advertised tools and a response for another request', async () => {
     const connection = async () => ({ origin: 'https://p7.example', apiKey: 'test' })
     await expect(new P7McpClient(connection, server({ tools: [tool, tool] }).fetcher).list()).rejects.toBeInstanceOf(P7McpError)
@@ -48,6 +69,29 @@ describe('P7 managed MCP client', () => {
   it('does not expose upstream credential-bearing error bodies', async () => {
     const wire = server({ status: 403 })
     const client = new P7McpClient(async () => ({ origin: 'https://p7.example', apiKey: 'test-secret' }), wire.fetcher)
-    await expect(client.list()).rejects.toThrow('Company MCP service is unavailable')
+    await expect(client.list()).rejects.toThrow('此公司工具当前未授权')
+  })
+  it.each([
+    [401, 'P7_AUTH_REQUIRED'], [403, 'P7_TOOL_FORBIDDEN'], [422, 'P7_TOOL_ARGUMENTS'],
+    [429, 'P7_TOOL_BUSY'], [502, 'P7_TOOL_UPSTREAM'], [503, 'P7_TOOL_UNAVAILABLE'], [504, 'P7_TOOL_UPSTREAM'],
+  ])('classifies HTTP %s without echoing a server error body', async (status, code) => {
+    const client = new P7McpClient(async () => ({ origin: 'https://p7.example', apiKey: 'test-secret' }),
+      async () => new Response('Bearer test-secret http://internal.invalid/private', { status: Number(status) }))
+    const error = await client.list().catch((e: unknown) => e)
+    expect(error).toMatchObject({ status, code })
+    expect(String(error)).not.toContain('test-secret')
+    expect(String(error)).not.toContain('internal.invalid')
+    if (status === 502 || status === 429) expect(String(error)).not.toContain('未授权')
+  })
+  it.each([[-32602, 422], [-32001, 403], [-32002, 502]])('classifies JSON-RPC %s and drops its untrusted message', async (rpcCode, status) => {
+    const wire = server()
+    const client = new P7McpClient(async () => ({ origin: 'https://p7.example', apiKey: 'test' }), async (url, init) => {
+      const body = JSON.parse(String(init?.body)) as { method: string; id?: string }
+      if (body.method !== 'tools/call') return wire.fetcher(url, init)
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: rpcCode, message: 'supplier-secret' } }), { headers: { 'content-type': 'application/json' } })
+    })
+    const error = await client.call(tool.name, {}).catch((e: unknown) => e)
+    expect(error).toMatchObject({ status })
+    expect(String(error)).not.toContain('supplier-secret')
   })
 })

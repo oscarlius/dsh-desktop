@@ -33,6 +33,39 @@ function okBody(...urls: string[]): unknown {
   return { schemaVersion: 1, requestId: 'req-1', results: urls.map(url => ({ url })), truncated: false }
 }
 
+/** Test double for the optional account service, with explicit login/logout notifications. */
+class PersonalAccount {
+  private token = ''
+  private readonly listeners = new Set<() => void>()
+
+  usesPersonalToken(): boolean { return true }
+  async getValidAccessToken(): Promise<string> {
+    if (!this.token) throw new Error('P7 personal sign-in is required.')
+    return this.token
+  }
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
+  }
+  login(token: string): void { this.token = token; this.publish() }
+  logout(): void { this.token = ''; this.publish() }
+  get subscriberCount(): number { return this.listeners.size }
+  private publish(): void { for (const listener of this.listeners) listener() }
+}
+
+/** A broker that explicitly permits the legacy shared credential plane. */
+class SharedAccount {
+  private readonly listeners = new Set<() => void>()
+
+  usesPersonalToken(): boolean { return false }
+  async getValidAccessToken(): Promise<string> { throw new Error('shared credentials do not use a personal token') }
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
+  }
+  get subscriberCount(): number { return this.listeners.size }
+}
+
 /** The first (and only) call a fetch mock received. */
 function singleCall(fetch: P7Fetch): [string, RequestInit] {
   const calls = vi.mocked(fetch).mock.calls
@@ -329,6 +362,37 @@ describe('secret containment', () => {
 })
 
 describe('P7 connection layers', () => {
+  it('does not dispatch a token resolved before a newer personal-account invalidation', async () => {
+    let personalMode = false
+    let releaseToken!: (value: string) => void
+    let tokenRequested!: () => void
+    const token = new Promise<string>(resolve => { releaseToken = resolve })
+    const requested = new Promise<void>(resolve => { tokenRequested = resolve })
+    const resolver = new P7ConnectionResolver({
+      credentialRef: REF as never,
+      configuredOrigin: 'https://p7.test',
+      configuredApiKey: 'shared-key',
+      persistenceFile: 'missing',
+      requestTimeoutMs: 1000,
+      ambientApiKey: () => undefined,
+      usesPersonalToken: () => personalMode,
+      personalAccessToken: async () => { tokenRequested(); return await token },
+    })
+    await resolver.settling
+    personalMode = true
+    resolver.invalidate()
+    const fetch = vi.fn(async () => jsonResponse(okBody('https://a.test'))) as unknown as P7Fetch
+    const search = new P7SearchProvider({ connection: resolver, credentialRef: REF, fetch }).search({ query: 'stale personal token' })
+    await requested
+    // This is the account subscriber's logout/failure invalidation while the
+    // previous token getter is still in flight.
+    resolver.invalidate()
+    releaseToken(SECRET)
+    await expect(search).rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_CREDENTIAL_MISSING' }))
+    expect(fetch).not.toHaveBeenCalled()
+    expect(resolver.peek().apiKey).toBe('')
+  })
+
   it('derives the credential reference from the Profile id', () => {
     expect(p7CredentialRef('/profiles/main')).toMatch(/^P7_DSH_[0-9A-F]{24}_API_KEY$/)
     expect(p7CredentialRef('/profiles/main')).toBe(p7CredentialRef('/profiles/main'))
@@ -541,7 +605,7 @@ describe('web-search-p7 plugin registration', () => {
   })
 
   it('is registered but unavailable when no layer supplies a key', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse(okBody('https://a.test')))
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init: RequestInit) => jsonResponse(okBody('https://a.test')))
     vi.stubGlobal('fetch', fetchMock)
     const { ctx, dir, dispose } = await mount({ origin: 'https://p7.test' })
     try {
@@ -550,6 +614,59 @@ describe('web-search-p7 plugin registration', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       await dispose()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('tracks a late personal broker through login and logout without using a shared key', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'p7-web-search-plugin-'))
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init: RequestInit) => jsonResponse(okBody('https://a.test')))
+    vi.stubGlobal('fetch', fetchMock)
+    const ctx = new Context()
+    const account = new PersonalAccount()
+    ctx.provide('credentials', { resolve: async () => undefined } as never)
+    ctx.provide('profileContext', { dir } as never)
+    await ctx.plugin(WebRuntime, { searchProvider: 'p7' })
+    const fiber = await ctx.plugin(plugin, { origin: 'https://p7.test', apiKey: 'shared-key' })
+    const removeAccount = ctx.provide('p7Account', account as never)
+    let removeSharedAccount: (() => void) | undefined
+    try {
+      await vi.waitFor(() => { expect(account.subscriberCount).toBe(1) })
+      await expect(ctx.web.search({ query: 'before personal login' }))
+        .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_CONFIGURED_UNAVAILABLE' }))
+      expect(fetchMock).not.toHaveBeenCalled()
+
+      account.login(SECRET)
+      await vi.waitFor(async () => {
+        await expect(ctx.web.search({ query: 'after personal login' }))
+          .resolves.toMatchObject({ sources: [{ url: 'https://a.test' }] })
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ headers: expect.objectContaining({ authorization: `Bearer ${SECRET}` }) })
+
+      account.logout()
+      await expect(ctx.web.search({ query: 'after personal logout' }))
+        .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_CONFIGURED_UNAVAILABLE' }))
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      await removeAccount()
+      await vi.waitFor(async () => {
+        await expect(ctx.web.search({ query: 'after personal broker removal' }))
+          .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_CONFIGURED_UNAVAILABLE' }))
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      const sharedAccount = new SharedAccount()
+      removeSharedAccount = ctx.provide('p7Account', sharedAccount as never)
+      await vi.waitFor(() => { expect(sharedAccount.subscriberCount).toBe(1) })
+      await expect(ctx.web.search({ query: 'after shared mode is explicitly restored' }))
+        .resolves.toMatchObject({ sources: [{ url: 'https://a.test' }] })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ headers: expect.objectContaining({ authorization: 'Bearer shared-key' }) })
+    } finally {
+      await fiber.dispose()
+      if (removeSharedAccount) await removeSharedAccount()
+      else await removeAccount()
       await rm(dir, { recursive: true, force: true })
     }
   })

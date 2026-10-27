@@ -141,7 +141,10 @@ export interface P7ConnectionSources {
   readonly credentials?: P7CredentialReader
   /** Host-only personal-account source. When selected, legacy shared keys are forbidden. */
   readonly personalAccessToken?: () => Promise<string | undefined>
-  readonly usesPersonalToken?: () => boolean
+  /** `undefined` means no scoped broker is currently available. */
+  readonly usesPersonalToken?: () => boolean | undefined
+  /** A scoped broker was observed, so do not read a registry entry being disposed. */
+  readonly personalAccountKnown?: () => boolean
   /** Same reference read from the launch environment, synchronously. */
   ambientApiKey(): string | undefined
   /** Profile file whose `origin` field the P7 company-model plugin maintains. */
@@ -164,6 +167,9 @@ export class P7ConnectionResolver {
   private refreshing: Promise<void> = Promise.resolve()
   private pendingCredentialRefreshes = 0
   private settlingPending = true
+  private availabilityBlocked = false
+  private availabilityGeneration = 0
+  private personalModeSeen = false
   /** The activation-time read of the Profile snapshot and the credential plane. */
   readonly settling: Promise<void>
 
@@ -196,8 +202,10 @@ export class P7ConnectionResolver {
   async resolve(): Promise<P7ResolvedConnection> {
     await this.settling
     await this.refreshing
+    const generation = this.availabilityGeneration
     await this.refreshOrigin()
     const apiKey = await this.readKey()
+    if (generation !== this.availabilityGeneration) return { ...this.peek(), apiKey: '' }
     this.apiKey = apiKey
     return { ...this.peek(), apiKey }
   }
@@ -209,25 +217,41 @@ export class P7ConnectionResolver {
    */
   refresh(): Promise<void> {
     this.pendingCredentialRefreshes += 1
+    const generation = this.availabilityGeneration
     const refresh = this.refreshing.then(async () => {
       await this.refreshOrigin()
-      this.apiKey = await this.readKey()
+      const apiKey = await this.readKey()
+      if (generation === this.availabilityGeneration) {
+        this.apiKey = apiKey
+        this.availabilityBlocked = false
+      }
     })
-    this.refreshing = refresh.catch(() => { this.apiKey = '' }).finally(() => {
+    this.refreshing = refresh.catch(() => {
+      if (generation === this.availabilityGeneration) this.apiKey = ''
+    }).finally(() => {
       this.pendingCredentialRefreshes -= 1
     })
     return this.refreshing
   }
 
+  /** Clear the cached key before an account-state refresh completes. */
+  invalidate(): void {
+    this.availabilityGeneration += 1
+    this.apiKey = ''
+    this.availabilityBlocked = true
+  }
+
   /** Whether a committed credential update is still being reflected locally. */
   hasPendingCredentialRefresh(): boolean {
-    return this.settlingPending || this.pendingCredentialRefreshes > 0
+    return !this.availabilityBlocked && (this.settlingPending || this.pendingCredentialRefreshes > 0)
   }
 
   private async settle(): Promise<void> {
+    const generation = this.availabilityGeneration
     try {
       await this.refreshOrigin()
-      this.apiKey = await this.readKey()
+      const apiKey = await this.readKey()
+      if (generation === this.availabilityGeneration) this.apiKey = apiKey
     } catch {
       // Unresolved rather than broken: `available()` then reports false, which is
       // honest, instead of dispatching a search that cannot authenticate.
@@ -241,10 +265,17 @@ export class P7ConnectionResolver {
   }
 
   private async readKey(): Promise<string> {
-    const account = registeredAccount(this.sources.profileId)
-    if (account?.usesPersonalToken() === true || this.sources.usesPersonalToken?.() === true) {
+    const scopedMode = this.sources.usesPersonalToken?.()
+    const account = scopedMode === undefined && this.sources.personalAccountKnown?.() !== true
+      ? registeredAccount(this.sources.profileId)
+      : undefined
+    const personalMode = account?.usesPersonalToken() ?? scopedMode
+    if (personalMode === true) {
+      this.personalModeSeen = true
       try { return (await (account?.getValidAccessToken() ?? this.sources.personalAccessToken?.()))?.trim() ?? '' } catch { return '' }
     }
+    if (personalMode === false) this.personalModeSeen = false
+    if (this.personalModeSeen) return ''
     const literal = this.sources.configuredApiKey?.trim() ?? ''
     if (literal.length > 0) return literal
     const { credentials, credentialRef } = this.sources

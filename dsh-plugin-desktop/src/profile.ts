@@ -1219,6 +1219,29 @@ function hasConfiguredWebSearchProviderEnvironment(): boolean {
   return provider !== undefined && provider.trim().length > 0
 }
 
+/** Return the last explicit provider value saved by a Profile or home patch. */
+function configuredWebProvider(
+  patches: readonly PatchOptions[],
+  field: 'searchProvider' | 'fetchProvider',
+): unknown {
+  for (const patch of [...patches].reverse()) {
+    const config = rowConfig(patch)
+    if (patch.id === 'web' && Object.hasOwn(config, field)) return config[field]
+  }
+  return undefined
+}
+
+/** Operational fetch selection takes precedence over the sealed Company default. */
+function hasConfiguredWebFetchProviderEnvironment(): boolean {
+  const provider = process.env.DSH_WEB_FETCH_PROVIDER
+  return provider !== undefined && provider.trim().length > 0
+}
+
+/** A Profile or home patch owns an explicit DeepSeek API row enablement. */
+function hasExplicitDeepSeekFetchApiEnablement(patches: readonly PatchOptions[]): boolean {
+  return [...patches].reverse().some(patch => patch.id === 'web-deepseek-api' && typeof patch.disabled === 'boolean')
+}
+
 /** Snapshot, validate, and deduplicate the LAN allowlist supplied by the launcher. */
 function preparedLanAddresses(addresses: readonly string[] | undefined): readonly string[] {
   const unique = new Set<string>()
@@ -1853,6 +1876,31 @@ export function prepareDesktopProfile(
       throw new Error(`${BIN_NAME}: company Desktop profile must use @deepseek-ai/dsh-web in the web row`)
     }
     patches.push({ id: 'web', config: { ...rowConfig(web), searchProvider: 'p7' } })
+  }
+  // P7 has no configured fetch endpoint. Company therefore uses the bundled
+  // public HTTP(S) provider and does not activate DeepSeek's API fetch route,
+  // unless the environment or saved Profile deliberately selects that provider.
+  if (DESKTOP_COMPANY_SERVICE_ENABLED) {
+    if (web?.name !== '@deepseek-ai/dsh-web') {
+      throw new Error(`${BIN_NAME}: company Desktop profile must use @deepseek-ai/dsh-web in the web row`)
+    }
+    const configuredPatches = [...filteredProfile.patches, ...filteredHome.patches]
+    const configuredSearch = configuredWebProvider(configuredPatches, 'searchProvider')
+    const configuredFetch = configuredWebProvider(configuredPatches, 'fetchProvider')
+    const usesDeepSeekApi = configuredSearch === 'deepseek-search-api'
+      || configuredFetch === 'deepseek-fetch-api'
+      || process.env.DSH_WEB_SEARCH_PROVIDER?.trim() === 'deepseek-search-api'
+      || process.env.DSH_WEB_FETCH_PROVIDER?.trim() === 'deepseek-fetch-api'
+    const config = {
+      ...(configuredSearch === undefined && !hasConfiguredWebSearchProviderEnvironment()
+        ? { searchProvider: 'p7' } : configuredSearch === undefined ? {} : { searchProvider: configuredSearch }),
+      ...(configuredFetch === undefined && !hasConfiguredWebFetchProviderEnvironment()
+        ? { fetchProvider: 'http' } : configuredFetch === undefined ? {} : { fetchProvider: configuredFetch }),
+    }
+    if (Object.keys(config).length > 0) patches.push({ id: 'web', config: { ...rowConfig(web), ...config } })
+    if (!usesDeepSeekApi && !hasExplicitDeepSeekFetchApiEnablement(configuredPatches)) {
+      patches.push({ id: 'web-deepseek-api', disabled: true })
+    }
   }
   // A Web bundle that still injects webRuntime into its own Connection row
   // also provides that service; only a core that retired it needs re-targeting.

@@ -238,7 +238,7 @@
     },
     {
       "path": "src/profiles.ts",
-      "betaSha256": "d71fc1fff125fa22652e953ba22718c11a14f8d7cfcab9eb2f0df4c68a2cc669",
+      "betaSha256": "314a8fe300d1c6b1b7aec87298420b56d4eb755ed3c7a0e5c65cfd944370bfdd",
       "nextSha256": "f22af39baf85b2a0b02dd17e3c8450084b660de911bcfcdda309e1de8a66bf94",
       "reason": "Company P7 and StreamFold composition, preserved Profile identity, first-run market and sealed login/account UI policy."
     },
@@ -292,7 +292,7 @@
     },
     {
       "path": "tests/company-profile-composition.spec.ts",
-      "betaSha256": "3aa29f51e0f8607223bf89fda699f5ccd99646d8ea63b822be31892a66ef3264",
+      "betaSha256": "416bbcc3d186a55505358f60816259dfff4fb16f983ee7aba694586c8309749f",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

@@ -26,6 +26,52 @@ function desktopCapabilityPatches() {
   ]
 }
 
+function configuredWebProvider(
+  patches: readonly { id?: unknown; config?: unknown }[],
+  field: 'searchProvider' | 'fetchProvider',
+): unknown {
+  for (const patch of [...patches].reverse()) {
+    if (patch.id === 'web' && patch.config !== null && typeof patch.config === 'object' && !Array.isArray(patch.config)
+      && Object.hasOwn(patch.config, field)) return (patch.config as Record<string, unknown>)[field]
+  }
+  return undefined
+}
+
+function hasConfiguredWebFetchProviderEnvironment(): boolean {
+  const provider = process.env.DSH_WEB_FETCH_PROVIDER
+  return provider !== undefined && provider.trim().length > 0
+}
+
+/** The last explicit row enablement is a user-owned choice, not a default. */
+function hasExplicitDeepSeekFetchApiEnablement(patches: readonly { id?: unknown; disabled?: unknown }[]): boolean {
+  return [...patches].reverse().some(patch => patch.id === 'web-deepseek-api' && typeof patch.disabled === 'boolean')
+}
+
+/**
+ * Company does not configure a P7 fetch endpoint. Keep the bundled public HTTP
+ * provider as its default and do not mount the unused DeepSeek Fetch API.
+ * Explicit Profile or environment choices retain upstream composition verbatim.
+ */
+function companyWebFetchPolicyPatches(patches: readonly { id?: unknown; config?: unknown }[]) {
+  if (!DESKTOP_COMPANY_SERVICE_ENABLED) return []
+  const configuredSearch = configuredWebProvider(patches, 'searchProvider')
+  const configuredFetch = configuredWebProvider(patches, 'fetchProvider')
+  const searchFromEnvironment = process.env.DSH_WEB_SEARCH_PROVIDER?.trim().length
+  const fetchFromEnvironment = hasConfiguredWebFetchProviderEnvironment()
+  const usesDeepSeekApi = configuredSearch === 'deepseek-search-api'
+    || configuredFetch === 'deepseek-fetch-api'
+    || process.env.DSH_WEB_SEARCH_PROVIDER?.trim() === 'deepseek-search-api'
+    || process.env.DSH_WEB_FETCH_PROVIDER?.trim() === 'deepseek-fetch-api'
+  const config = {
+    ...(configuredSearch === undefined && !searchFromEnvironment ? { searchProvider: 'p7' } : configuredSearch === undefined ? {} : { searchProvider: configuredSearch }),
+    ...(configuredFetch === undefined && !fetchFromEnvironment ? { fetchProvider: 'http' } : configuredFetch === undefined ? {} : { fetchProvider: configuredFetch }),
+  }
+  return [
+    ...(Object.keys(config).length === 0 ? [] : [{ id: 'web', config }]),
+    ...(!usesDeepSeekApi && !hasExplicitDeepSeekFetchApiEnablement(patches) ? [{ id: 'web-deepseek-api', disabled: true }] : []),
+  ]
+}
+
 /** Company sessions use the P7 account surface exclusively. These rows must be
  * last so a persisted Profile patch cannot re-enable DeepSeek login or feedback. */
 function companyAccountUiPolicyPatches() {
@@ -345,6 +391,7 @@ export function loadNextProfile(projectDir: string, home: string, installAnchor 
   profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir: target,
     patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches() })
   profile.patches.push(...companyAccountUiPolicyPatches())
+  profile.patches.push(...companyWebFetchPolicyPatches(profile.patches))
   const overlay = [
     { id: 'agents-anywhere-bridge-next', config: {
       dshHome: home,
@@ -399,6 +446,6 @@ export function readNextProfilePatches(projectDir: string, home: string, overlay
   // Profile HMR/reload must not turn Company personal-login back into a shared
   // credential path.  This final product patch is deliberately after user rows.
   return DESKTOP_COMPANY_SERVICE_ENABLED
-    ? [...patches, ...companyAccountUiPolicyPatches(), { id: 'p7-company-models', config: { requirePersonalLogin: true } }]
+    ? [...patches, ...companyWebFetchPolicyPatches(patches), ...companyAccountUiPolicyPatches(), { id: 'p7-company-models', config: { requirePersonalLogin: true } }]
     : patches
 }

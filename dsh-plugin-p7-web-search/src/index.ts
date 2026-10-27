@@ -87,7 +87,8 @@ export const Config: z<Config> = z.object({
 /** Register the P7 search provider with `ctx.web`. */
 export function apply(ctx: Context, config: Config): void {
   const ref = credentialRef(config.credentialRef ?? p7CredentialRef(ctx.profileContext.dir))
-  const account = ctx.get('p7Account')
+  let account: P7AccountTokenSource | undefined
+  let accountSeen = false
   const resolver = new P7ConnectionResolver({
     profileId: ctx.profileContext.dir,
     credentialRef: ref,
@@ -95,7 +96,11 @@ export function apply(ctx: Context, config: Config): void {
     persistenceFile: join(ctx.profileContext.dir, P7_PERSISTENCE_FILE),
     ambientApiKey: () => launchEnvironmentOf(ctx).get(ref)?.value,
     requestTimeoutMs: config.requestTimeoutMs ?? P7_DEFAULT_REQUEST_TIMEOUT_MS,
-    ...(account === undefined ? {} : { personalAccessToken: async () => await account.getValidAccessToken(), usesPersonalToken: () => account.usesPersonalToken() }),
+    // `p7Account` is optional. Keep these sources live because the company
+    // plugin can provide its broker after this provider has already settled.
+    personalAccessToken: async () => await account?.getValidAccessToken(),
+    usesPersonalToken: () => account?.usesPersonalToken(),
+    personalAccountKnown: () => accountSeen,
     ...config.origin === undefined ? {} : { configuredOrigin: config.origin },
     ...config.apiKey === undefined || config.apiKey.length === 0 ? {} : { configuredApiKey: config.apiKey },
     ...config.maxResults === undefined ? {} : { maxResults: config.maxResults },
@@ -114,9 +119,28 @@ export function apply(ctx: Context, config: Config): void {
   ctx.on('credentials/reference-updated', updatedRef => {
     if (updatedRef === ref) void resolver.refresh()
   })
-  // Login, refresh failure, and logout change which credential plane is legal.
-  // Refresh the cached availability view; actual requests still resolve afresh.
-  if (account !== undefined) ctx.effect(() => account.subscribe(() => { void resolver.refresh() }), 'web-search-p7: personal account credential refresh')
+  // The broker is an optional late service. Its scoped fiber follows provider
+  // registration/removal, so the resolver observes login and logout even when
+  // it first settled before the company plugin became active.
+  ctx.inject(['p7Account'], accountCtx => {
+    const current = accountCtx.p7Account
+    if (current === undefined) return
+    account = current
+    accountSeen = true
+    resolver.invalidate()
+    void resolver.refresh()
+    accountCtx.effect(() => current.subscribe(() => {
+      resolver.invalidate()
+      void resolver.refresh()
+    }), 'web-search-p7: personal account credential refresh')
+    accountCtx.effect(() => () => {
+      if (account === current) {
+        account = undefined
+        resolver.invalidate()
+        void resolver.refresh()
+      }
+    }, 'web-search-p7: personal account removal')
+  })
   // Registration is synchronous, but the Profile snapshot and the credential
   // plane are not. The Company profile is selected only after its shared
   // credential is committed; ordinary profiles keep their original selection.

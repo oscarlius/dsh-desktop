@@ -8,7 +8,7 @@ import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { p7CredentialRef, P7ConnectionResolver, P7_PERSISTENCE_FILE } from 'dsh-plugin-p7-web-search'
-import { P7McpClient } from './client.js'
+import { P7McpClient, P7McpError } from './client.js'
 
 export { P7McpClient, P7McpError } from './client.js'
 export const name = 'p7-managed-mcp'
@@ -63,7 +63,16 @@ export function apply(ctx: Context): void {
         inputSchema: tool.inputSchema,
         call: async (args, execution) => {
           try { return await client.call(tool.name, args, execution.signal) }
-          catch { void sync(); throw new Error('Company tool failed or permission changed. Retry only after checking its status.') }
+          catch (error) {
+            // A supplier failure does not change the advertised tools. Refresh
+            // authorization only when the gateway actually rejects access.
+            if (error instanceof P7McpError) {
+              if (error.status === 401 || error.status === 403) void sync()
+              throw error
+            }
+            if (execution.signal?.aborted) throw error
+            throw new Error('公司工具请求未完成，请检查网络或服务状态，避免连续重试。')
+          }
         },
       }))
       clear()
