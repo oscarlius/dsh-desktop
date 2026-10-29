@@ -19,7 +19,7 @@ function fixture(initial = 'Qwen', initialEffort?: string) {
   const directory = { getSnapshot: () => state, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) } }
   const select = vi.fn(async (selection: NonNullable<ModelDirectoryState['current']>) => { update({ current: selection }); return { ok: true, value: undefined } })
   const props = { available: true, locked: false, directory, load: vi.fn(), select, t: (key: keyof typeof zh) => zh[key] } as unknown as Parameters<typeof CompanyModelPicker>[0]
-  return { props, select, directory, current: () => state.current }
+  return { props, select, directory, current: () => state.current, update }
 }
 beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }); Element.prototype.scrollIntoView = vi.fn() })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -33,6 +33,57 @@ class RemoteNamespace extends Service {
 }
 
 describe('company reasoning slider', () => {
+  it('migrates an unroutable P7 alias to its one routable P7 protocol group', async () => {
+    const app = fixture('GPT6.1-SOL', 'high')
+    app.update({ current: { provider: 'p7-company-chat', model: 'GPT6.1-SOL', reasoningEffort: 'high' }, routable: false, groups: [
+      { id: 'p7-company-chat', name: 'Chat', models: [model('old3')] },
+      { id: provider, name: 'Responses', models: [model('GPT6.1-SOL', ['low', 'high'])] },
+    ] })
+    render(<CompanyModelPicker {...app.props} />)
+    await waitFor(() => expect(app.select).toHaveBeenCalledWith({ provider, model: 'GPT6.1-SOL', reasoningEffort: 'high' }))
+    expect(app.current()).toEqual({ provider, model: 'GPT6.1-SOL', reasoningEffort: 'high' })
+  })
+  it('uses the target model default when the saved effort is unsupported', async () => {
+    const app = fixture('GPT6.1-SOL', 'high')
+    app.update({ current: { provider: 'p7-company-chat', model: 'GPT6.1-SOL', reasoningEffort: 'high' }, routable: false, groups: [
+      { id: 'p7-company-chat', name: 'Chat', models: [model('old3')] },
+      { id: provider, name: 'Responses', models: [model('GPT6.1-SOL', ['low'])] },
+    ] })
+    render(<CompanyModelPicker {...app.props} />)
+    await waitFor(() => expect(app.select).toHaveBeenCalledWith({ provider, model: 'GPT6.1-SOL', reasoningEffort: 'low' }))
+  })
+  it.each([
+    ['a routable current selection', { routable: true }],
+    ['a local selection', { current: { provider: 'local', model: 'GPT6.1-SOL' }, routable: false }],
+    ['an unavailable directory', { available: false, routable: false }],
+    ['a loading directory', { status: 'loading', routable: false }],
+    ['an ambiguous same-alias P7 target', { routable: false, groups: [
+      { id: 'p7-company-chat', name: 'Chat', models: [model('old3')] },
+      { id: 'p7-company-responses', name: 'Responses', models: [model('GPT6.1-SOL')] },
+      { id: 'p7-company-messages', name: 'Messages', models: [model('GPT6.1-SOL')] },
+    ] }],
+    ['a locked session', { locked: true, routable: false }],
+  ])('does not auto-migrate %s', async (_name, change) => {
+    const app = fixture('GPT6.1-SOL')
+    app.update(Object.assign({ current: { provider: 'p7-company-chat', model: 'GPT6.1-SOL' }, routable: false, groups: [
+      { id: 'p7-company-chat', name: 'Chat', models: [model('old3')] },
+      { id: provider, name: 'Responses', models: [model('GPT6.1-SOL')] },
+    ] }, change) as Partial<ModelDirectoryState>)
+    render(<CompanyModelPicker {...app.props} {...(change as { available?: boolean, locked?: boolean })} />)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(app.select).not.toHaveBeenCalled()
+  })
+  it('does not retry a failed automatic migration and exposes its error', async () => {
+    const app = fixture('GPT6.1-SOL')
+    app.select.mockResolvedValue({ ok: false, error: { code: 'selection/rejected' } } as never)
+    app.update({ current: { provider: 'p7-company-chat', model: 'GPT6.1-SOL' }, routable: false, groups: [
+      { id: 'p7-company-chat', name: 'Chat', models: [model('old3')] },
+      { id: provider, name: 'Responses', models: [model('GPT6.1-SOL')] },
+    ] })
+    render(<CompanyModelPicker {...app.props} />)
+    await waitFor(() => expect(screen.getByText('切换未成功，请重试。')).toBeTruthy())
+    expect(app.select).toHaveBeenCalledTimes(1)
+  })
   it('uses Qwen metadata only and commits a drag once on release', async () => {
     const app = fixture(); render(<CompanyModelPicker {...app.props} />); const range = openSlider()
     expect(range.max).toBe('1'); fireEvent.change(range, { target: { value: '1' } }); expect(app.select).not.toHaveBeenCalled(); fireEvent.pointerUp(range)

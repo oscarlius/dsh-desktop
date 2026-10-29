@@ -1,5 +1,5 @@
 /** Company presentation over Harness's shared, durable model-selection service. */
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ModelDirectoryState, ModelSelectInjected } from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
@@ -29,6 +29,10 @@ const FRIENDLY_EFFORTS: Record<string, readonly [CompanySettingsLocaleKey, Compa
   xhigh: ['reasoningExtraDeep', 'reasoningExtraDeepDetail'],
   max: ['reasoningMaximum', 'reasoningMaximumDetail'],
 }
+
+const P7_COMPANY_PROVIDER_IDS = new Set([
+  'p7-company-chat', 'p7-company-responses', 'p7-company-messages',
+])
 
 function modelDefault(provider: string, model: Model): string | undefined {
   return provider.startsWith('p7-company-') && model.reasoning?.efforts.some(level => level.id === 'low')
@@ -63,6 +67,7 @@ export function CompanyModelPicker({ available, locked, directory, load, select,
   const [error, setError] = useState<string | null>(null)
   const [previewEffort, setPreviewEffort] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
+  const migrationAttempt = useRef<string | null>(null)
   const busy = saving || state.pending !== null
   const choices = useMemo(() => state.groups.flatMap(group => group.models.map(model => ({ group, model }))), [state.groups])
   const current = choices.find(({ group, model }) => group.id === state.current?.provider && model.id === state.current.model)
@@ -81,13 +86,7 @@ export function CompanyModelPicker({ available, locked, directory, load, select,
   const previewOption = efforts[previewIndex]
   const previewLabel = previewEffort === null && effectiveEffort === undefined ? t('reasoningProviderDefault') : previewOption?.label
   const progress = efforts.length < 2 ? 0 : previewIndex / (efforts.length - 1) * 100
-  useEffect(() => { if (available) load() }, [available, load])
-  // A changed model must not leave the previous model's effort menu on screen.
-  useEffect(() => { setOpen(null); setQuery(''); setError(null); setPreviewEffort(null) }, [state.current?.provider, state.current?.model])
-  useEffect(() => { setPreviewEffort(null) }, [state.current?.reasoningEffort])
-
-  if (!available) return null
-  const submit = async (selection: Selection, close = true): Promise<boolean> => {
+  const submit = useCallback(async (selection: Selection, close = true): Promise<boolean> => {
     if (locked || busy) return false
     setSaving(true); setError(null)
     try {
@@ -100,7 +99,28 @@ export function CompanyModelPicker({ available, locked, directory, load, select,
       return true
     } catch { setError(t('pickerSelectionFailed')); return false }
     finally { setSaving(false) }
-  }
+  }, [busy, locked, select, t])
+  useEffect(() => { if (available) load() }, [available, load])
+  // A changed model must not leave the previous model's effort menu on screen.
+  useEffect(() => { setOpen(null); setQuery(''); setError(null); setPreviewEffort(null) }, [state.current?.provider, state.current?.model])
+  useEffect(() => { setPreviewEffort(null) }, [state.current?.reasoningEffort])
+  useEffect(() => {
+    const current = state.current
+    if (!available || locked || busy || state.pending !== null || state.status !== 'ready' || state.routable !== false
+      || current === null || !P7_COMPANY_PROVIDER_IDS.has(current.provider)) return
+    const targets = choices.filter(({ group, model }) => group.id !== current.provider
+      && P7_COMPANY_PROVIDER_IDS.has(group.id) && model.id === current.model)
+    if (targets.length !== 1) return
+    const target = targets[0]!
+    const key = `${current.provider}:${current.model}->${target.group.id}`
+    if (migrationAttempt.current === key) return
+    migrationAttempt.current = key
+    const effort = current.reasoningEffort !== undefined && target.model.reasoning?.efforts.some(level => level.id === current.reasoningEffort)
+      ? current.reasoningEffort : modelDefault(target.group.id, target.model)
+    void submit({ provider: target.group.id, model: target.model.id, ...(effort === undefined ? {} : { reasoningEffort: effort }) }, false)
+  }, [available, busy, choices, locked, state.current, state.pending, state.routable, state.status, submit])
+
+  if (!available) return null
   const chooseModel = (provider: string, model: Model): void => {
     if (state.current?.provider === provider && state.current.model === model.id) { setOpen(null); return }
     const effort = modelDefault(provider, model)
