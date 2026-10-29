@@ -32,7 +32,7 @@ const createHost = (fetch: typeof globalThis.fetch, persisted = state(), port = 
 describe('CompanyHost integration', () => {
   it('defaults an advertised company reasoning model to low without overriding an explicit same-model choice', async () => {
     const source = config()
-    const catalog = { ...source, models: source.models.map(model => ({ ...model, reasoningEfforts: { off: null, minimal: null, low: 'low', medium: 'medium', high: 'high' } })) }
+    const catalog = { ...source, models: source.models.map(model => ({ ...model, reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' } })) }
     const app = createHost(vi.fn(async () => response(catalog)))
     await app.host.initialize()
     await app.host.connect('https://p7.example', 'p7k_test')

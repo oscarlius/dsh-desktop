@@ -170,54 +170,68 @@
                   "maxLength": 64
                 },
                 "minimal": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": "string",
                   "minLength": 1,
                   "maxLength": 64
                 },
                 "low": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": "string",
                   "minLength": 1,
                   "maxLength": 64
                 },
                 "medium": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": "string",
                   "minLength": 1,
                   "maxLength": 64
                 },
                 "high": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": "string",
                   "minLength": 1,
                   "maxLength": 64
                 },
                 "xhigh": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": "string",
                   "minLength": 1,
                   "maxLength": 64
                 },
                 "max": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": "string",
                   "minLength": 1,
                   "maxLength": 64
                 }
-              }
+              },
+              "anyOf": [
+                {
+                  "required": [
+                    "minimal"
+                  ]
+                },
+                {
+                  "required": [
+                    "low"
+                  ]
+                },
+                {
+                  "required": [
+                    "medium"
+                  ]
+                },
+                {
+                  "required": [
+                    "high"
+                  ]
+                },
+                {
+                  "required": [
+                    "xhigh"
+                  ]
+                },
+                {
+                  "required": [
+                    "max"
+                  ]
+                }
+              ]
             }
           ]
         }

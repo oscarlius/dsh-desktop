@@ -29,6 +29,8 @@ describe('P7 model config contract', () => {
     config({ models: [{ ...config().models[0], maxOutputTokens: 4097 }] }),
     config({ models: [{ ...config().models[0], inputModalities: ['image'] }] }),
     config({ enabled: false, defaultModel: 'admin-alias', models: [] }),
+    config({ models: [{ ...config().models[0], reasoningEfforts: { low: null } }] }),
+    config({ models: [{ ...config().models[0], reasoningEfforts: { off: null } }] }),
   ])('rejects invalid configuration %#', invalid => expect(() => validateModelConfig(invalid)).toThrow(ConfigValidationError))
   it('maps disabled or empty configurations to no managed provider', () => {
     expect(mapConfigToProviders(validateModelConfig(config({ enabled: false, defaultModel: null, models: [] })), { origin: 'https://p7.example', credentialRef: 'ref' })).toEqual([])

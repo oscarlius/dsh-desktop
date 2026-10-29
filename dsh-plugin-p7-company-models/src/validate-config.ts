@@ -23,7 +23,9 @@ function validateReasoning(value: unknown): ReasoningEfforts | undefined {
   for (const [key, wire] of entries) {
     assert((REASONING_EFFORTS as readonly string[]).includes(key), `unknown reasoning effort: ${key}`)
     assert(wire === null || (typeof wire === 'string' && wire.length > 0 && wire.length <= 64), `invalid reasoning effort wire value: ${key}`)
+    assert(wire !== null || key === 'off', `reasoning effort ${key} needs a wire value`)
   }
+  assert(entries.some(([key]) => key !== 'off'), 'reasoningEfforts must offer a thinking level; use false for a model without selectable reasoning')
   return value as ReasoningEfforts
 }
 function validateModel(input: unknown): ModelDefinition {
