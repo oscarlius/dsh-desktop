@@ -16,6 +16,8 @@ export const COMPANY_MODEL_PICKER_CSS = `
 .p7ModelMenu,.p7ReasoningMenu { background:var(--dsw-alias-bg-layer-2)!important;border:1px solid var(--dsw-alias-border-l1)!important;box-shadow:var(--dsw-elevation-prominent,0 8px 28px #0000001a); }
 .p7ModelMenu { width:280px;max-width:calc(100vw - 24px);max-height:min(420px,65vh);overflow-y:auto; }
 .p7ReasoningMenu { width:255px;max-width:calc(100vw - 24px);padding:10px 12px!important;border-radius:18px!important;overflow:visible!important; }
+/* Menu's inner viewport must also allow the range thumb and focus ring to overflow. */
+.p7ReasoningMenu > [role="presentation"] { overflow:visible!important; }
 .p7ReasoningSlider { --p7-reasoning-accent:var(--dsw-alias-brand-primary-new-colorprimary-new-color);--p7-reasoning-rail:var(--dsw-alias-border-l2);display:flex;flex-direction:column;gap:4px;min-width:0; }
 .p7ReasoningSliderHeader { display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:20px; }
 .p7ReasoningFastest,.p7ReasoningReset,.p7ReasoningModel { border:0;background:transparent;font:inherit;cursor:pointer; }
