@@ -2,7 +2,7 @@
 export function companyBuildVersion(version: string, compatibilityBuild?: string): { readonly visible: string, readonly build?: string } {
   // Older company installers only accept beta.N. Advance the transport patch
   // version for the bridge while retaining the agreed beta15 product label.
-  if (version === '2.0.20-beta.15' || version === '2.0.21-beta.15' || version === '2.0.22-beta.15' || version === '2.0.23-beta.15' || version === '2.0.24-beta.15') return compatibilityBuild === undefined
+  if (version === '2.0.20-beta.15' || version === '2.0.21-beta.15' || version === '2.0.22-beta.15' || version === '2.0.23-beta.15' || version === '2.0.24-beta.15' || version === '2.0.25-beta.15') return compatibilityBuild === undefined
     ? { visible: '2.0.18-beta.15' }
     : { visible: '2.0.18-beta.15', build: compatibilityBuild }
   const match = /^(2\.0\.18-beta\.15)\.build\.(\d+)$/u.exec(version)
