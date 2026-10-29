@@ -147,6 +147,27 @@ describe('P7 company login shell gate', () => {
     await waitFor(() => expect(api.accountLogin).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
+
+  it.each(['syncing', 'unauthorized'] as const)('keeps chat blocked after sign-in while the Host catalog is %s, without requesting a key or another login', async phase => {
+    const api = {
+      status: vi.fn(async () => ({ ...READY, loginRequired: true, phase, models: [] })), accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(), sync: vi.fn(async () => ({ ...READY, loginRequired: true, models: [] })),
+    }
+    render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect(screen.getByText('Sign-in successful — syncing company models…')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Sign in to company account' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry company model sync' }))
+    await waitFor(() => expect(api.sync).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it.each(['ready', 'stale', 'error'] as const)('does not keep a signed-in user blocked for a %s Host catalog outcome, including an empty catalog', async phase => {
+    const api = {
+      status: vi.fn(async () => ({ ...READY, loginRequired: true, phase, models: [], defaultModel: null })), accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(), sync: vi.fn(),
+    }
+    render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
 })
 
 describe('P7 company-model settings section', () => {

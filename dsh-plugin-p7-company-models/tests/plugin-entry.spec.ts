@@ -20,7 +20,7 @@ describe('published Cordis entrypoint', () => {
     ctx.provide('webServer', { register, getOrigin: () => 'http://127.0.0.1:3000' } as never)
     ctx.provide('profileContext', { dir } as never)
     ctx.provide('settings', { describe: () => [], mutate: vi.fn() } as never)
-    ctx.provide('credentials', { resolve: vi.fn(), set: vi.fn(), unset: vi.fn() } as never)
+    ctx.provide('credentials', { resolve: vi.fn(), describe: vi.fn(async () => ({ configured: false, writable: true })), set: vi.fn(), unset: vi.fn() } as never)
     ctx.provide('llm', { listConfigurableProviders: () => [{ settingsNs: 'llm-pi-ai', settingsPath: ['providers'] }] } as never)
     ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'local', model: 'local-model' }), saveSelection: vi.fn() } as never)
     try {
