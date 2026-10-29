@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "package.json",
-      "betaSha256": "f6cf22f3dda89f5e8f9543500ee23871a9161ac2ef0c20b8d1a0807bc6883e06",
-      "nextSha256": "143116f69490a44fad82c48e5bc5e1ee4fbc5d2df4c8dfae091e574c288ef12c",
+      "betaSha256": "a40f3f7b960659b621b715fbd6bb30a611e4e37ae20da95e41bdb4d1f7627137",
+      "nextSha256": "31bfcdeea588ef13596e2321577ac1edee1ccbc2954b8f00b2fe57de69add265",
       "reason": "Company transport/build metadata, P7 workspaces and release commands; ordinary Next keeps upstream identity."
     },
     {
