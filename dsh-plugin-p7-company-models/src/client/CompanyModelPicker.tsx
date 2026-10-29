@@ -162,7 +162,7 @@ export function CompanyModelPicker({ available, locked, directory, load, select,
       {state.error && <div className="p7ModelNotice" role="alert">{t('pickerLoadFailed')}
         <button type="button" disabled={busy} onClick={load}>{t('pickerRetry')}</button></div>}
       {visibleGroups.map(group => <div key={group.id}>
-        <div className="p7ModelGroup">{group.name}</div>
+        {!group.id.startsWith('p7-company-') && <div className="p7ModelGroup">{group.name}</div>}
         {group.models.map(model => <MenuItemButton key={model.id} current={state.current?.provider === group.id && state.current.model === model.id}
           disabled={busy} onSelect={() => chooseModel(group.id, model)}>
           {model.name}

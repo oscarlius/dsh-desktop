@@ -164,7 +164,7 @@ it('sets the sealed company AppUserModelId before creating its window', async ()
     expect(app.setAppUserModelId).toHaveBeenCalledExactlyOnceWith('ai.deepseek.dsh.desktop.companytest')
     const window = fixture.windows[0]
     const current = fixture.handlers.get('dsh-next:state')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame })
-    expect(current).toMatchObject({ version: '2.0.25-beta.15', displayVersion: '2.0.18-beta.15', build: '2026102903' })
+    expect(current).toMatchObject({ version: '2.0.26-beta.15', displayVersion: '2.0.18-beta.15', build: '2026102904' })
   } finally { vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }) }
 })
 
