@@ -30,6 +30,21 @@ const createHost = (fetch: typeof globalThis.fetch, persisted = state(), port = 
 }
 
 describe('CompanyHost integration', () => {
+  it('defaults an advertised company reasoning model to low without overriding an explicit same-model choice', async () => {
+    const source = config()
+    const catalog = { ...source, models: source.models.map(model => ({ ...model, reasoningEfforts: { off: null, minimal: null, low: 'low', medium: 'medium', high: 'high' } })) }
+    const app = createHost(vi.fn(async () => response(catalog)))
+    await app.host.initialize()
+    await app.host.connect('https://p7.example', 'p7k_test')
+    expect(app.saveDefault).toHaveBeenLastCalledWith(P7_PROVIDER_IDS['openai-completions'], catalog.defaultModel, 'low')
+
+    const explicit = createHost(vi.fn(async () => response(catalog)))
+    explicit.readDefault.mockReturnValue({ provider: P7_PROVIDER_IDS['openai-completions'], model: catalog.defaultModel!, reasoningEffort: 'high' })
+    await explicit.host.initialize()
+    await explicit.host.connect('https://p7.example', 'p7k_test')
+    expect(explicit.saveDefault).toHaveBeenLastCalledWith(P7_PROVIDER_IDS['openai-completions'], catalog.defaultModel, 'high')
+  })
+
   it('connects a fresh company installation without asking for a key and keeps it out of public status/state', async () => {
     const app = createHost(vi.fn(async () => response(config())), state(), settings(), async () => ({ origin: DEFAULT_P7_PUBLIC_ORIGIN, key: 'p7k_packaged-test-only' }))
     await app.host.initialize()

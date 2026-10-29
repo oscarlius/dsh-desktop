@@ -147,10 +147,19 @@ export class CompanyHost {
     if (!isCurrent() || this.closed) return
     if (config?.enabled && config.defaultModel !== null) {
       const selected = providers.find(provider => provider.models.some(model => model.id === config.defaultModel))
-      const identity = selected ? selected.id + ':' + config.defaultModel : null
+      const model = selected?.models.find(model => model.id === config.defaultModel)
+      const low = model?.reasoningEfforts && typeof model.reasoningEfforts.low === 'string' ? 'low' : undefined
+      const identity = selected ? selected.id + ':' + config.defaultModel + ':' + (low ?? 'provider-default') : null
       if (selected && identity !== this.defaultAlias) {
         const previousDefault = this.options.readDefault()
-        try { await this.options.saveDefault(selected.id, config.defaultModel) }
+        // Seed daily work with the advertised low tier. A user's explicit
+        // choice for this same model remains theirs, including high research.
+        const effort = previousDefault.provider === selected.id && previousDefault.model === config.defaultModel
+          ? previousDefault.reasoningEffort ?? low : low
+        try {
+          if (effort === undefined) await this.options.saveDefault(selected.id, config.defaultModel)
+          else await this.options.saveDefault(selected.id, config.defaultModel, effort)
+        }
         catch {
           await this.owned!.apply(previous ? mapConfigToProviders(previous, connection) : [], isCurrent)
           throw new Error('The company default model could not be applied. Check profile configuration overrides.')
