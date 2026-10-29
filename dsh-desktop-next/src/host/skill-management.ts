@@ -97,8 +97,9 @@ export class DesktopSkillManager {
 
   private async replaceProvider(sources: readonly DesktopSkillSource[]): Promise<void> {
     await this.dispose()
-    const customSkillDirs = sources.filter(source => source.enabled).map(source => source.path)
-    if (customSkillDirs.length === 0) return
+    // The official default filesystem provider is mounted inside each preset.
+    // Mount the personal root globally too so settings and all presets can see it.
+    const customSkillDirs = [...sources.filter(source => source.enabled).map(source => source.path), join(this.home, 'skills')]
     this.provider = await this.ctx.plugin(filesystemSkills, {
       providerName: 'desktop-managed',
       includeDefaultRoots: false,

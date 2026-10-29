@@ -60,6 +60,9 @@ it('persists normalized sources, hot-reloads only its provider, and preserves st
     expect(creator?.content).toContain('\n')
     expect(creator?.invocation).toEqual({ modelInvocable: true, userInvocable: true })
     removeCreator()
+    writeSkill(join(home, 'skills'), 'my-personal-skill')
+    const personalOnly = await manager.save({ expectedRevision: '3', sources: [] })
+    expect(personalOnly.skills.map(skill => skill.name)).toEqual(['default-skill', 'my-personal-skill'])
   } finally {
     await manager.dispose()
     await ctx.fiber.dispose()
