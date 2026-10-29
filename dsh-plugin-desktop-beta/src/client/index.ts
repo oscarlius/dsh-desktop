@@ -1,5 +1,5 @@
 /** Compose Next capabilities into the official frontend. */
-import { createElement, useEffect, useState } from 'react'
+import { createElement, Fragment, useEffect, useState } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -11,6 +11,8 @@ import { installDesktopSettingsStyles } from './desktop-settings-styles.ts'
 import { installSidebarFooterStyles, setSidebarFooterBalanced, setSidebarFooterCompat } from './sidebar-footer-styles.ts'
 import { NextSettingsAdapter } from './settings-adapter.ts'
 import { NextDesktopSettings, NextDesktopActions } from './settings.tsx'
+import { NextVersionManagement } from './updates.tsx'
+import { useDesktopState } from './desktop-state.ts'
 import { installWindowStyles } from './styles.ts'
 import { registerDesktopOnboarding } from '../../../dsh-plugin-desktop/src/client/onboarding.tsx'
 import '../../../dsh-plugin-desktop/src/client/onboarding.css'
@@ -21,12 +23,13 @@ import { desktopDirectoryPicker, registerDesktopDirectoryPicker } from './direct
 import { SettingsRequests } from './settings-requests.tsx'
 import type { DesktopSettingsLocaleKey } from '../../../dsh-plugin-desktop/src/client/desktop-settings-locales.ts'
 import { installRendererRecovery } from './renderer-recovery.ts'
+import { registerDesktopSkillSettings } from './skills.tsx'
 import { installCompanyTranscriptDefaults } from './company-transcript-defaults.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     'desktop.settings': DesktopSettingsLocaleKey | 'sidebarFooterCompat' | 'sidebarFooterCompatBody' | 'sidebarFooterBalanced' | 'sidebarFooterBalancedBody'
-    'desktop-next': 'settings' | 'language' | 'safeMode' | 'safeModeDetail' | 'recovery' | 'dismiss'
+    'desktop-next': 'settings' | 'versionManagement' | 'language' | 'safeMode' | 'safeModeDetail' | 'recovery' | 'dismiss'
   }
 }
 
@@ -36,47 +39,54 @@ export function apply(ctx: Context): void {
   installCompanyTranscriptDefaults()
   ctx.effect(installUiDiagnostics, 'AA and Plugins client lifecycle diagnostics')
   ctx.effect(() => ctx.locale.register('desktop-next', {
-    zh: { settings: '桌面设置', language: 'zh', safeMode: '安全模式', safeModeDetail: '当前使用临时环境。退出安全模式并重启后返回原 Profile，临时数据不会保留。', dismiss: '关闭提示', recovery: '打开恢复助手' },
-    en: { settings: 'Desktop settings', language: 'en', safeMode: 'Safe mode', safeModeDetail: 'You are using a temporary environment. Exiting Safe Mode and restarting returns to the original Profile and removes the temporary data.', dismiss: 'Dismiss notice', recovery: 'Open recovery assistant' },
+    zh: { settings: '桌面设置', versionManagement: '版本管理', language: 'zh', safeMode: '安全模式', safeModeDetail: '当前使用临时环境。退出安全模式并重启后返回原 Profile，临时数据不会保留。', dismiss: '关闭提示', recovery: '打开恢复助手' },
+    en: { settings: 'Desktop settings', versionManagement: 'Version management', language: 'en', safeMode: 'Safe mode', safeModeDetail: 'You are using a temporary environment. Exiting Safe Mode and restarting returns to the original Profile and removes the temporary data.', dismiss: 'Dismiss notice', recovery: 'Open recovery assistant' },
   }), 'Next settings and recovery labels')
   ctx.effect(() => installDesktopSettingsStyles('dsh-plugin-desktop-beta'), 'Shared Desktop settings styles')
   ctx.effect(installPluginControlsStyles, 'Plugin controls and permission dialog styles')
   registerPluginControls(ctx)
   registerComputerUseCommandUi(ctx)
+  registerDesktopSkillSettings(ctx)
   // The Desktop window adds workspaces through the system folder dialog like upstream
   // Desktop, whatever directory flow the Host mounted; ordinary browsers have no bridge.
   const directoryPicker = desktopDirectoryPicker()
   if (directoryPicker) registerDesktopDirectoryPicker(ctx, directoryPicker)
   registerDesktopOnboarding(ctx, () => null)
-  if (window.desktopNext?.state) {
+  const t = ctx.locale.bind('desktop-next')
+  const desktopNext = window.desktopNext
+  const adapter = desktopNext?.state ? new NextSettingsAdapter(desktopNext) : undefined
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section', id: 'version-management', order: 101, locale: 'desktop-next', label: () => t('versionManagement'),
+    inject: () => ({ adapter }),
+  }, VersionManagementSettings))
+  if (adapter) {
+    const nativeAdapter = adapter
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
       name: 'shell.overlay', id: 'desktop-next-renderer-health', order: 0,
       inject: () => ({ ctx }),
     }, RendererHealth))
-    const permissions = window.desktopNext.permissions
+    const permissions = desktopNext?.permissions
     if (permissions) ctx.effect(() => {
       const dispose = ctx.reflect.provide('desktopPermissions', permissions)
       return () => { void dispose() }
     }, 'Native Desktop permissions')
     ctx.effect(installSidebarFooterStyles, 'Shared Desktop sidebar footer layout')
-    const adapter = new NextSettingsAdapter(window.desktopNext)
     ctx.effect(() => {
       const syncSidebarFooterCompat = (): void => {
-        const value = adapter.desktopSettings.getSnapshot().value
+        const value = nativeAdapter.desktopSettings.getSnapshot().value
         setSidebarFooterCompat(value?.sidebarFooterCompat !== false)
         setSidebarFooterBalanced(value?.sidebarFooterBalanced !== false)
       }
       syncSidebarFooterCompat()
-      return adapter.desktopSettings.subscribe(syncSidebarFooterCompat)
+      return nativeAdapter.desktopSettings.subscribe(syncSidebarFooterCompat)
     }, 'Sync Desktop sidebar footer compatibility setting')
-    const t = ctx.locale.bind('desktop-next')
     // The shared settings shell maps the legacy section ID to our display icon.
     ctx.slots.inject('settings.section', () => ctx.slots.register({
       name: 'settings.section', id: 'desktop', order: 100, locale: 'desktop-next', label: () => t('settings'),
-      inject: () => ({ adapter, openPlugins: () => ctx.layout.selectPanel('plugins' as MainPanelId) }),
+      inject: () => ({ adapter: nativeAdapter, openPlugins: () => ctx.layout.selectPanel('plugins' as MainPanelId) }),
     }, DesktopSettings))
     ctx.slots.inject('settings.action', () => ctx.slots.register({
-      name: 'settings.action', id: 'desktop-native-actions', order: 1, locale: 'desktop-next', inject: () => ({ adapter }),
+      name: 'settings.action', id: 'desktop-native-actions', order: 1, locale: 'desktop-next', inject: () => ({ adapter: nativeAdapter }),
     }, SettingsActions))
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
       name: 'shell.overlay', id: 'desktop-next-settings-requests', order: 90, locale: 'desktop-next',
@@ -174,4 +184,23 @@ function DesktopSettings({ t, adapter, close, openPlugins }: PropsLocale<'deskto
 
 function SettingsActions({ t, adapter }: PropsLocale<'desktop-next'> & { adapter: NextSettingsAdapter }) {
   return createElement(NextDesktopActions, { adapter, language: t('language') })
+}
+
+function VersionManagementSettings({ t, adapter }: PropsLocale<'desktop-next'> & { adapter?: NextSettingsAdapter }) {
+  return adapter
+    ? createElement(NativeVersionManagementSettings, { adapter, language: t('language') })
+    : createElement(NextVersionManagement, { language: t('language') })
+}
+
+function NativeVersionManagementSettings({ adapter, language }: { adapter: NextSettingsAdapter; language: string }) {
+  const state = useDesktopState(adapter)
+  const [failure, setFailure] = useState('')
+  const run = async (command: Parameters<NextSettingsAdapter['command']>[0]): Promise<void> => {
+    setFailure('')
+    try { await adapter.command(command) } catch (error) { setFailure(error instanceof Error ? error.message : String(error)) }
+  }
+  return createElement(Fragment, null,
+    failure ? createElement('p', { role: 'alert', className: 'dshDesktopSettingsError' }, failure) : null,
+    createElement(NextVersionManagement, { state: state ?? undefined, language, run: command => { void run(command) } }),
+  )
 }

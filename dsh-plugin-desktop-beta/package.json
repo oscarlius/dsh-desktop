@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.26-beta.15",
-  "dshCompanyCompatibilityBuild": "2026102904",
+  "version": "2.0.27-beta.15",
+  "dshCompanyCompatibilityBuild": "2026102905",
   "dshDesktopFlavor": "companytest",
   "private": true,
   "description": "Desktop Beta integration for the DeepSeek Harness",
@@ -101,6 +101,7 @@
     "@deepseek-ai/dsh-client-ui-session": "0.2.1-rc.3",
     "@deepseek-ai/dsh-client-ui-settings": "0.2.1-rc.3",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "0.2.1-rc.3",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.3",
     "@deepseek-ai/dsh-client-ui-theme": "0.2.1-rc.3",
     "@deepseek-ai/dsh-client-ui-tool": "0.2.1-rc.3",

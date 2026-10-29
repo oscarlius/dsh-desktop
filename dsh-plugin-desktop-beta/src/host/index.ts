@@ -25,6 +25,7 @@ import { installSharpWasmResolution } from './sharp-wasm.ts'
 import { installSkillBadgeResolution } from './skill-badge.ts'
 import * as desktopOffice from './office.ts'
 import { resolveOfficeConfig } from './office.ts'
+import { installDesktopSkillManagement } from './skill-management.ts'
 import { DESKTOP_COMPANY_SERVICE_ENABLED } from '../product-identity.ts'
 import { installCompanyTranscriptBoot } from '../client/company-transcript-defaults.ts'
 
@@ -150,6 +151,8 @@ export async function main(): Promise<void> {
     const mounted = hostOperation('host', 'office.mount', { source: office.source })
     try { await ctx.plugin(desktopOffice, office); mounted() } catch (error) { mounted(error); throw error }
   }
+  try { await installDesktopSkillManagement(ctx, { home, projectDir }) }
+  catch (error) { hostLog({ source: 'host', event: 'skills.unavailable', level: 'warn', fields: { message: maskSecrets(error instanceof Error ? error.message : String(error)) } }) }
   hostLog({ source: 'host', event: 'process.ready' })
   await send({ type: 'ready', url: ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`),
     injections: ctx.webServer.collectIndexInjections() })

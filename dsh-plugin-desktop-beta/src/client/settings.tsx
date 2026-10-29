@@ -8,7 +8,6 @@ import { desktopVersionLabel, type DesktopCommand, type DesktopState } from '../
 import { NextSettingsAdapter } from './settings-adapter.ts'
 import { DesktopPermissionsSection } from './permissions.tsx'
 import { useDesktopState } from './desktop-state.ts'
-import { NextUpdateSettings } from './updates.tsx'
 
 export function desktopTranslate(language: string): (key: string) => string {
   const copy = language.startsWith('zh') ? zh : en
@@ -84,7 +83,6 @@ function NextDesktopOptions({ adapter, state, language }: { adapter: NextSetting
   const action = (type: DesktopCommand['type'], cn: string, en: string, unavailable = false) => <button key={type} type="button" className="dshDesktopSettingsButton dshDesktopSettingsButtonSecondary" disabled={busy || state.busy || unavailable} onClick={() => { void run(() => adapter.command({ type } as DesktopCommand)) }}>{t(cn, en)}</button>
   return <>
     {failure && <p role="alert" className="dshDesktopSettingsError">{failure}</p>}
-    <NextUpdateSettings state={state} language={language} run={command => { void run(() => adapter.command(command)) }} />
     <section className="dshDesktopSettingsGroup"><h3>{t('后台运行', 'Background operation')}</h3>
       <DesktopSettingsToggleRow
         label={t('关闭窗口后保持后台运行', 'Keep running after closing the window')}

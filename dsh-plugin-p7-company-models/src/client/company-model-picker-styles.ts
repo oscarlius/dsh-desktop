@@ -5,12 +5,12 @@ export const COMPANY_MODEL_PICKER_CSS = `
 .p7ReasoningPill>svg { flex-shrink:0; }
 .p7ModelPicker button { font-family:inherit; }
 .p7ModelButton,.p7ReasoningPill { display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;box-sizing:border-box;border:0;cursor:pointer;color:var(--dsw-alias-label-secondary);background:transparent;line-height:20px;white-space:nowrap;font-size:12px; }
-.p7ModelButton { padding:0 4px;min-width:0;max-width:min(240px,30cqw);border-radius:8px; }
+.p7ModelButton { padding:0 10px;min-width:0;max-width:min(240px,30cqw);border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:var(--dsw-alias-bg-layer-1); }
 .p7ModelName { display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .p7ReasoningPill { padding:0 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:var(--dsw-alias-bg-layer-1); }
 .p7ReasoningValue { font-weight:500;color:var(--dsw-alias-label-primary); }
 .p7ReasoningDivider { margin:0 5px;color:var(--dsw-alias-label-tertiary); }
-.p7ModelButton:hover:not(:disabled),.p7ReasoningPill:hover:not(:disabled),.p7ReasoningPill[aria-expanded=true] { background:var(--dsw-alias-interactive-bg-hover); }
+.p7ModelButton:hover:not(:disabled),.p7ReasoningPill:hover:not(:disabled),.p7ModelButton[aria-expanded=true],.p7ReasoningPill[aria-expanded=true] { background:var(--dsw-alias-interactive-bg-hover); }
 .p7ModelButton:focus-visible,.p7ReasoningPill:focus-visible { outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:2px; }
 .p7ModelButton:disabled,.p7ReasoningPill:disabled { opacity:.5;cursor:default; }
 .p7ModelMenu,.p7ReasoningMenu { background:var(--dsw-alias-bg-layer-2)!important;border:1px solid var(--dsw-alias-border-l1)!important;box-shadow:var(--dsw-elevation-prominent,0 8px 28px #0000001a); }

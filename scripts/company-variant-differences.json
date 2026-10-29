@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "package.json",
-      "betaSha256": "8b442f37fb39233f5c3e982ce62752dafc81d7881a9b524b708596cf586cc3ee",
-      "nextSha256": "35f4226d9b2c4ae59c2d186e3aaae62de03adcf96e4a2da06ec325b3f4031b7b",
+      "betaSha256": "99fde3cac7f72284d83cba2444cda5bac74b32091df08eb0e11d723356de2984",
+      "nextSha256": "90697211dbd3531ca129a820a7aa5c384450a9cb4eb83916a69c0b6003f92bdf",
       "reason": "Company transport/build metadata, P7 workspaces and release commands; ordinary Next keeps upstream identity."
     },
     {
@@ -130,25 +130,25 @@
     },
     {
       "path": "src/client/index.ts",
-      "betaSha256": "df8d6375bf897ef59f3f0f50a6380b26fc5c3f25dd715a28bcc7f5c658325960",
-      "nextSha256": "2ed4c700719859b72ac4c182e2c361d75a4a0bb3de3e7df46ffcbfb5254aa358",
+      "betaSha256": "5eedac71bb68750c4af974db199c203dc099dd3a7335ae684d923f107c7e4700",
+      "nextSha256": "aa176c65e85863f66c9a01084daf3377e95de2bf6a45777576b29a663737b2c1",
       "reason": "Company first-run StreamFold preferences and client integration, preserving saved preferences."
     },
     {
       "path": "src/client/settings.tsx",
-      "betaSha256": "f8e756dfe60b5288ae6e34830f2691e71785036096e18ee7637888d104caf6a7",
-      "nextSha256": "0edcc70dcdf50fb156a03800fd59bb088d28526b4a4915860baa9acd90779ac1",
+      "betaSha256": "573ca968f5b1e6b7e01285999613ee8752d68d0399e1ba6e140184111e868fc8",
+      "nextSha256": "28bbe53e0f9a43762167ea06699ec8b36d4a1500cc4868627d0025ba79af6883",
       "reason": "Company display/build fields in the Desktop UI, retaining the transport SemVer for service requests."
     },
     {
       "path": "src/client/updates.tsx",
-      "betaSha256": "50ef75727c5143996d43a6b3aa80b2f26c7abe10646f088d03cd48c172b94094",
-      "nextSha256": "7c319e312534c253d06cf3549fff4d0b006e868d94c042746963ff4e60076014",
+      "betaSha256": "8c2a3eea42c48a25f6409e4a684f4b17eac469e2f1719e15999e95372d92a84e",
+      "nextSha256": "92aaf02fdc90579e8ba718b675065c12af8fab0801bbc6b50b0535fe41a4798f",
       "reason": "Company display/build fields in the Desktop UI, retaining the transport SemVer for service requests."
     },
     {
       "path": "src/company-build-version.ts",
-      "betaSha256": "888697023298f6d9f0aca14bf4f6d15139e338c2f81ac37b0a2347d8c9c0b68d",
+      "betaSha256": "3165aaa507cb788f58315e38912ee6975fce411de3d6d2002f373588dd2d4fe4",
       "nextSha256": null,
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
@@ -208,8 +208,8 @@
     },
     {
       "path": "src/host/index.ts",
-      "betaSha256": "8f88019344884d6581f3ec804a368939866a37b7bac6377ced4d7c646b676dda",
-      "nextSha256": "c39ffd72adf17d713d23d80dc414b7bae6e1546847b9732f5d244cd1a0c0de2a",
+      "betaSha256": "76b901ad1b3c96eaaadc1036d12782224f21395e09ec517d91ee601bb90c0b79",
+      "nextSha256": "d8031e42db71f255c531847e6b4422d72aaeb241f61e3c9712f9477c66501d86",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },
     {
@@ -274,7 +274,7 @@
     },
     {
       "path": "tests/company-build-version.spec.ts",
-      "betaSha256": "63764cae0292aa7a775fb5763faaaab52e87fd2a831a8a69cdfeb1c7287c2c07",
+      "betaSha256": "072aa583e752764f79a4aa247d9f489be0153c3d0c082203d5623a4e58d92550",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -298,7 +298,7 @@
     },
     {
       "path": "tests/company-release-package.spec.mjs",
-      "betaSha256": "8d8bde38c719bafd4c7e4545ca8c66fdd61cde980f4643df3ca21e20e6fea8ee",
+      "betaSha256": "ee049bc4ebe62c982ad3426761757781d351a3d3adc5f910d9559507ed60913d",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -364,7 +364,7 @@
     },
     {
       "path": "tests/main-lifecycle.spec.ts",
-      "betaSha256": "5bf0cc6c47292c83482dd39f11f7a6bc5e724d3f913b4287e894ee7ff929f7bb",
+      "betaSha256": "8f6300ee29df27b81907ff91caed005972bae1cc48ad7a60f22f588f3ce49590",
       "nextSha256": "c3cb4b923491a1d123fb62789c4c6cd3d8b30194a9fca5add0f119595b5de7fe",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -382,7 +382,7 @@
     },
     {
       "path": "tests/package.spec.ts",
-      "betaSha256": "62586f8ba0b47e38db119bd5d2149c079b2a78f05296bf558c424b441d9849dc",
+      "betaSha256": "9c3745248ea1c8e3c69c844c569b1413c5184116b49f556fc9afe540622354eb",
       "nextSha256": "79535168437669b9a1ef6b9873d316a6b9b84c6fa2d51d4f40c55b49b1507067",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -412,8 +412,8 @@
     },
     {
       "path": "tests/updates.spec.ts",
-      "betaSha256": "93de11eb73e1a028637f2e656a4ee663a8e3f3761cbbe177ce001e6c81db075a",
-      "nextSha256": "9b326370aa0789a39a776f85345efd8460ddc985f908ac7f0de1bebbcb70d9a3",
+      "betaSha256": "c90ad6932052e97bf25b2ffaed2d51277cfb680a6bab723ab00661169c2b7c1b",
+      "nextSha256": "4c5c18cb9c8deb629370c3e581c733f7af3d64fa936d39b805b3e7b05c081759",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
     {

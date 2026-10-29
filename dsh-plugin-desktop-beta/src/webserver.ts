@@ -28,14 +28,14 @@ export default class NextWebServer extends WebServer {
   override register(route: WebRoute): () => void {
     return super.register({ ...route, handler: this.observeHttp(route.path, async (request, response) => {
       if (!this.permits(request)) { response.writeHead(403, { 'cache-control': 'no-store' }); response.end('Browser access is disabled'); return }
-      if (route.path !== '/api/community-market' && !route.path.startsWith('/api/community-market/')) {
+      if (route.path !== '/api/community-market' && !route.path.startsWith('/api/community-market/') && route.path !== '/api/desktop-skills') {
         await route.handler(request, response); return
       }
       const connection = this.ctx.get('connection')
       const rejection = connection === undefined ? 503 : connection.requestRejection(request)
       if (rejection !== undefined) {
         response.writeHead(rejection, { 'cache-control': 'no-store' })
-        response.end('Market request authentication required')
+        response.end(route.path === '/api/desktop-skills' ? 'Skill management authentication required' : 'Market request authentication required')
         return
       }
       await route.handler(request, response)

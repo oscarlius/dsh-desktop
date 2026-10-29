@@ -2,13 +2,13 @@ import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DesktopCommand, DesktopState } from '../desktop-contract.ts'
 import { updateAction, updateLabel } from '../update-state.ts'
 
-export function NextUpdateSettings({ state, language, run }: { state: DesktopState; language: string; run(command: DesktopCommand): void }) {
+export function NextUpdateSettings({ state, language, run, heading }: { state: DesktopState; language: string; run(command: DesktopCommand): void; heading?: string }) {
   const update = state.platform === 'darwin' || state.platform === 'win32' ? state.updates : undefined
   if (!update && state.platform !== 'linux') return null
   const t = (zh: string, en: string) => language.startsWith('zh') ? zh : en
   const action = update ? updateAction(update) : undefined
   return <section className="dshDesktopSettingsGroup" data-next-updates>
-    <h3>{state.platform === 'linux' ? t('桌面版本', 'Desktop version') : t('应用更新', 'App updates')}</h3>
+    <h3>{heading ?? (state.platform === 'linux' ? t('桌面版本', 'Desktop version') : t('应用更新', 'App updates'))}</h3>
     <p className="dshDesktopSettingsHint">DSH NEXT · {state.version}</p>
     {update && <>
       <p role={update.phase === 'error' ? 'alert' : 'status'}>{updateLabel(update, language)}</p>
@@ -22,4 +22,14 @@ export function NextUpdateSettings({ state, language, run }: { state: DesktopSta
       </div>
     </>}
   </section>
+}
+
+/** The browser has no native bridge, so update controls are intentionally unavailable there. */
+export function NextVersionManagement({ state, language, run }: { state?: DesktopState; language: string; run?: (command: DesktopCommand) => void }) {
+  const t = (zh: string, en: string) => language.startsWith('zh') ? zh : en
+  if (!state || !run) return <section className="dshDesktopSettingsGroup" data-next-version-management>
+    <h3>{t('版本管理', 'Version management')}</h3>
+    <p className="dshDesktopSettingsHint">{t('应用内更新仅可在 DSH Desktop 中使用。', 'In-app updates are available only in DSH Desktop.')}</p>
+  </section>
+  return <div data-next-version-management><NextUpdateSettings state={state} language={language} run={run} heading={t('版本管理', 'Version management')} /></div>
 }
