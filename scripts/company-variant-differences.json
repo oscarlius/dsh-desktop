@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "package.json",
-      "betaSha256": "99fde3cac7f72284d83cba2444cda5bac74b32091df08eb0e11d723356de2984",
-      "nextSha256": "90697211dbd3531ca129a820a7aa5c384450a9cb4eb83916a69c0b6003f92bdf",
+      "betaSha256": "70ba3b5499bbdc4704b68cf7bf754df2ce79a1217d1a72a967e6727c076cab25",
+      "nextSha256": "d4db5f05058526e5097b70ec13e9616df15036fcf05ccd588b69b2af685260d3",
       "reason": "Company transport/build metadata, P7 workspaces and release commands; ordinary Next keeps upstream identity."
     },
     {
@@ -148,7 +148,7 @@
     },
     {
       "path": "src/company-build-version.ts",
-      "betaSha256": "3165aaa507cb788f58315e38912ee6975fce411de3d6d2002f373588dd2d4fe4",
+      "betaSha256": "17e93c90fa18a0b8dd0b7a00364b7f8fcc0c0d46de208195397fd2cf4442c318",
       "nextSha256": null,
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
@@ -274,7 +274,7 @@
     },
     {
       "path": "tests/company-build-version.spec.ts",
-      "betaSha256": "072aa583e752764f79a4aa247d9f489be0153c3d0c082203d5623a4e58d92550",
+      "betaSha256": "7732ffd9bc1ca1258ca8438d21137d432116100234c7445c757cba712447a61e",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -298,7 +298,7 @@
     },
     {
       "path": "tests/company-release-package.spec.mjs",
-      "betaSha256": "ee049bc4ebe62c982ad3426761757781d351a3d3adc5f910d9559507ed60913d",
+      "betaSha256": "ca2a250e27cb88dea1b42124a50e255c3b88f210559d4d7e47ce99a61b983f27",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -364,7 +364,7 @@
     },
     {
       "path": "tests/main-lifecycle.spec.ts",
-      "betaSha256": "8f6300ee29df27b81907ff91caed005972bae1cc48ad7a60f22f588f3ce49590",
+      "betaSha256": "76613de96292fecabe8a098f1e1f521ca063b3b230604c065a5b3d94dfad2fc9",
       "nextSha256": "c3cb4b923491a1d123fb62789c4c6cd3d8b30194a9fca5add0f119595b5de7fe",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -382,7 +382,7 @@
     },
     {
       "path": "tests/package.spec.ts",
-      "betaSha256": "9c3745248ea1c8e3c69c844c569b1413c5184116b49f556fc9afe540622354eb",
+      "betaSha256": "5fce8f86223f23676acd0bb13068750be3891f031d8fb22bdd3085f0f7b2b628",
       "nextSha256": "79535168437669b9a1ef6b9873d316a6b9b84c6fa2d51d4f40c55b49b1507067",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

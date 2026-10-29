@@ -9,6 +9,9 @@ import { APP_BOOT_SCRIPT, serveWebDocument } from '../lib/web-document.js'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const require = createRequire(import.meta.url)
+const desktopClient = readFileSync(join(root, 'lib/client.js'), 'utf8')
+assert.ok(!/\brequire\(["']@deepseek-ai\/dsh-util-workspace-path["']\)/u.test(desktopClient),
+  'Workspace path helpers must be bundled; the browser module table does not provide this package')
 const webRoot = dirname(require.resolve('@deepseek-ai/dsh-web-frontend/dist/index.html'))
 const official = readFileSync(join(webRoot, 'index.html'), 'utf8')
 const local = await serveWebDocument(new Request('dsh-app://app/'), webRoot)

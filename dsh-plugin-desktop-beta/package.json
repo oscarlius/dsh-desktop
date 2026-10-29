@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.27-beta.15",
-  "dshCompanyCompatibilityBuild": "2026102905",
+  "version": "2.0.28-beta.15",
+  "dshCompanyCompatibilityBuild": "2026103001",
   "dshDesktopFlavor": "companytest",
   "private": true,
   "description": "Desktop Beta integration for the DeepSeek Harness",
@@ -24,6 +24,7 @@
     "verify:host": "node scripts/verify-host.mjs",
     "verify:host:electron": "node scripts/verify-host.mjs --electron",
     "verify:frontend": "node scripts/verify-frontend.mjs",
+    "verify:client-boot": "node scripts/verify-client-boot.mjs",
     "verify:window-controls": "node scripts/verify-window-controls.mjs",
     "verify:onboarding": "node scripts/verify-onboarding.mjs",
     "verify:protocol": "electron scripts/verify-protocol.mjs",

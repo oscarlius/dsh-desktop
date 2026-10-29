@@ -36,7 +36,9 @@ export default defineConfig({
     outDir: 'lib', emptyOutDir: false, target: 'es2022', minify: false,
     lib: { entry: 'src/client/index.ts', formats: ['cjs'], fileName: () => 'client.js' },
     rollupOptions: {
-      external: id => /^(react(?:-dom)?(?:\/|$)|@deepseek-ai\/)/u.test(id),
+      // This pure helper is not a platform word or a registered Client factory.
+      // Inline it: an npm installation does not make it available to browser require().
+      external: id => id !== '@deepseek-ai/dsh-util-workspace-path' && /^(react(?:-dom)?(?:\/|$)|@deepseek-ai\/)/u.test(id),
       output: {
         codeSplitting: false,
         banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(name)}, factory: (require) => {`,
