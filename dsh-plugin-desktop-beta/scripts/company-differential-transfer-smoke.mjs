@@ -110,6 +110,9 @@ class LocalCompanyHttpExecutor extends HttpExecutor {
       path: `${target.pathname}${target.search}`,
       method: options.method ?? 'GET',
       headers,
+      // Electron owns the production request lifecycle. This Node-only harness
+      // must not reuse Node 24 pooled sockets with stale completed-request timeouts.
+      agent: false,
       timeout: options.timeout,
       ...(target.protocol === 'https:' && this.serverCa !== undefined ? { ca: this.serverCa, servername: 'maas.zxrc.com.cn' } : {}),
     }, response => {

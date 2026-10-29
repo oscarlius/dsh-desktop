@@ -38,7 +38,7 @@ function modelDefault(provider: string, model: Model): string | undefined {
 /** Register once for both Electron and this Host's ordinary browser entry. */
 export function registerCompanyModelPicker(ctx: Context): void {
   ctx.effect(installCompanyModelPickerStyles, 'p7-company-models: model and reasoning controls')
-  ctx.inject(['modelDirectories', 'sessions'], scope => {
+  ctx.inject(['slots', 'modelDirectories', 'sessions', 'remote', 'remote.session'], scope => {
     scope.slots.inject('conversation.input.model', () => scope.slots.register({
       name: 'conversation.input.model', priority: -100, locale: 'p7-company-models',
       // Lowest priority wins; the upstream entry stays registered as fallback.

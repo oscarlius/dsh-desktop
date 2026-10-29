@@ -10,7 +10,7 @@
     },
     {
       "path": "scripts/company-differential-transfer-smoke.mjs",
-      "betaSha256": "0496460567f21a580942c07740515fa5875028337b76d1524987cfae81027f26",
+      "betaSha256": "c1090b72a4a8e8f8a54123630124e767097f8ec9cfd7d7bb6adccf0449c7e668",
       "nextSha256": null,
       "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
     },

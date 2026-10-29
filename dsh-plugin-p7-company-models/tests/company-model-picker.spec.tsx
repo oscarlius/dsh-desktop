@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Context, Service } from '@deepseek-ai/cordis'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { ModelDirectoryState } from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import { CompanyModelPicker, registerCompanyModelPicker } from '../src/client/CompanyModelPicker.js'
 import { zh } from '../src/client/locales.js'
+import { apply, inject as clientInject } from '../src/client/index.js'
 
 const provider = 'p7-company-responses'
 const model = (id: string, efforts?: string[], defaultEffort = 'low') => ({ id, name: id, ...(efforts ? { reasoning: { defaultEffort, efforts: efforts.map(id => ({ id, name: id })) } } : {}) })
@@ -20,6 +24,13 @@ function fixture(initial = 'Qwen', initialEffort?: string) {
 beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }); Element.prototype.scrollIntoView = vi.fn() })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 function openSlider() { fireEvent.click(screen.getByRole('button', { name: /推理强度：/ })); return screen.getByRole('slider', { name: '推理强度' }) as HTMLInputElement }
+
+/** Matches the caller-traced `remote.session` access used by the client RPC namespace. */
+class RemoteNamespace extends Service {
+  constructor(ctx: Context, private readonly sessionWire: unknown) { super(ctx, 'remote') }
+  get session() { return this.ctx.get('remote.session') }
+  $on() { return this.sessionWire }
+}
 
 describe('company reasoning slider', () => {
   it('uses Qwen metadata only and commits a drag once on release', async () => {
@@ -54,5 +65,29 @@ describe('company reasoning slider', () => {
   it('registers the company shadow entry over the shared directory', async () => {
     const app = fixture(); const shared = { store: app.directory, load: vi.fn(async () => undefined), select: app.select }; const register = vi.fn(); const scope = { modelDirectories: { directoryFor: vi.fn(() => shared) }, sessions: { subagentAddress: () => undefined }, slots: { inject: (_name: string, mount: () => unknown) => mount(), register } }
     registerCompanyModelPicker({ effect: (fn: () => unknown) => fn(), inject: (_names: string[], mount: (scope: unknown) => void) => mount(scope) } as never); const [options] = register.mock.calls[0]!; expect(options).toMatchObject({ name: 'conversation.input.model', priority: -100 }); const face = options.inject('session-1'); await face.select({ provider, model: 'Qwen', reasoningEffort: 'high' }); expect(app.select).toHaveBeenCalledWith({ provider, model: 'Qwen', reasoningEffort: 'high' })
+  })
+  it('mounts the shadow entry through the real Cordis capability boundary', async () => {
+    const serviceUrl = pathToFileURL(resolve(process.cwd(), '../deepseek-harness/packages/client/ui-model-selection/src/client/service.ts'))
+    const { ModelDirectoryResolver } = await import(/* @vite-ignore */ serviceUrl.href) as { ModelDirectoryResolver: new (ctx: Context) => Service }
+    const ctx = new Context(); const register = vi.fn(() => () => {})
+    const scopes = new Map<string, Context>(); const projection = { getSnapshot: () => ({ lastUsed: null, next: { provider, model: 'Qwen' } }), subscribe: () => () => {} }; const bindings = new Map<string, { session: { projections: { faceOf: () => typeof projection }, getSnapshot: () => { blank: boolean } } }>()
+    const sessionWire = { modelCatalog: vi.fn(async () => ({ ok: true, value: { default: { provider, model: 'Qwen' }, routableProviders: [provider], groups: [{ id: provider, name: 'Company', models: [models[0]] }], failures: [] } })), selectModel: vi.fn(async () => ({ ok: true, value: undefined })) }
+    ctx.provide('locale', { bind: () => (key: keyof typeof zh) => zh[key], register: vi.fn(() => () => {}) })
+    ctx.provide('slots', { inject: (_name: string, mount: () => unknown) => mount(), register, entriesOfSlot: () => [], subscribe: () => () => {} })
+    ctx.provide('sessions', { subagentAddress: () => undefined, scope: (id: string) => scopes.get(id), binding: (id: string) => bindings.get(id) })
+    await ctx.plugin(providerCtx => {
+      new RemoteNamespace(providerCtx, sessionWire)
+      providerCtx.reflect.provide('remote.session', sessionWire)
+    }).await()
+    const resolver = ctx.plugin(ModelDirectoryResolver); await resolver.await()
+    const sessionId = 'real-session' as never
+    scopes.set(sessionId, ctx.extend())
+    bindings.set(sessionId, { session: { projections: { faceOf: () => projection }, getSnapshot: () => ({ blank: false }) } })
+    const fiber = ctx.plugin({ inject: clientInject, apply })
+    await fiber.await()
+    const options = (register.mock.calls as unknown as [Record<string, unknown>, unknown][]).find(([candidate]) => candidate.name === 'conversation.input.model')?.[0] as { priority: number, inject: (id: typeof sessionId) => { directory: { getSnapshot: () => ModelDirectoryState } } } | undefined
+    expect(options).toMatchObject({ priority: -100 })
+    expect(options?.inject(sessionId).directory.getSnapshot().current).toMatchObject({ provider, model: 'Qwen' })
+    await ctx.fiber.dispose()
   })
 })

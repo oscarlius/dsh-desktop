@@ -17,7 +17,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap { 'shell.overlay': { kind: 'list'; scope: 'root' } }
 }
 
-export const inject = ['slots', 'locale']
+// The model-directory service captures the session remote while creating its
+// per-session directory.  Declare the same carrier boundary as the upstream
+// model-selector; a slot component runs under this plugin's caller context.
+export const inject = ['slots', 'locale', 'sessions', 'remote', 'remote.session']
 export const NS = 'p7-company-models'
 
 export function apply(ctx: ClientContext): void {
