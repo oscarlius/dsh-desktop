@@ -59,6 +59,7 @@ describe('P7 company-model settings registration', () => {
     const subscribe = vi.fn(() => () => {})
     const localeRegister = vi.fn(() => () => {})
     const ctx = {
+      inject: vi.fn(),
       locale: { bind: (namespace: string) => (key: string) => `${namespace}:${key}`, register: localeRegister },
       effect: vi.fn((effect: () => unknown) => effect()),
       slots: { inject, register, entriesOfSlot, subscribe },
