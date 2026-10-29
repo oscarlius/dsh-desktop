@@ -71,8 +71,12 @@ export function createP7Client(options: { fetch: P7Fetch; timeoutMs?: number; ma
         let config: ModelConfigV1
         try { config = validateModelConfig(raw, buffer.byteLength) } catch (error) { throw new P7ClientError('invalid-response', undefined, error instanceof ConfigValidationError ? error.message : 'invalid-response') }
         const returnedEtag = response.headers.get('ETag')
-        if (returnedEtag !== `"${config.revision}"`) throw new P7ClientError('invalid-response')
-        return { kind: 'snapshot', config, etag: returnedEtag }
+        const revisionEtag = `"${config.revision}"`
+        // gzip proxies may weaken an ETag without changing the decoded JSON.
+        // Validate that exact revision and keep the origin's canonical token so
+        // subsequent requests still match older P7 conditional-GET handlers.
+        if (returnedEtag !== revisionEtag && returnedEtag !== `W/${revisionEtag}`) throw new P7ClientError('invalid-response')
+        return { kind: 'snapshot', config, etag: revisionEtag }
       }
       const result = await once(request.etag)
       if (result.kind === 'not-modified' && !request.hasSnapshot) {

@@ -18,6 +18,19 @@ describe('P7 config client', () => {
     await expect(createP7Client({ fetch }).fetchConfig({ origin: 'https://p7.example', key: 'p7k_secret', etag: '"old"', hasSnapshot: false })).resolves.toMatchObject({ kind: 'snapshot' })
     expect((fetch.mock.calls[1]?.[1] as RequestInit).headers).not.toHaveProperty('If-None-Match')
   })
+  it('accepts a gzip proxy weak ETag and reuses the canonical revision for conditional sync', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(response(config(), 200, { ETag: 'W/"revision-1"' })).mockResolvedValueOnce(new Response(null, { status: 304 }))
+    const client = createP7Client({ fetch })
+    const first = await client.fetchConfig({ origin: 'https://p7.example', key: 'p7k_secret', hasSnapshot: false })
+    expect(first).toMatchObject({ kind: 'snapshot', etag: '"revision-1"' })
+    if (first.kind !== 'snapshot') throw new Error('Expected initial snapshot')
+    await expect(client.fetchConfig({ origin: 'https://p7.example', key: 'p7k_secret', etag: first.etag, hasSnapshot: true })).resolves.toEqual({ kind: 'not-modified' })
+    expect((fetch.mock.calls[1]?.[1] as RequestInit).headers).toHaveProperty('If-None-Match', '"revision-1"')
+  })
+  it.each(['W/"other-revision"', 'W/revision-1', 'w/"revision-1"', '*', '"revision-1", "other"'])('rejects unrelated or malformed ETag %s', async etag => {
+    const client = createP7Client({ fetch: vi.fn(async () => response(config(), 200, { ETag: etag })) })
+    await expect(client.fetchConfig({ origin: 'https://p7.example', key: 'p7k_secret', hasSnapshot: false })).rejects.toMatchObject({ code: 'invalid-response' })
+  })
   it('categorizes auth failures without error response content or key leakage', async () => {
     const client = createP7Client({ fetch: vi.fn(async () => new Response('p7k_secret private response', { status: 401 })) })
     await expect(client.fetchConfig({ origin: 'https://p7.example', key: 'p7k_secret', hasSnapshot: false })).rejects.toMatchObject({ code: 'unauthorized', status: 401, message: 'unauthorized' })
