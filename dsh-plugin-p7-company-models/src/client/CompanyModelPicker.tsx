@@ -190,7 +190,7 @@ export function CompanyModelPicker({ available, locked, directory, load, select,
           <button type="button" className="p7ReasoningReset" disabled={locked || busy} aria-label={t('reasoningReset')} onClick={resetEffort}><IconRefreshOutlineRegular size={14} /></button>
         </div>
         <button type="button" className="p7ReasoningModel" disabled={locked || busy} onClick={() => { setOpen('model'); setQuery('') }}>{label}<IconChevronDownOutlineRegular size={12} /></button>
-        <div className="p7ReasoningRangeWrap">
+        <div className="p7ReasoningRangeWrap" data-peak={efforts.length > 1 && previewIndex === efforts.length - 1 ? '' : undefined}>
           <span className="p7ReasoningRail" aria-hidden="true"><i style={{ width: `calc(${progress}% + ${13 - 26 * progress / 100}px)` }} /></span>
           <input className="p7ReasoningRange" type="range" min="0" max={Math.max(0, efforts.length - 1)} step="1" value={previewIndex}
             disabled={locked || busy} aria-label={t('reasoningLabel')} aria-valuetext={previewLabel}

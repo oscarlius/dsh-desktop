@@ -32,10 +32,16 @@ export const COMPANY_MODEL_PICKER_CSS = `
 .p7ReasoningRange { grid-area:1/1;width:100%;height:24px;margin:0;appearance:none;background:transparent;cursor:pointer;z-index:1; }
 .p7ReasoningRail { grid-area:1/1;align-self:center;height:24px;border-radius:999px;background:var(--p7-reasoning-rail);overflow:hidden;z-index:0; }
 .p7ReasoningRail i { display:block;height:100%;border-radius:inherit;background:var(--p7-reasoning-accent); }
+.p7ReasoningRangeWrap[data-peak] .p7ReasoningRail i { position:relative;overflow:hidden; }
+.p7ReasoningRangeWrap[data-peak] .p7ReasoningRail i::before,.p7ReasoningRangeWrap[data-peak] .p7ReasoningRail i::after { content:"";position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 28'%3E%3Cpath d='M0 12C16 4 32 4 48 12S80 20 96 12V28H0Z' fill='white' fill-opacity='.22'/%3E%3C/svg%3E");background-repeat:repeat-x;background-size:96px 28px;animation:p7ReasoningWaterFlow 1.8s linear infinite;pointer-events:none; }
+.p7ReasoningRangeWrap[data-peak] .p7ReasoningRail i::after { opacity:.6;transform:scaleY(-1);animation-duration:2.6s;animation-direction:reverse; }
+@keyframes p7ReasoningWaterFlow { from { background-position-x:0; } to { background-position-x:96px; } }
 .p7ReasoningRange::-webkit-slider-runnable-track { height:24px;border-radius:999px;background:transparent; }
 .p7ReasoningRange::-moz-range-track { height:24px;border-radius:999px;background:transparent; }
 .p7ReasoningRange::-webkit-slider-thumb { appearance:none;width:26px;height:26px;margin-top:-1px;border:2px solid var(--dsw-alias-bg-layer-2);border-radius:50%;background:var(--dsw-alias-bg-layer-2);box-shadow:0 1px 4px #00000033; }
 .p7ReasoningRange::-moz-range-thumb { width:22px;height:22px;border:2px solid var(--dsw-alias-bg-layer-2);border-radius:50%;background:var(--dsw-alias-bg-layer-2);box-shadow:0 1px 4px #00000033; }
+.p7ReasoningRangeWrap[data-peak] .p7ReasoningRange::-webkit-slider-thumb { box-shadow:0 0 0 3px color-mix(in srgb,var(--p7-reasoning-accent) 12%,transparent),0 1px 5px #00000026; }
+.p7ReasoningRangeWrap[data-peak] .p7ReasoningRange::-moz-range-thumb { box-shadow:0 0 0 3px color-mix(in srgb,var(--p7-reasoning-accent) 12%,transparent),0 1px 5px #00000026; }
 .p7ReasoningRange:focus-visible { outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:3px;border-radius:999px; }
 .p7ReasoningRange:disabled { cursor:default;opacity:.5; }
 .p7ReasoningDots { pointer-events:none;grid-area:1/1;display:flex;justify-content:space-between;align-items:center;padding:0 13px;z-index:0; }
@@ -48,6 +54,7 @@ export const COMPANY_MODEL_PICKER_CSS = `
 .p7ModelSearch input { width:100%;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:7px 9px;font:inherit;outline:none; }
 .p7ModelSearch input:focus-visible { outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary)); }
 @media(max-width:520px) { .p7ModelPicker{gap:4px}.p7ModelButton{max-width:26vw}.p7ReasoningPill{padding:0 8px;gap:4px}.p7ReasoningPill>svg:first-child{display:none} }
+@media(prefers-reduced-motion:reduce) { .p7ReasoningRangeWrap[data-peak] .p7ReasoningRail i::before,.p7ReasoningRangeWrap[data-peak] .p7ReasoningRail i::after { animation:none; } }
 `
 /** Both renderer entry points load this company plugin and the same stylesheet. */
 export function installCompanyModelPickerStyles(): () => void {

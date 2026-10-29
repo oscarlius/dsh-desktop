@@ -94,8 +94,12 @@ describe('company reasoning slider', () => {
     fireEvent.keyDown(range, { key: 'ArrowRight' }); fireEvent.change(range, { target: { value: '1' } }); fireEvent.keyUp(range, { key: 'ArrowRight' })
     await waitFor(() => expect(app.select).toHaveBeenCalledWith({ provider, model: 'Gemini', reasoningEffort: 'medium' })); expect(document.activeElement).toBe(range)
   })
-  it('supports model-specific Codex tier counts', () => {
-    const app = fixture('Codex', 'xhigh'); render(<CompanyModelPicker {...app.props} />); expect(openSlider().max).toBe('4')
+  it('supports model-specific Codex tiers and shows flowing emphasis only at the highest tier', async () => {
+    const app = fixture('Codex', 'xhigh'); render(<CompanyModelPicker {...app.props} />); const range = openSlider()
+    expect(range.max).toBe('4'); expect(range.parentElement?.hasAttribute('data-peak')).toBe(false)
+    fireEvent.change(range, { target: { value: '4' } }); expect(range.parentElement?.hasAttribute('data-peak')).toBe(true)
+    fireEvent.pointerUp(range); await waitFor(() => expect(app.select).toHaveBeenCalledWith({ provider, model: 'Codex', reasoningEffort: 'max' }))
+    fireEvent.change(range, { target: { value: '2' } }); expect(range.parentElement?.hasAttribute('data-peak')).toBe(false)
   })
   it('resets to the model default and keeps the popup open', async () => {
     const app = fixture('Codex', 'max'); render(<CompanyModelPicker {...app.props} />); openSlider(); fireEvent.click(screen.getByRole('button', { name: '恢复默认推理强度' }))
