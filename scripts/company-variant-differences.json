@@ -431,7 +431,7 @@
     {
       "path": "scripts/verify-company-mac-upgrade.mjs",
       "reason": "Company Mac update channel and native installation acceptance; ordinary Next keeps the upstream feed and identity.",
-      "betaSha256": "0a3efc71678796512f8b9a07631f00c13d0714141be7011d05434924ccf332bd",
+      "betaSha256": "411f39ee2648f57df8d091d0c9f9ec86896c15ec14a7b6022153e4ddde14e0df",
       "nextSha256": null
     },
     {

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { cp, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -78,7 +78,8 @@ try {
   try {
     const apps = (await execute('/usr/bin/find', [mount, '-maxdepth', '1', '-type', 'd', '-name', '*.app', '-print'])).stdout.split('\n').map(value => value.trim()).filter(Boolean)
     assert.equal(apps.length, 1, 'the smoke DMG must contain exactly one application bundle')
-    await cp(apps[0], installed, { recursive: true, preserveTimestamps: true })
+    // ditto preserves the relative symlinks inside Electron framework bundles.
+    await execute('/usr/bin/ditto', [apps[0], installed], { timeout: 5 * 60_000 })
   } finally { await detach(mount) }
   const before = await lstat(installed)
   // These are the actual Company home and Electron user-data roots selected by
