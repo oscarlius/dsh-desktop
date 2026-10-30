@@ -15,11 +15,12 @@ const SOURCE_COMMIT = /^[0-9a-f]{40}$/u
 export function companyPayloadExtraMetadata(environment: NodeJS.ProcessEnv = process.env): Readonly<Record<string, unknown>> | undefined {
   const initial = environment.DSH_COMPANY_INITIAL_DISTRIBUTION === '1'
   const update = environment.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
+  const personal = environment.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION === '1'
   const sourceCommit = environment.DSH_COMPANY_RELEASE_SOURCE_COMMIT
-  if (!initial && !update && sourceCommit === undefined) return undefined
-  if (initial === update) throw new Error('Select exactly one company package distribution')
+  if (!initial && !update && !personal && sourceCommit === undefined) return undefined
+  if ([initial, update, personal].filter(Boolean).length !== 1) throw new Error('Select exactly one company package distribution')
   if (sourceCommit === undefined || !SOURCE_COMMIT.test(sourceCommit)) throw new Error('Company payload requires a 40-character lowercase source commit')
-  return { dshCompanyReleaseSourceCommit: sourceCommit, ...(update ? { dshDesktopUpdateDistribution: true } : {}) }
+  return { dshCompanyReleaseSourceCommit: sourceCommit, ...(update ? { dshDesktopUpdateDistribution: true } : {}), ...(personal ? { dshDesktopPersonalLoginDistribution: true } : {}) }
 }
 
 /**

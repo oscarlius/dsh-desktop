@@ -10,6 +10,8 @@ describe('company installer distributions', () => {
     const commit = 'a'.repeat(40)
     expect(companyPayloadExtraMetadata({ DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit })
     expect(companyPayloadExtraMetadata({ DSH_COMPANY_UPDATE_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit, dshDesktopUpdateDistribution: true })
+    expect(companyPayloadExtraMetadata({ DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit, dshDesktopPersonalLoginDistribution: true })
+    expect(() => companyPayloadExtraMetadata({ DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION: '1', DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toThrow('exactly one')
     expect(companyPayloadExtraMetadata({})).toBeUndefined()
     expect(() => companyPayloadExtraMetadata({ DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_UPDATE_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toThrow('exactly one')
     expect(() => companyPayloadExtraMetadata({ DSH_COMPANY_UPDATE_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: 'not-a-commit' })).toThrow('40-character')

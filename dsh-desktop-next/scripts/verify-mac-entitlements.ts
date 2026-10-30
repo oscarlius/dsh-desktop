@@ -1,5 +1,6 @@
 /** Inspect the actual signatures, not merely the builder's entitlement input. */
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const NEXT_MAC_REQUIRED_ENTITLEMENTS = [
@@ -16,10 +17,18 @@ const readEntitlements: ReadEntitlements = (path, arch) => {
   return JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', '-'], { input: xml, encoding: 'utf8' }))
 }
 
+export function macProductName(): string {
+  const product = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  if (typeof product?.build?.productName !== 'string' || product.build.productName.length === 0) {
+    throw new Error('Package build.productName is required for macOS entitlement verification')
+  }
+  return product.build.productName
+}
+
 /** Both Universal slices and every Electron Helper must retain microphone access. */
-export function verifyNextMacEntitlements(appPath: string, read: ReadEntitlements = readEntitlements): void {
+export function verifyNextMacEntitlements(appPath: string, read: ReadEntitlements = readEntitlements, productName = macProductName()): void {
   const targets = [appPath, ...['', ' (Renderer)', ' (GPU)', ' (Plugin)']
-    .map(suffix => join(appPath, 'Contents', 'Frameworks', `DSH NEXT Helper${suffix}.app`))]
+    .map(suffix => join(appPath, 'Contents', 'Frameworks', `${productName} Helper${suffix}.app`))]
   for (const target of targets) {
     for (const arch of ['arm64', 'x86_64']) {
       const entitlements = read(target, arch)

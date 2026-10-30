@@ -65,6 +65,18 @@ it('does not start background update polling on Linux', async () => {
   await vi.advanceTimersByTimeAsync(60_000)
   expect(request).not.toHaveBeenCalled()
 })
+it('keeps company Mac builds away from both the Windows company feed and the upstream feed', async () => {
+  vi.useFakeTimers()
+  const check = vi.fn()
+  const { updates, request, options } = await fixture({ platform: 'darwin', company: { check } as never })
+  updates.start()
+  await vi.advanceTimersByTimeAsync(60_000)
+  await updates.check(); await updates.download(); await updates.install()
+  expect(updates.snapshot()).toMatchObject({ phase: 'error', error: 'unsupported', installable: false })
+  expect(updateAction(updates.snapshot())).toBeUndefined()
+  expect(check).not.toHaveBeenCalled(); expect(request).not.toHaveBeenCalled()
+  expect(options.prepare).not.toHaveBeenCalled(); expect(options.install).not.toHaveBeenCalled()
+})
 it('rechecks the selected version before downloading, and preserves preparation failures for retry', async () => {
   const { updates, options } = await fixture({ prepare: async () => { throw new Error('Signature mismatch') } })
   await updates.download()

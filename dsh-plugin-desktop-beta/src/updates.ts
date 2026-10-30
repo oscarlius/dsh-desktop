@@ -39,8 +39,13 @@ export class NextUpdates {
   private cacheReady?: Promise<void>
   private disposed = false
   constructor(private readonly options: NextUpdateOptions) {
-    this.state = { phase: 'idle', installable: options.packaged && ['darwin', 'win32'].includes(options.platform) }
+    this.state = this.companyPlatformUnsupported
+      ? { phase: 'error', error: 'unsupported', installable: false }
+      : { phase: 'idle', installable: options.packaged && ['darwin', 'win32'].includes(options.platform) }
   }
+  // P7 currently publishes NSIS artifacts only. A company Mac must not fetch them
+  // or fall through to the unrelated upstream Desktop feed.
+  private get companyPlatformUnsupported(): boolean { return this.options.company !== undefined && this.options.platform !== 'win32' }
   snapshot(): NextUpdateState { return { ...this.state } }
   private initializeCache(): Promise<void> {
     return this.cacheReady ??= (async () => {
@@ -71,7 +76,7 @@ export class NextUpdates {
     this.options.changed()
   }
   start(): void {
-    if (!this.options.packaged || !['darwin', 'win32'].includes(this.options.platform) || this.timer || this.disposed) return
+    if (this.companyPlatformUnsupported || !this.options.packaged || !['darwin', 'win32'].includes(this.options.platform) || this.timer || this.disposed) return
     void this.initializeCache().catch(this.options.log)
     const poll = (): void => {
       if (this.disposed) return
@@ -106,6 +111,7 @@ export class NextUpdates {
     return result === null ? null : { status: result.status, latestVersion: result.latestVersion }
   }
   check(background = false): Promise<void> {
+    if (this.companyPlatformUnsupported) return Promise.resolve()
     if (this.state.phase === 'ready' || this.state.phase === 'installing') return Promise.resolve()
     return this.run(async signal => {
       this.set({ phase: 'checking' })

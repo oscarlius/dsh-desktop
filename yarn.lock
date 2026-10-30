@@ -10949,7 +10949,7 @@ __metadata:
     clsx: "npm:^2.1.1"
     diff: "npm:^9.0.0"
     dsh-community-market: "npm:0.1.0-dev.0"
-    dshmarket: "npm:1.73.3"
+    dshmarket: "npm:1.73.5"
     electron: "npm:44.7.0"
     electron-builder: "npm:26.15.7"
     extract-zip: "npm:2.0.1"
@@ -11197,7 +11197,7 @@ __metadata:
     dsh-plugin-p7-mcp: "workspace:*"
     dsh-plugin-p7-web-search: "workspace:*"
     dsh-streamfold: "npm:0.7.9"
-    dshmarket: "npm:1.73.3"
+    dshmarket: "npm:1.73.5"
     electron: "npm:44.7.0"
     electron-builder: "npm:26.15.7"
     electron-updater: "npm:6.8.9"
@@ -11447,7 +11447,7 @@ __metadata:
     dsh-plugin-p7-company-models: "workspace:*"
     dsh-plugin-p7-mcp: "workspace:*"
     dsh-plugin-p7-web-search: "workspace:*"
-    dshmarket: "npm:1.73.3"
+    dshmarket: "npm:1.73.5"
     electron: "npm:44.7.0"
     electron-builder: "npm:26.15.7"
     electron-updater: "npm:6.8.9"
@@ -11657,9 +11657,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dshmarket@npm:1.73.3":
-  version: 1.73.3
-  resolution: "dshmarket@npm:1.73.3"
+"dshmarket@npm:1.73.5":
+  version: 1.73.5
+  resolution: "dshmarket@npm:1.73.5"
   dependencies:
     js-yaml: "npm:^4.3.2"
     undici: "npm:^7.29.1"
@@ -11672,13 +11672,13 @@ __metadata:
       optional: true
     "@deepseek-ai/schemastery":
       optional: true
-  checksum: 10c0/b591bbb4b0b7b117f6d8d5b74b8fe1708c2e212dd0a76cca925eec398e56ccb7574f647e3743f50d0dcfce3c6c050ffaa7c1a25a0f79e03a54fd208f742a371b
+  checksum: 10c0/fe7ec6c367d66aad7af868eb2373d5c1e8a155b08214a21feab5f24e10453be0df87a11b021660ed17f6d76c9f6196cc0e52e80bb1c9f26965fcb89838757d70
   languageName: node
   linkType: hard
 
-"dshmarket@patch:dshmarket@npm%3A1.73.3#./.yarn/patches/dshmarket-desktop.patch::locator=deepseek-harness-desktop%40workspace%3A.":
-  version: 1.73.3
-  resolution: "dshmarket@patch:dshmarket@npm%3A1.73.3#./.yarn/patches/dshmarket-desktop.patch::version=1.73.3&hash=5d28a1&locator=deepseek-harness-desktop%40workspace%3A."
+"dshmarket@patch:dshmarket@npm%3A1.73.5#./.yarn/patches/dshmarket-desktop.patch::locator=deepseek-harness-desktop%40workspace%3A.":
+  version: 1.73.5
+  resolution: "dshmarket@patch:dshmarket@npm%3A1.73.5#./.yarn/patches/dshmarket-desktop.patch::version=1.73.5&hash=5d28a1&locator=deepseek-harness-desktop%40workspace%3A."
   dependencies:
     js-yaml: "npm:^4.3.2"
     undici: "npm:^7.29.1"
@@ -11691,7 +11691,7 @@ __metadata:
       optional: true
     "@deepseek-ai/schemastery":
       optional: true
-  checksum: 10c0/2dec52f9923861d061323e98d085a1746928359a68034dd1c366ba8910e7450ff9f54513d4d7f3f1c098c651d751fa3a70531e63302df2f34e942a94d8930433
+  checksum: 10c0/a0130a07dd1233720df72127942271f670842f7a29bcbe00b6e422c1650c7f1286ea2c597efc4150c69b924f08bbe99be759a44bfa1e36448afaa4acc86b8ca9
   languageName: node
   linkType: hard
 
