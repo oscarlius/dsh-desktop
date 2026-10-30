@@ -63,6 +63,8 @@ jobs:
         env:
           DSH_PACKAGE_CHECK_ALREADY_RAN: '1'
         run: yarn workspace dsh-plugin-desktop-beta dist:mac-smoke
+      - name: Smoke the native company macOS full-DMG upgrade
+        run: node dsh-plugin-desktop-beta/scripts/verify-company-mac-upgrade.mjs
       - name: Collect credential-free installer and provenance
         run: node scripts/collect-company-mac.mjs
       - uses: actions/upload-artifact@v7

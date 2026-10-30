@@ -22,7 +22,7 @@ vi.mock('node:child_process', () => {
   }
 })
 
-import { assertNextMacBundle, assertNextWindowsInstaller, COMPANY_PRODUCT_NAME, NextUpdateInstaller } from '../src/update-installer.ts'
+import { assertCompanyAdHocMacSignature, assertCompanyMacUpdateSignature, assertNextMacBundle, assertNextWindowsInstaller, COMPANY_PRODUCT_NAME, MAC_UPDATE_SCRIPT, NextUpdateInstaller } from '../src/update-installer.ts'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -46,6 +46,37 @@ it('rejects Stable installers and an unexpected release even when the archive is
   expect(() => assertNextMacBundle('ai.deepseek.dsh.desktop.beta', { name: 'dsh-plugin-desktop-beta', version: '2.0.13-beta.1' }, '2.0.14-beta.1')).toThrow()
   expect(() => assertNextWindowsInstaller({ ProductName: 'DSH Desktop Beta', ProductVersion: '2.0.14-beta.1' }, '2.0.14-beta.1')).not.toThrow()
   expect(() => assertNextWindowsInstaller({ ProductName: 'DSH Desktop', ProductVersion: '2.0.14-beta.1' }, '2.0.14-beta.1')).toThrow()
+})
+
+it('only accepts the sealed company bundle identity and personal-login distribution manifest for personal-login updates', () => {
+  const manifest = { name: 'dsh-plugin-desktop-beta', version: '2.0.14-beta.1', dshDesktopFlavor: 'companytest', dshDesktopPersonalLoginDistribution: true }
+  expect(() => assertNextMacBundle('ai.deepseek.dsh.desktop.companytest', manifest, '2.0.14-beta.1', COMPANY_PRODUCT_NAME)).not.toThrow()
+  expect(() => assertNextMacBundle('ai.deepseek.dsh.desktop.beta', manifest, '2.0.14-beta.1', COMPANY_PRODUCT_NAME)).toThrow()
+  expect(() => assertNextMacBundle('ai.deepseek.dsh.desktop.companytest', { ...manifest, dshDesktopFlavor: 'beta' }, '2.0.14-beta.1', COMPANY_PRODUCT_NAME)).toThrow()
+  expect(() => assertNextMacBundle('ai.deepseek.dsh.desktop.companytest', { ...manifest, dshDesktopPersonalLoginDistribution: false }, '2.0.14-beta.1', COMPANY_PRODUCT_NAME)).toThrow()
+  expect(() => assertNextMacBundle('ai.deepseek.dsh.desktop.beta', manifest, '2.0.14-beta.1')).toThrow()
+})
+
+it('permits only an ad-hoc company signature with the sealed company identifier', () => {
+  const adHoc = 'Executable=/Applications/P7 DSH Company Test.app/Contents/MacOS/P7 DSH Company Test\nIdentifier=ai.deepseek.dsh.desktop.companytest\nFormat=app bundle with Mach-O thin (arm64)\nSignature=adhoc\n'
+  expect(() => assertCompanyAdHocMacSignature(adHoc, 'ai.deepseek.dsh.desktop.companytest')).not.toThrow()
+  expect(() => assertCompanyAdHocMacSignature(`${adHoc}TeamIdentifier=not set\n`, 'ai.deepseek.dsh.desktop.companytest')).not.toThrow()
+  expect(() => assertCompanyAdHocMacSignature(adHoc.replace('Signature=adhoc', 'Signature=Authority'), 'ai.deepseek.dsh.desktop.companytest')).toThrow()
+  expect(() => assertCompanyAdHocMacSignature(`${adHoc}TeamIdentifier=742992243H\n`, 'ai.deepseek.dsh.desktop.companytest')).toThrow()
+  expect(() => assertCompanyAdHocMacSignature(adHoc, 'ai.deepseek.dsh.desktop.beta')).toThrow()
+})
+
+it('keeps future signed company updates pinned to the installed signing team', () => {
+  const installed = 'Identifier=ai.deepseek.dsh.desktop.companytest\nTeamIdentifier=742992243H\n'
+  expect(() => assertCompanyMacUpdateSignature(installed, installed, 'ai.deepseek.dsh.desktop.companytest', false)).not.toThrow()
+  expect(() => assertCompanyMacUpdateSignature(installed, installed.replace('742992243H', 'OTHER56789'), 'ai.deepseek.dsh.desktop.companytest', false)).toThrow('signing team')
+})
+
+it('keeps the prior app until the replacement can be reopened', () => {
+  expect(MAC_UPDATE_SCRIPT).toContain('if ! /usr/bin/open "$DSH_UPDATE_INSTALLED" --args --updated; then')
+  expect(MAC_UPDATE_SCRIPT).toContain('mv "$BACKUP" "$DSH_UPDATE_INSTALLED"')
+  expect(MAC_UPDATE_SCRIPT.indexOf('if ! /usr/bin/open "$DSH_UPDATE_INSTALLED" --args --updated; then'))
+    .toBeLessThan(MAC_UPDATE_SCRIPT.indexOf('rm -rf "$BACKUP" "$DSH_UPDATE_DIR"'))
 })
 
 it('launches the Windows NSIS installer visibly without /S so progress is shown before auto-restarting', async () => {
@@ -159,4 +190,38 @@ it('stages the verified macOS app bundle and launches the detached progress upda
   expect(spawnOptions.env.DSH_UPDATE_STAGED).toBe(join(staging, 'DSH Desktop Beta.app'))
   expect(spawnOptions.env.DSH_UPDATE_INSTALLED).toBe(installedBundle)
   expect(spawnOptions.env.DSH_UPDATE_MESSAGE).toContain('2.0.18-beta.2')
+})
+
+it('stages a verified personal-login company DMG without a Developer TeamIdentifier', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'company-mac-update-')); roots.push(root)
+  const applications = join(root, 'Applications')
+  const installedBundle = join(applications, 'P7 DSH Company Test.app')
+  const installedExecutable = join(installedBundle, 'Contents', 'MacOS', 'P7 DSH Company Test')
+  await mkdir(join(installedBundle, 'Contents', 'MacOS'), { recursive: true })
+  await writeFile(installedExecutable, 'binary')
+  const staging = join(root, 'staging'); await mkdir(staging, { recursive: true })
+  const dmg = join(staging, 'P7-DSH-Company-Test-2.0.18-beta.2-universal.dmg'); await writeFile(dmg, 'dmg')
+  const adHoc = 'Identifier=ai.deepseek.dsh.desktop.companytest\nSignature=adhoc\nTeamIdentifier=not set\n'
+  execFileMock.mockImplementation((file: string, args: string[], _opts: unknown, callback: (err: Error | null, stdout: string, stderr: string) => void) => {
+    if (file === '/usr/bin/hdiutil' && args[0] === 'attach') {
+      const mountedBundle = join(args[args.indexOf('-mountpoint') + 1]!, 'P7 DSH Company Test.app')
+      mkdir(join(mountedBundle, 'Contents', 'Resources', 'app'), { recursive: true })
+        .then(() => writeFile(join(mountedBundle, 'Contents', 'Resources', 'app', 'package.json'), JSON.stringify({
+          name: 'dsh-plugin-desktop-beta', version: '2.0.18-beta.2', dshDesktopFlavor: 'companytest', dshDesktopPersonalLoginDistribution: true,
+        }))).then(() => callback(null, '', ''), error => callback(error as Error, '', ''))
+      return
+    }
+    if (file === '/usr/libexec/PlistBuddy') { callback(null, 'ai.deepseek.dsh.desktop.companytest\n', ''); return }
+    if (file === '/usr/bin/codesign' && args[0] === '--verify') { callback(null, '', ''); return }
+    if (file === '/usr/bin/codesign' && args[0] === '-dv') { callback(null, '', adHoc); return }
+    if (file === '/usr/bin/ditto') { mkdir(args[1]!, { recursive: true }).then(() => callback(null, '', ''), error => callback(error as Error, '', '')); return }
+    if (file === '/usr/bin/hdiutil' && args[0] === 'detach') { callback(null, '', ''); return }
+    callback(new Error(`Unexpected execFile: ${file} ${args.join(' ')}`), '', '')
+  })
+  const installer = new NextUpdateInstaller({ platform: 'darwin', executable: installedExecutable, productName: COMPANY_PRODUCT_NAME, log: vi.fn() })
+  await installer.prepare(dmg, '2.0.18-beta.2', staging, new AbortController().signal)
+  await installer.stage()
+  mockSpawnSuccess()
+  await installer.launch()
+  expect(spawnMock.mock.calls[0]?.[2]).toMatchObject({ env: expect.objectContaining({ DSH_UPDATE_TITLE: COMPANY_PRODUCT_NAME }) })
 })

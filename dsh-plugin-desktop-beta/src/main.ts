@@ -239,6 +239,7 @@ const updates = new NextUpdates({ version, platform: process.platform, packaged:
   request: (url, init) => net.fetch(url, { ...init, credentials: 'omit' }),
   artifactRequest: createArtifactRequest(),
   ...(DESKTOP_COMPANY_SERVICE_ENABLED ? { company: createCompanyUpdateAdapter({
+    platform: process.platform,
     request: (url, init) => net.fetch(url, { ...init, credentials: 'omit' }),
     artifactRequest: createArtifactRequest(),
     log: error => runtime.diagnostics.append(String(error), 'warn'),

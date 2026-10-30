@@ -43,9 +43,7 @@ export class NextUpdates {
       ? { phase: 'error', error: 'unsupported', installable: false }
       : { phase: 'idle', installable: options.packaged && ['darwin', 'win32'].includes(options.platform) }
   }
-  // P7 currently publishes NSIS artifacts only. A company Mac must not fetch them
-  // or fall through to the unrelated upstream Desktop feed.
-  private get companyPlatformUnsupported(): boolean { return this.options.company !== undefined && this.options.platform !== 'win32' }
+  private get companyPlatformUnsupported(): boolean { return this.options.company !== undefined && !['win32', 'darwin'].includes(this.options.platform) }
   snapshot(): NextUpdateState { return { ...this.state } }
   private initializeCache(): Promise<void> {
     return this.cacheReady ??= (async () => {

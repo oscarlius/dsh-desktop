@@ -65,10 +65,10 @@ it('does not start background update polling on Linux', async () => {
   await vi.advanceTimersByTimeAsync(60_000)
   expect(request).not.toHaveBeenCalled()
 })
-it('keeps company Mac builds away from both the Windows company feed and the upstream feed', async () => {
+it('keeps unsupported company platforms away from both company and upstream feeds', async () => {
   vi.useFakeTimers()
   const check = vi.fn()
-  const { updates, request, options } = await fixture({ platform: 'darwin', company: { check } as never })
+  const { updates, request, options } = await fixture({ platform: 'linux', company: { check } as never })
   updates.start()
   await vi.advanceTimersByTimeAsync(60_000)
   await updates.check(); await updates.download(); await updates.install()

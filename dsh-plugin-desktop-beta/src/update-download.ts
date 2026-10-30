@@ -143,10 +143,10 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
   if (company === undefined) validatedVersion(options.version, channel)
   else {
     validatedReleaseVersion(options.version)
-    if (platform !== 'win32' || company.version !== options.version) {
+    if (platform !== (company.platform ?? 'win32') || company.version !== options.version) {
       throw new UpdateDownloadError('invalid-options', 'The company installer does not match the requested platform or version.')
     }
-    companyInstallerUrl(company.downloadUrl, company.version)
+    companyInstallerUrl(company.downloadUrl, company.version, platform)
     if (!/^[a-fA-F0-9]{64}$/u.test(company.sha256)) {
       throw new UpdateDownloadError('invalid-options', 'Company installers require a SHA-256 digest.')
     }
@@ -190,7 +190,7 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
   }
   try {
     if (company === undefined) assertSecureDownloadUrl(finalUrl)
-    else if (companyInstallerUrl(finalUrl, company.version) !== company.downloadUrl) {
+    else if (companyInstallerUrl(finalUrl, company.version, platform) !== company.downloadUrl) {
       throw new UpdateDownloadError('redirect-origin', 'The company download changed its immutable address.')
     }
     assertDeclaredSize(response)
@@ -497,7 +497,7 @@ function normalizedExpectedDigest(expected: string | undefined): string | undefi
  * single whole-file buffer would spike main-process memory — and compared in
  * constant time over the decoded bytes.
  */
-async function assertInstallerDigest(filename: string, expected: string): Promise<void> {
+export async function assertInstallerDigest(filename: string, expected: string): Promise<void> {
   const expectedBytes = Buffer.from(expected, 'hex')
   const hash = createHash('sha256')
   const handle = await open(filename, 'r')

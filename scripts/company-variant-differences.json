@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "package.json",
-      "betaSha256": "d644a9c4e5171472b8b93ff19540443c6361d5e89fc0bed15521d275646c39fa",
+      "betaSha256": "b4b558eb6dc043a5495cca49538b51c6aa55db5d8996ec3e7551c0265d987ee1",
       "nextSha256": "20c985a5384b92a7ec4686654e8652c3db6b6ffccdb91c84d175f196f2a35b5a",
       "reason": "Company transport/build metadata, P7 workspaces and release commands; ordinary Next keeps upstream identity."
     },
@@ -70,7 +70,7 @@
     },
     {
       "path": "scripts/package.ts",
-      "betaSha256": "28a5978d40c2eb335521e4b65a8ebc8faec8c1d405e7ec85cb7a44328d38b245",
+      "betaSha256": "4becb9c12ce7ee8537258b84fd8152456d94ac54b8c717fc24b4d6a67dbb0c2c",
       "nextSha256": "a8e1c1962dd025916d31631127454100dd60e44173ed28455b562713758dfb60",
       "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
     },
@@ -148,7 +148,7 @@
     },
     {
       "path": "src/company-build-version.ts",
-      "betaSha256": "17e93c90fa18a0b8dd0b7a00364b7f8fcc0c0d46de208195397fd2cf4442c318",
+      "betaSha256": "6906e2dc3441f057b8d24911d8972c8f3849bd47e61e87a5580bb05f60679347",
       "nextSha256": null,
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
@@ -160,7 +160,7 @@
     },
     {
       "path": "src/company-update-check.ts",
-      "betaSha256": "b72c92d5d55bf13481fe1887379e2d490d5d3e27366977d7344ec7720e582a43",
+      "betaSha256": "1ee6d3028aa0626254c2621d512a5c5a28bd3b810d5f7cc57041bc7f8af78d8e",
       "nextSha256": null,
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
@@ -172,7 +172,7 @@
     },
     {
       "path": "src/company-updates.ts",
-      "betaSha256": "5a6202e4e35c10de7ca26b8cb370277ebb2dd109abc0a58964a8e204dede27f4",
+      "betaSha256": "fe27f25f5ce17112d19a2ec250f14e9ce000a7471c5dfecac37792af722be6e0",
       "nextSha256": null,
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
@@ -214,7 +214,7 @@
     },
     {
       "path": "src/main.ts",
-      "betaSha256": "4b2a9b8b0a5fcb65589f03019cf9c28e63a0a30853d2b0bf29eb81d5fa4f0355",
+      "betaSha256": "4f38d1588a4b5ae38c55f76f2d659fcd02bff0b29421170493b56f25d2123171",
       "nextSha256": "e4a50b19ab3e30cbe0dd8032dc3a02552450ef52e0649ee185d4abe2385b5ac5",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },
@@ -244,19 +244,19 @@
     },
     {
       "path": "src/update-download.ts",
-      "betaSha256": "84117fab77510a8c971707554f5d6c1598e22adb8cef65df6c8e28b9bca6cbc8",
+      "betaSha256": "54b24421245c0e7d1b44573a4ce382827662d467ae9bd696220158e9564965dd",
       "nextSha256": null,
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
     {
       "path": "src/update-installer.ts",
-      "betaSha256": "b7174b64d7de3e3a0bd98500e79b93fcf7d1c2efb148709b3adb18e5bbdd0f97",
+      "betaSha256": "27e64ebe78b05e73302976f4b94ba528491eb6e7c99f74c1f2fea5a0e2142d78",
       "nextSha256": "2c346cfed643254593af69860db12f814297313b2480b7313ddd76f1d665dbd1",
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
     {
       "path": "src/updates.ts",
-      "betaSha256": "ec113478c3645196ee4b5a69209e35ec4dca68532d69ce3139848cc1043d9f14",
+      "betaSha256": "d9036ae47c377b9cfa06f2ebb93fb844b4eb4d8bd94329850c7949a0962c74d5",
       "nextSha256": "917b2a48c6a7379e94f5219efb805a2bd76b673b186a14f3f19faa4dbfbb1dab",
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
@@ -274,7 +274,7 @@
     },
     {
       "path": "tests/company-build-version.spec.ts",
-      "betaSha256": "7732ffd9bc1ca1258ca8438d21137d432116100234c7445c757cba712447a61e",
+      "betaSha256": "a73469915b73a3e4b046623dddc977052f7e865466e10fae2352bb329e6cefca",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -406,13 +406,13 @@
     },
     {
       "path": "tests/update-installer.spec.ts",
-      "betaSha256": "8a873a8328d7ea775b110d282e7e77574299945c5c356e4a596344dbfed45737",
+      "betaSha256": "608d68857c31b6400a80a1ebcf49b9b0d199dfb9501c2da6320b7f3c29875f55",
       "nextSha256": "cf3cf06061958efec9cbae38cbee36f54e7004b3609b716dce00e08126e28d91",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
     {
       "path": "tests/updates.spec.ts",
-      "betaSha256": "66d7c6ac088d4d9b5e3d414da1f38cb8d8d0104d44303f538ef818dd787347c5",
+      "betaSha256": "505b62a26e9464a9759093ea9b7df5460a28ccebb0abea8716026191025c73a0",
       "nextSha256": "4c5c18cb9c8deb629370c3e581c733f7af3d64fa936d39b805b3e7b05c081759",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
@@ -427,6 +427,18 @@
       "betaSha256": "fa023020225d03e05e2946f79542ce131a8f75ea9729bda2cfa9ce5a49bb5a8e",
       "nextSha256": "2a8c36736f3054d9b44f0d359787140e612d1f45b2eabe60e4083d7f64444b4d",
       "reason": "Stable product-identity runtime entry required by the packaged company smoke verifier."
+    },
+    {
+      "path": "scripts/verify-company-mac-upgrade.mjs",
+      "reason": "Company Mac update channel and native installation acceptance; ordinary Next keeps the upstream feed and identity.",
+      "betaSha256": "0a3efc71678796512f8b9a07631f00c13d0714141be7011d05434924ccf332bd",
+      "nextSha256": null
+    },
+    {
+      "path": "tests/company-mac-updates.spec.ts",
+      "reason": "Company Mac update channel and native installation acceptance; ordinary Next keeps the upstream feed and identity.",
+      "betaSha256": "e0ef2681032f91fa601ffd500dd7bcd3737e06fac773cfb07b27f91b8a91e87c",
+      "nextSha256": null
     }
   ]
 }

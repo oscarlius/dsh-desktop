@@ -52,9 +52,13 @@ const run = (command: string, args: readonly string[], cwd: string, env: NodeJS.
   if (TEST_BUILD_VERSION !== undefined && isBuilder) console.log(`Packaging with test build version ${TEST_BUILD_VERSION}; source manifests are unchanged.`)
   const isPreflight = (args.includes('run') && args.includes('check')) || args.some(arg => arg.includes('check:win-package') || arg.includes('check:linux-package'))
   const stage = isBuilder ? 'builder:total' : isPreflight ? 'build:package-preflight' : 'package:command'
+  // The company personal-login test channel needs an integrity-verifiable ad-hoc
+  // signature for native app replacement; ordinary unsigned smoke builds stay unchanged.
+  const companyMacArgs = isBuilder && args.includes('--mac') && env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION === '1'
+    ? [...forwarded, '--config.mac.identity=-'] : forwarded
   const measuredArgs = isBuilder && env.DSH_DESKTOP_PACKAGING_RUN_DIR !== undefined
-    ? ['--import', new URL('./packaging-builder.mjs', import.meta.url).href, ...forwarded]
-    : forwarded
+    ? ['--import', new URL('./packaging-builder.mjs', import.meta.url).href, ...companyMacArgs]
+    : companyMacArgs
   const builderEnv = isBuilder ? { ...env, DSH_NEXT_WINDOWS_FAST_COMPRESSION: '1' } : env
   packagingStepSync(stage, () => runNextPackagingCommand(command, measuredArgs, cwd, builderEnv, workspaceRoot))
 }

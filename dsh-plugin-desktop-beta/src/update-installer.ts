@@ -55,9 +55,7 @@ export const MAC_UPDATE_SCRIPT = [
   'BACKUP="${DSH_UPDATE_INSTALLED}.backup-$$"',
   'rm -rf "$BACKUP"',
   'mv "$DSH_UPDATE_INSTALLED" "$BACKUP" || exit 1',
-  'if mv "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED" 2>/dev/null || /usr/bin/ditto "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED"; then',
-  '  rm -rf "$BACKUP" "$DSH_UPDATE_DIR"',
-  'else',
+  'if ! (mv "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED" 2>/dev/null || /usr/bin/ditto "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED"); then',
   '  rm -rf "$DSH_UPDATE_INSTALLED"',
   '  mv "$BACKUP" "$DSH_UPDATE_INSTALLED"',
   '  cleanup',
@@ -66,16 +64,64 @@ export const MAC_UPDATE_SCRIPT = [
   'fi',
   '/usr/bin/xattr -dr com.apple.quarantine "$DSH_UPDATE_INSTALLED" 2>/dev/null || true',
   'sleep 0.8',
+  'if ! /usr/bin/open "$DSH_UPDATE_INSTALLED" --args --updated; then',
+  '  rm -rf "$DSH_UPDATE_INSTALLED"',
+  '  mv "$BACKUP" "$DSH_UPDATE_INSTALLED"',
+  '  cleanup',
+  '  /usr/bin/open "$DSH_UPDATE_INSTALLED"',
+  '  exit 1',
+  'fi',
+  'rm -rf "$BACKUP" "$DSH_UPDATE_DIR"',
   'cleanup',
-  '/usr/bin/open "$DSH_UPDATE_INSTALLED" --args --updated',
 ].join('\n')
 
 /** Check both bundle identity and embedded SemVer before validating the signature. */
-export function assertNextMacBundle(identifier: string, manifest: unknown, version: string): void {
-  if (identifier.trim() !== NEXT_APP_ID || !manifest || typeof manifest !== 'object'
-    || (manifest as { name?: unknown }).name !== 'dsh-plugin-desktop-beta' || (manifest as { version?: unknown }).version !== version) {
+export function assertNextMacBundle(identifier: string, manifest: unknown, version: string, productName?: string): void {
+  const company = productName === COMPANY_PRODUCT_NAME
+  const distribution = (manifest !== null && typeof manifest === 'object')
+    ? (manifest as { dshDesktopFlavor?: unknown }).dshDesktopFlavor
+    : undefined
+  const personalLoginDistribution = (manifest !== null && typeof manifest === 'object')
+    ? (manifest as { dshDesktopPersonalLoginDistribution?: unknown }).dshDesktopPersonalLoginDistribution
+    : undefined
+  if (identifier.trim() !== (company ? COMPANY_APP_ID : NEXT_APP_ID) || !manifest || typeof manifest !== 'object'
+    || (manifest as { name?: unknown }).name !== 'dsh-plugin-desktop-beta' || (manifest as { version?: unknown }).version !== version
+    || (company ? distribution !== 'companytest' || personalLoginDistribution !== true : distribution === 'companytest')) {
     throw new Error('The downloaded application does not match this Next release')
   }
+}
+
+/** A personal-login company build is ad-hoc signed, so bind it to the sealed bundle identifier instead of a Team ID. */
+export function assertCompanyAdHocMacSignature(details: string, identifier: string): void {
+  const lines = new Set(details.split(/\r?\n/u))
+  if (!lines.has(`Identifier=${identifier}`) || !lines.has('Signature=adhoc')
+    || [...lines].some(line => /^TeamIdentifier=(?!not set$)[A-Z0-9]+$/u.test(line))) {
+    throw new Error('Company update is not an ad-hoc signed application with the expected bundle identity')
+  }
+}
+
+function signingTeam(details: string): string | undefined {
+  return /^TeamIdentifier=([A-Z0-9]+)$/mu.exec(details)?.[1]
+}
+
+function assertCompanyMacSignatureIdentity(details: string, identifier: string): void {
+  if (!details.split(/\r?\n/u).includes(`Identifier=${identifier}`)) {
+    throw new Error('Company update signing identity does not match the application bundle')
+  }
+}
+
+/** Keep future Developer ID company updates pinned to the installed team; only personal-login builds may be ad-hoc. */
+export function assertCompanyMacUpdateSignature(installedDetails: string, candidateDetails: string, identifier: string, personalLoginDistribution: boolean): void {
+  assertCompanyMacSignatureIdentity(installedDetails, identifier)
+  assertCompanyMacSignatureIdentity(candidateDetails, identifier)
+  const team = signingTeam(installedDetails)
+  if (team !== undefined) {
+    if (!candidateDetails.split(/\r?\n/u).includes(`TeamIdentifier=${team}`)) throw new Error('Company update signing team does not match the installed application')
+    return
+  }
+  if (!personalLoginDistribution) throw new Error('Company ad-hoc updates require a personal-login distribution')
+  assertCompanyAdHocMacSignature(installedDetails, identifier)
+  assertCompanyAdHocMacSignature(candidateDetails, identifier)
 }
 
 export function assertNextWindowsInstaller(info: { ProductName?: unknown; ProductVersion?: unknown }, version: string, productName = 'DSH Desktop Beta'): void {
@@ -125,12 +171,16 @@ export class NextUpdateInstaller {
       const manifestPath = join(bundle, 'Contents', 'Resources', 'app', 'package.json')
       const meta = await lstat(manifestPath)
       if (!meta.isFile() || meta.isSymbolicLink() || meta.size > 128 * 1024) throw new Error('Invalid Next application manifest')
-      assertNextMacBundle(info.stdout, JSON.parse(await readFile(manifestPath, 'utf8')), version)
+      assertNextMacBundle(info.stdout, JSON.parse(await readFile(manifestPath, 'utf8')), version, this.options.productName)
       await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle])
       const installedSignature = await run('/usr/bin/codesign', ['-dv', '--verbose=4', installed])
       const candidateSignature = await run('/usr/bin/codesign', ['-dv', '--verbose=4', bundle])
-      const team = /^TeamIdentifier=([A-Z0-9]+)$/m.exec(installedSignature.stderr)?.[1]
-      if (!team || !candidateSignature.stderr.split('\n').includes(`TeamIdentifier=${team}`)) throw new Error('Next update signing team does not match the installed application')
+      if (this.options.productName === COMPANY_PRODUCT_NAME) {
+        assertCompanyMacUpdateSignature(installedSignature.stderr, candidateSignature.stderr, COMPANY_APP_ID, true)
+      } else {
+        const team = /^TeamIdentifier=([A-Z0-9]+)$/m.exec(installedSignature.stderr)?.[1]
+        if (!team || !candidateSignature.stderr.split('\n').includes(`TeamIdentifier=${team}`)) throw new Error('Next update signing team does not match the installed application')
+      }
       const staged = join(directory, apps[0]!.name)
       await run('/usr/bin/ditto', [bundle, staged])
       this.prepared = { path, version, directory, bundle: staged, installed }
@@ -161,7 +211,8 @@ export class NextUpdateInstaller {
       const prepared = this.prepared
       if (!this.nativeReady || !prepared?.bundle || !prepared.installed || !prepared.directory) throw new Error('No prepared update installer')
       const zh = (this.options.language?.() ?? 'en').toLowerCase().startsWith('zh')
-      const message = zh ? `正在更新 DSH Desktop Beta 至 ${prepared.version}，请稍候…` : `Updating DSH Desktop Beta to ${prepared.version}, please wait…`
+      const productName = this.options.productName ?? 'DSH Desktop Beta'
+      const message = zh ? `正在更新 ${productName} 至 ${prepared.version}，请稍候…` : `Updating ${productName} to ${prepared.version}, please wait…`
       await new Promise<void>((resolve, reject) => {
         const child = spawn('/bin/sh', ['-c', MAC_UPDATE_SCRIPT], {
           detached: true, stdio: 'ignore', shell: false, cwd: '/',
@@ -171,7 +222,7 @@ export class NextUpdateInstaller {
             DSH_UPDATE_STAGED: prepared.bundle!,
             DSH_UPDATE_INSTALLED: prepared.installed!,
             DSH_UPDATE_DIR: prepared.directory!,
-            DSH_UPDATE_TITLE: 'DSH Desktop Beta',
+            DSH_UPDATE_TITLE: productName,
             DSH_UPDATE_MESSAGE: message,
             DSH_UPDATE_UI_SCRIPT: MAC_PROGRESS_UI_SCRIPT,
           },
