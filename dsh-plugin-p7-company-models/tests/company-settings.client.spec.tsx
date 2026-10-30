@@ -94,7 +94,8 @@ describe('P7 company login shell gate', () => {
     const api = { status: vi.fn(() => new Promise<CompanyStatus>(() => {})), accountStatus: vi.fn(() => new Promise<typeof SIGNED_OUT>(() => {})), accountLogin: vi.fn() }
     render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
     expect(screen.getByRole('dialog')).toBeTruthy()
-    expect(screen.getByText('Sign in to your company Feishu account')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Restoring company sign-in' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Sign in to company account' })).toBeNull()
   })
 
   it('keeps the policy gate when an older Host status omits loginRequired', async () => {
@@ -112,12 +113,13 @@ describe('P7 company login shell gate', () => {
     let underlyingKeys = 0
     underlying.addEventListener('keydown', () => { underlyingKeys++ })
     document.body.append(underlying)
-    const api = { status: vi.fn(() => new Promise<CompanyStatus>(() => {})), accountStatus: vi.fn(() => new Promise<typeof SIGNED_OUT>(() => {})), accountLogin: vi.fn() }
+    const api = { status: vi.fn(async () => ({ ...READY, loginRequired: true })), accountStatus: vi.fn(async () => SIGNED_OUT), accountLogin: vi.fn() }
     try {
       render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
       const signIn = await screen.findByRole('button', { name: 'Sign in to company account' })
       const refresh = screen.getByRole('button', { name: 'Refresh sign-in status' })
-      await waitFor(() => expect(document.activeElement).toBe(signIn))
+      expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true)
+      signIn.focus()
       fireEvent.keyDown(signIn, { key: 'Tab' })
       expect(document.activeElement).toBe(refresh)
       fireEvent.keyDown(refresh, { key: 'Tab', shiftKey: true })
@@ -149,17 +151,46 @@ describe('P7 company login shell gate', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
-  it.each(['syncing', 'unauthorized'] as const)('keeps chat blocked after sign-in while the Host catalog is %s, without requesting a key or another login', async phase => {
+  it.each(['syncing', 'unauthorized'] as const)('silently syncs a signed-in user while the Host catalog is %s', async phase => {
     const api = {
       status: vi.fn(async () => ({ ...READY, loginRequired: true, phase, models: [] })), accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(), sync: vi.fn(async () => ({ ...READY, loginRequired: true, models: [] })),
     }
     render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
-    expect(await screen.findByRole('dialog')).toBeTruthy()
-    expect(screen.getByText('Sign-in successful — syncing company models…')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Sign in to company account' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry company model sync' }))
-    await waitFor(() => expect(api.sync).toHaveBeenCalledOnce())
+    await waitFor(() => expect(api.accountStatus).toHaveBeenCalled())
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.queryByRole('button', { name: 'Sign in to company account' })).toBeNull()
+    expect(api.accountLogin).not.toHaveBeenCalled()
+    expect(api.sync).not.toHaveBeenCalled()
+  })
+
+  it('does not steal focus during a background poll, but asks for login after confirmed expiry', async () => {
+    let account = SIGNED_IN as import('../src/account-broker.js').P7AccountStatus
+    let phase: CompanyStatus['phase'] = 'ready'
+    const api = {
+      status: vi.fn(async () => ({ ...READY, loginRequired: true, phase })), accountStatus: vi.fn(async () => account), accountLogin: vi.fn(),
+    }
+    const composer = document.createElement('textarea')
+    const intervals = vi.spyOn(window, 'setInterval')
+    document.body.append(composer)
+    try {
+      render(<CompanyLoginGate {...({ api, t } as unknown as import('../src/client/CompanyLoginGate.js').CompanyLoginGateProps)} />)
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      const poll = intervals.mock.calls.find(([, delay]) => delay === 1_000)![0]
+      composer.focus()
+      phase = 'syncing'
+      await act(async () => { poll() })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(document.activeElement).toBe(composer)
+      api.status.mockRejectedValueOnce(new Error('catalog unavailable'))
+      await act(async () => { poll() })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(document.activeElement).toBe(composer)
+      account = { ...SIGNED_OUT, phase: 'expired' }
+      await act(async () => { poll() })
+      expect(screen.getByRole('dialog')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Sign in to company account' })).toBeTruthy()
+      expect(api.accountLogin).not.toHaveBeenCalled()
+    } finally { composer.remove() }
   })
 
   it.each(['ready', 'stale', 'error'] as const)('does not keep a signed-in user blocked for a %s Host catalog outcome, including an empty catalog', async phase => {

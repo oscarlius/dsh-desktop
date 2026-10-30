@@ -68,6 +68,49 @@ describe('AccountBroker', () => {
     expect(refreshes).toBe(1); expect(JSON.stringify(broker.status())).not.toContain('access-2'); expect(JSON.stringify(broker.status())).not.toContain('refresh-2'); await broker.dispose()
   })
 
+  it('renews the same account silently, retains it through a temporary outage, and notifies on expiry', async () => {
+    let now = Date.now()
+    let result: 'ok' | 'offline' | 'expired' = 'ok'
+    const store = { load: vi.fn(async () => 'refresh-old'), save: vi.fn(async () => {}), clear: vi.fn(async () => {}) }
+    const openBrowser = vi.fn()
+    const changed = vi.fn()
+    const broker = new AccountBroker({ origin: () => 'https://p7.example', profileId: 'silent-renewal', requirePersonalLogin: true, store, openBrowser, now: () => now, fetch: async input => {
+      if (String(input).includes('/policy')) return Response.json({ upgradeRequired: false })
+      if (result === 'offline') throw new TypeError('offline')
+      if (result === 'expired') return Response.json({ detail: 'expired' }, { status: 401 })
+      return Response.json({ ...token('access-renewed'), expiresAt: now + 120_000 })
+    } })
+    const unsubscribe = broker.subscribe(changed)
+    try {
+      await broker.restore()
+      expect(changed).toHaveBeenCalledOnce()
+      changed.mockClear()
+      now += 70_000
+      await expect(broker.getValidAccessToken()).resolves.toBe('access-renewed')
+      expect(changed).not.toHaveBeenCalled()
+      expect(store.save).toHaveBeenCalledTimes(2)
+
+      now += 70_000
+      result = 'offline'
+      await expect(broker.getValidAccessToken()).rejects.toThrow('offline')
+      expect(broker.status()).toMatchObject({ phase: 'signed-in', profile, message: expect.stringContaining('retried') })
+      expect(store.clear).not.toHaveBeenCalled()
+
+      result = 'ok'
+      changed.mockClear()
+      await expect(broker.getValidAccessToken()).resolves.toBe('access-renewed')
+      expect(changed).not.toHaveBeenCalled()
+      expect(broker.status().message).toBeNull()
+      now += 70_000
+      result = 'expired'
+      await expect(broker.getValidAccessToken()).rejects.toThrow()
+      expect(broker.status()).toMatchObject({ phase: 'expired', profile: null })
+      expect(changed).toHaveBeenCalledOnce()
+      expect(store.clear).toHaveBeenCalledWith('https://p7.example')
+      expect(openBrowser).not.toHaveBeenCalled()
+    } finally { unsubscribe(); await broker.dispose() }
+  })
+
   it('clears its in-memory session on logout and revokes the current bearer session', async () => {
     let start: Record<string, unknown> | undefined; const revocations: string[] = []
     const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

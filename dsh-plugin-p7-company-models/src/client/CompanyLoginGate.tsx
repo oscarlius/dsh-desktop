@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { P7AccountStatus } from '../account-broker.js'
-import type { CompanyStatus } from '../public-status.js'
 import { createCompanyModelsApi, type CompanyModelsApi } from './api.js'
 
 const POLL_MS = 1_000
@@ -27,27 +26,26 @@ export function CompanyLoginGate({ api: suppliedApi, t }: CompanyLoginGateProps)
   const api = apiRef.current
   const [required, setRequired] = useState(policyRequiresLogin)
   const [account, setAccount] = useState<P7AccountStatus>()
-  const [hostStatus, setHostStatus] = useState<CompanyStatus>()
   const [error, setError] = useState(false)
   const [busy, setBusy] = useState(false)
   const active = useRef(true)
   const gateRef = useRef<HTMLDivElement>(null)
-  // A signed-in account is not sufficient while the Host is still replacing
-  // the unauthenticated catalog. `ready` intentionally includes an empty
-  // administrator-published catalog; `stale` and `error` remain usable per
-  // the Host status contract.
-  const catalogRestoring = hostStatus === undefined || hostStatus.phase === 'syncing' || hostStatus.phase === 'unauthorized'
-  const blocking = required && (account?.phase !== 'signed-in' || catalogRestoring)
+  // Catalog polls and token renewal are background work, not new sign-ins.
+  // Only the identity broker can require authentication; catalog failures
+  // remain visible in company settings without covering the conversation.
+  const signedIn = account?.phase === 'signed-in' || (account?.phase === 'error' && account.profile !== null)
+  const blocking = required && !signedIn
 
   const refresh = useCallback(async () => {
     try {
-      const [status, nextAccount] = await Promise.all([api.status(), api.accountStatus()])
+      const [status, nextAccount] = await Promise.allSettled([api.status(), api.accountStatus()])
       if (!active.current) return
-      const statusRequired = (status as { loginRequired?: unknown }).loginRequired
-      setRequired(previous => policyRequiresLogin() || statusRequired === true || (statusRequired === undefined ? previous : false))
-      setHostStatus(status)
-      setAccount(nextAccount)
-      setError(false)
+      if (status.status === 'fulfilled') {
+        const statusRequired = (status.value as { loginRequired?: unknown }).loginRequired
+        setRequired(previous => policyRequiresLogin() || statusRequired === true || (statusRequired === undefined ? previous : false))
+      }
+      if (nextAccount.status === 'fulfilled') setAccount(nextAccount.value)
+      setError(status.status === 'rejected' || nextAccount.status === 'rejected')
     } catch {
       if (active.current) setError(true)
     }
@@ -100,24 +98,16 @@ export function CompanyLoginGate({ api: suppliedApi, t }: CompanyLoginGateProps)
     finally { if (active.current) setBusy(false) }
   }
 
-  const recoverCatalog = async () => {
-    if (busy) return
-    setBusy(true)
-    try { const next = await api.sync(); if (active.current) { setHostStatus(next); setError(false) } }
-    catch { if (active.current) setError(true) }
-    finally { if (active.current) setBusy(false) }
-  }
-
   if (!blocking) return null
   const pending = account?.phase === 'pending'
-  const signedInAwaitingCatalog = account?.phase === 'signed-in' && catalogRestoring
+  const checking = account === undefined || account.phase === 'error'
   return <div ref={gateRef} className="dshP7CompanyLoginOverlay" role="dialog" aria-modal="true" aria-labelledby="p7-company-overlay-login-title">
     <section className="dshP7CompanyLoginOverlayCard">
-      <h2 id="p7-company-overlay-login-title">{t(signedInAwaitingCatalog ? 'loginSyncingTitle' : 'loginRequiredTitle')}</h2>
-      <p>{t(signedInAwaitingCatalog ? 'loginSyncingIntro' : 'loginRequiredIntro')}</p>
-      <p className="dshP7CompanyLoginOverlayStatus" role="status">{signedInAwaitingCatalog ? t(hostStatus?.phase === 'unauthorized' ? 'loginRecoveringStatus' : 'loginSyncingStatus') : account?.message ?? (pending ? t('accountPending') : t('loginRequiredStatus'))}</p>
+      <h2 id="p7-company-overlay-login-title">{t(checking ? 'loginRestoringTitle' : 'loginRequiredTitle')}</h2>
+      <p>{t(checking ? 'loginRestoringIntro' : 'loginRequiredIntro')}</p>
+      <p className="dshP7CompanyLoginOverlayStatus" role="status">{account?.message ?? (checking ? t('loginRestoringIntro') : pending ? t('accountPending') : t('loginRequiredStatus'))}</p>
       {error && <p className="dshP7CompanySettingsAlert" role="alert">{t('unavailable')}</p>}
-      <div className="dshP7CompanySettingsActions">{signedInAwaitingCatalog ? <button className="dshP7CompanySettingsButton" type="button" disabled={busy} onClick={() => { void recoverCatalog() }}>{t('recoverModels')}</button> : <button className="dshP7CompanySettingsButton" type="button" disabled={busy || pending} onClick={() => { void signIn() }}>{t(pending ? 'accountPending' : 'signIn')}</button>}<button className="dshP7CompanySettingsButton dshP7CompanySettingsButtonSecondary" type="button" disabled={busy} onClick={() => { void refresh() }}>{t('refreshLoginStatus')}</button></div>
+      <div className="dshP7CompanySettingsActions">{!checking && <button className="dshP7CompanySettingsButton" type="button" disabled={busy || pending} onClick={() => { void signIn() }}>{t(pending ? 'accountPending' : 'signIn')}</button>}<button className="dshP7CompanySettingsButton dshP7CompanySettingsButtonSecondary" type="button" disabled={busy} onClick={() => { void refresh() }}>{t('refreshLoginStatus')}</button></div>
     </section>
   </div>
 }

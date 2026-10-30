@@ -109,13 +109,18 @@ export class AccountBroker {
     const expiresAt = timestamp(body.expiresAt), profile = profileOf(body.profile)
     if (!accessToken || !refreshToken || expiresAt === undefined || !profile) throw new Error('invalid token response')
     if (!this.isCurrent(origin, generation)) return
+    // Tokens are resolved per operation. Renewing this same identity must not
+    // tell consumers to tear down the company's model and tool catalogs.
+    const changed = this.phase !== 'signed-in' || this.session?.origin !== origin
+      || JSON.stringify(this.session?.profile) !== JSON.stringify(profile)
     // A failed durable save must not expose an authenticated session while the
     // UI reports failure. Rotation already invalidated the previous credential.
     try { await this.queueStore(generation, () => this.options.store?.save(origin, refreshToken)) }
     catch (error) { if (this.isCurrent(origin, generation)) this.session = undefined; throw error }
     if (!this.isCurrent(origin, generation)) return
     this.session = { origin, accessToken, refreshToken, expiresAt, profile }
-    this.phase = 'signed-in'; this.message = null; this.upgradeUrl = null; this.publish()
+    this.phase = 'signed-in'; this.message = null; this.upgradeUrl = null
+    if (changed) this.publish()
   }
   private async request(origin: string, path: string, body: object): Promise<unknown> { const response = await this.fetch(`${origin}${path}`, { method: 'POST', redirect: 'error', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify(body) }); if (!response.ok) throw await this.httpError(response); return await response.json() }
   private async checkPolicy(origin: string, generation: number): Promise<boolean> {
@@ -169,7 +174,12 @@ export class AccountBroker {
   }
   private async handleRefreshFailure(origin: string, error: unknown): Promise<void> {
     if (clearsRefresh(error)) await this.expire(origin, error)
-    else this.fail(error, 'Company sign-in could not be refreshed. It will be retried when P7 is available.')
+    else {
+      // A timeout/5xx is not a sign-out. Preserve the identity and catalogs;
+      // this operation still fails, and the next request retries renewal.
+      this.message = 'Company sign-in could not be refreshed. It will be retried when P7 is available.'
+      if (!this.session || error instanceof AccountHttpError && error.status === 426) this.fail(error, this.message)
+    }
   }
   private async expire(origin: string, error: unknown): Promise<void> { this.session = undefined; await this.queueStore(this.authGeneration, () => this.options.store?.clear(origin)); this.fail(error, 'Your company sign-in expired. Sign in again.', 'expired') }
   private fail(error: unknown, fallback: string, phase: P7AccountStatus['phase'] = 'error'): void { const upgrade = error instanceof AccountHttpError && error.status === 426; this.phase = upgrade ? 'upgrade-required' : phase; this.message = upgrade ? (error.detail ?? `Update DSH Desktop to ${error.minimumVersion ?? 'the required version'} before signing in.`) : fallback; this.upgradeUrl = upgrade && error instanceof AccountHttpError ? safeUpgradeUrl(error.upgradeUrl) : null; this.publish() }
