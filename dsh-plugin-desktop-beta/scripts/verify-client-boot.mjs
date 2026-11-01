@@ -73,6 +73,16 @@ try {
   assert.equal(boot.failure, undefined, String(boot.failure))
   assert.equal(boot.health, 'healthy')
   assert.equal(boot.skillStyles, true, 'Desktop Skill client must activate in the real module Loader')
+  if (manifest.dshDesktopFlavor === 'companytest' && manifest.dependencies?.['dsh-mnemon']) {
+    await page.waitForFunction(() => document.querySelector('style[data-plugin="dsh-better-sidebar"]')
+      && document.querySelector('style[data-plugin-css^="dsh-mnemon/"]'), undefined, { timeout: 15_000 })
+    boot.companyPlugins = await page.evaluate(() => ({
+      sidebarStyles: !!document.querySelector('style[data-plugin="dsh-better-sidebar"]'),
+      memoryStyles: !!document.querySelector('style[data-plugin-css^="dsh-mnemon/"]'),
+    }))
+    assert.equal(boot.companyPlugins.sidebarStyles, true)
+    assert.equal(boot.companyPlugins.memoryStyles, true)
+  }
   assert.deepEqual(errors, [])
   Object.assign(report, { passed: true, ...boot })
   await page.screenshot({ path: join(output, 'client-boot.png') })

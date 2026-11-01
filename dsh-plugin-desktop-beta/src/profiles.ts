@@ -14,13 +14,15 @@ import { RETIRED_SCHEDULE_BUNDLE, retiredSchedulePatch } from './profile-schedul
 import { removeLinkProjectionsSafely } from '../../dsh-plugin-desktop/src/link-projections.ts'
 import { insideArchive, unpackedPath } from './asar-archive-policy.ts'
 import { DESKTOP_COMPANY_SERVICE_ENABLED } from './product-identity.ts'
+import { COMPANY_DEFAULT_PLUGIN_BUNDLES, companyMnemonCliPath, companyPluginDefaultPatches, hasExplicitCompanyPluginDisable } from './company-plugin-defaults.ts'
 
 export const NEXT_PACKAGE = fileURLToPath(new URL('../package.json', import.meta.url))
 export const WEB_BUNDLES = [...PROFILE_TEMPLATES.web!.bundles]
 const NEXT_BUNDLE_PATCH = fileURLToPath(new URL('../cordis.patch.yml', import.meta.url))
-function desktopCapabilityPatches() {
+function desktopCapabilityPatches(home: string, installAnchor: string) {
   return [
     ...loadOverlayPatches('dsh-plugin-desktop-beta', NEXT_BUNDLE_PATCH),
+    ...(DESKTOP_COMPANY_SERVICE_ENABLED ? companyPluginDefaultPatches(join(home, 'mnemon'), companyMnemonCliPath(installAnchor)) : []),
     ...(DESKTOP_COMPANY_SERVICE_ENABLED && !process.env.DSH_WEB_SEARCH_PROVIDER?.trim()
       ? [{ id: 'web', config: { searchProvider: 'p7' } }] : []),
   ]
@@ -105,6 +107,8 @@ interface ProfileManifest {
      * rc.2 optional bundle, 2 retired that bundle once upstream removed it.
      */
     desktopNextScheduleBundle?: number
+    /** Company bundle selection is a one-time default, never a standing policy. */
+    desktopNextCompanyPluginDefaults?: number
     desktopNextOnboarding?: { version: number; outcome: 'completed' | 'skipped'; accountPending?: boolean }
     profile: { bundles: string[] }
   }
@@ -209,6 +213,7 @@ export class NextProfiles {
       }
     } else this.setFeatures(name, initialProfileFeatures())
     this.migrateSchedule(name)
+    this.migrateCompanyPluginDefaults(name)
     return dir
   }
   create(name: string): string {
@@ -218,6 +223,7 @@ export class NextProfiles {
     initProfile(dir, WEB_BUNDLES)
     this.setFeatures(name, initialProfileFeatures())
     this.migrateSchedule(name)
+    this.migrateCompanyPluginDefaults(name)
     return dir
   }
   features(name: string): Features {
@@ -321,6 +327,26 @@ export class NextProfiles {
     manifest.dsh.desktopNextScheduleBundle = 2
     atomicJson(join(this.directory(name), 'package.json'), manifest)
   }
+  /**
+   * Select Company plugins once per Profile. Their published bundle patches
+   * supply the complete component graph; this only records the two roots.
+   * A user-owned disabled row is respected, and after this marker is written
+   * removing a bundle remains a durable opt-out.
+   */
+  private migrateCompanyPluginDefaults(name: string): void {
+    if (!DESKTOP_COMPANY_SERVICE_ENABLED) return
+    const manifest = this.manifest(name)
+    if (manifest.dsh.desktopNextCompanyPluginDefaults === 1) return
+    const patchPath = join(this.directory(name), 'cordis.patch.yml')
+    const patches = existsSync(patchPath) ? loadOverlayPatches('dsh-plugin-desktop-beta', patchPath) : []
+    for (const bundle of COMPANY_DEFAULT_PLUGIN_BUNDLES) {
+      if (!manifest.dsh.profile.bundles.includes(bundle) && !hasExplicitCompanyPluginDisable(patches, bundle)) {
+        manifest.dsh.profile.bundles.push(bundle)
+      }
+    }
+    manifest.dsh.desktopNextCompanyPluginDefaults = 1
+    atomicJson(join(this.directory(name), 'package.json'), manifest)
+  }
   private manifest(name: string): ProfileManifest {
     const value = JSON.parse(readPrivateFile(join(this.directory(name), 'package.json')) ?? 'null')
     if (!value || !Array.isArray(value.dsh?.profile?.bundles) || value.dsh.profile.bundles.some((item: unknown) => typeof item !== 'string')) throw new Error('Invalid Next Profile manifest')
@@ -389,7 +415,7 @@ export function loadNextProfile(projectDir: string, home: string, installAnchor 
   if (linkTarget !== undefined && !lstatSync(link, { throwIfNoEntry: false })) symlinkSync(linkTarget, link, 'junction')
   const profile = loadProfileDirectory('dsh-plugin-desktop-beta', projectDir, installAnchor)
   profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir: target,
-    patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches() })
+    patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches(home, installAnchor) })
   profile.patches.push(...companyAccountUiPolicyPatches())
   profile.patches.push(...companyWebFetchPolicyPatches(profile.patches))
   const overlay = [
@@ -434,7 +460,7 @@ function archivedAgentsAnywhereConfig(installAnchor: string): { connectorSourceD
 export function readNextProfilePatches(projectDir: string, home: string, overlays: readonly string[], profilePatches?: readonly Profile['patches'][number][]) {
   const profile = loadProfileDirectory('dsh-plugin-desktop-beta', projectDir, NEXT_PACKAGE, { userLayer: false })
   profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir: dirname(NEXT_PACKAGE),
-    patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches() })
+    patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches(home, NEXT_PACKAGE) })
   profile.patches = profilePatches === undefined
     ? existsSync(profile.patchPath) ? loadOverlayPatches('dsh-plugin-desktop-beta', profile.patchPath) : []
     : [...profilePatches]

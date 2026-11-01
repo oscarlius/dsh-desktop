@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { applyEntryPatches } from '@deepseek-ai/cordis-plugin-include'
-import { loadNextProfile, NextProfiles, readNextProfilePatches } from '../src/profiles.ts'
+import { loadNextProfile, NEXT_PACKAGE, NextProfiles, readNextProfilePatches } from '../src/profiles.ts'
+import { COMPANY_DEFAULT_PLUGIN_BUNDLES, companyMnemonCliPath } from '../src/company-plugin-defaults.ts'
 
 it('patches the existing Web module without creating a nameless duplicate', () => {
   const home = mkdtempSync(join(tmpdir(), 'company-composition-'))
@@ -99,5 +100,82 @@ it('retains explicit DeepSeek API provider and row enablement choices', () => {
     ]))
     rows = applyEntryPatches([], readNextProfilePatches(directory, home, []), () => {})
     expect(rows.find(row => row.id === 'web-deepseek-api')).toMatchObject({ disabled: true })
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+it('selects complete Company plugin bundles once while preserving Profile opt-outs and live settings', () => {
+  const home = mkdtempSync(join(tmpdir(), 'company-plugin-defaults-'))
+  try {
+    const manager = new NextProfiles(home)
+    const directory = manager.ensure('desktop')
+    const manifestPath = join(directory, 'package.json')
+    let manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    for (const bundle of COMPANY_DEFAULT_PLUGIN_BUNDLES) expect(manifest.dsh.profile.bundles).toContain(bundle)
+    expect(manifest.dsh.desktopNextCompanyPluginDefaults).toBe(1)
+
+    const profile = loadNextProfile(directory, home)
+    for (const bundle of COMPANY_DEFAULT_PLUGIN_BUNDLES) {
+      expect(profile.layers.filter(layer => layer.packageName === bundle)).toHaveLength(1)
+    }
+    let patches = readNextProfilePatches(directory, home, [])
+    let rows = applyEntryPatches([], patches, () => {})
+    expect(rows.filter(row => row.id === 'better-sidebar')).toHaveLength(1)
+    expect(rows.find(row => row.id === 'better-sidebar')).toMatchObject({ config: { autoOpenSubagent: false, autoOpenJobs: false } })
+    // Mnemon's published bundle intentionally nests its components beneath a
+    // group. The loader expands that group; our top-level overrides must stay
+    // separate rather than duplicate its Sources/Strategies insertion.
+    expect(patches.find(row => row.id === 'mnemon')).toMatchObject({ config: {
+      idleReview: { enabled: false }, embedding: { enabled: false }, storageScope: 'workspaces', dataDir: join(home, 'mnemon'),
+      cliPath: companyMnemonCliPath(NEXT_PACKAGE),
+      skills: { evolution: false, autoBacktest: false },
+    } })
+    expect(patches.find(row => row.id === 'mnemon-source-skills')).toMatchObject({ disabled: true })
+
+    // Volatile Settings writes live in the Profile patch and take precedence
+    // over Company first-run defaults on every reload.
+    writeFileSync(join(directory, 'cordis.patch.yml'), JSON.stringify([
+      { id: 'better-sidebar', config: { autoOpenSubagent: true, autoOpenJobs: true } },
+      { id: 'mnemon', config: { idleReview: { enabled: true }, skills: { evolution: true, autoBacktest: true } } },
+    ]))
+    patches = readNextProfilePatches(directory, home, [])
+    rows = applyEntryPatches([], patches, () => {})
+    expect(rows.find(row => row.id === 'better-sidebar')).toMatchObject({ config: { autoOpenSubagent: true, autoOpenJobs: true } })
+    expect(patches.filter(row => row.id === 'mnemon').at(-1)).toMatchObject({ config: {
+      idleReview: { enabled: true }, skills: { evolution: true, autoBacktest: true },
+    } })
+
+    // Once migrated, an intentional bundle removal remains an opt-out.
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((bundle: string) => bundle !== 'dsh-mnemon')
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+    manager.ensure('desktop')
+    expect(JSON.parse(readFileSync(manifestPath, 'utf8')).dsh.profile.bundles).not.toContain('dsh-mnemon')
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+it('resolves Mnemon from the app-owned platform package instead of a global command', () => {
+  const path = companyMnemonCliPath(NEXT_PACKAGE)
+  expect(path?.replaceAll('\\', '/')).toMatch(new RegExp(`@mnemon-dev/mnemon-${process.platform}-${process.arch}/bin/mnemon${process.platform === 'win32' ? '\\.exe' : ''}$`, 'u'))
+})
+
+it('honors a legacy explicit Company plugin disable before its one-time migration', () => {
+  const home = mkdtempSync(join(tmpdir(), 'company-plugin-opt-out-'))
+  try {
+    const manager = new NextProfiles(home)
+    const directory = manager.create('desktop')
+    writeFileSync(join(directory, 'cordis.patch.yml'), JSON.stringify([
+      { id: 'better-sidebar', disabled: true },
+      { id: 'mnemon', disabled: true },
+    ]))
+    // Simulate a Profile created before the Company defaults migration.
+    const manifestPath = join(directory, 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter((bundle: string) => !new Set<string>(COMPANY_DEFAULT_PLUGIN_BUNDLES).has(bundle))
+    delete manifest.dsh.desktopNextCompanyPluginDefaults
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+    manager.ensure('desktop')
+    const migrated = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    expect(migrated.dsh.profile.bundles).not.toEqual(expect.arrayContaining([...COMPANY_DEFAULT_PLUGIN_BUNDLES]))
+    expect(migrated.dsh.desktopNextCompanyPluginDefaults).toBe(1)
   } finally { rmSync(home, { recursive: true, force: true }) }
 })

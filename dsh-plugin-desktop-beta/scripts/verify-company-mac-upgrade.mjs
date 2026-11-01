@@ -81,6 +81,13 @@ try {
     // ditto preserves the relative symlinks inside Electron framework bundles.
     await execute('/usr/bin/ditto', [apps[0], installed], { timeout: 5 * 60_000 })
   } finally { await detach(mount) }
+  // Exercise the actual unpacked native memory executable from the DMG.
+  const memoryCli = join(installed, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules', '@mnemon-dev', `mnemon-darwin-${process.arch}`, 'bin', 'mnemon')
+  const memoryDir = join(temporary, 'native-memory')
+  const memoryMarker = 'company-local-memory-2026110101'
+  await execute(memoryCli, ['--data-dir', memoryDir, 'remember', memoryMarker, '--no-diff'], { timeout: 15_000 })
+  const recalled = await execute(memoryCli, ['--data-dir', memoryDir, 'recall', memoryMarker, '--basic'], { timeout: 15_000 })
+  assert.ok(recalled.stdout.includes(memoryMarker), 'the packaged native memory must retain and retrieve its record')
   const before = await lstat(installed)
   // These are the actual Company home and Electron user-data roots selected by
   // the launch environment, rather than unrelated temporary marker files.

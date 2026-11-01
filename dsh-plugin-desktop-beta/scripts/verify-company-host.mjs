@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {copyFileSync,mkdtempSync,writeFileSync,readFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {pathToFileURL} from 'node:url';
@@ -26,11 +27,36 @@ try{
  const ready=await Promise.race([host.start(),new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('Cold Host boot timeout')),30000);timer.unref();})]);
  const auth=await fetch(ready.url,{redirect:'manual'});const cookie=auth.headers.get('set-cookie')?.split(';')[0];await auth.body?.cancel();assert.ok(cookie);
  const origin=new URL(ready.url).origin;
- const rpc=async(method,args={})=>{const response=await fetch(origin+'/api/pluginManager/'+method,{method:'POST',headers:{cookie,origin,'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method:'pluginManager/'+method,payload:{args}})});const reply=await response.json();assert.equal(reply.result?.ok,true,JSON.stringify(reply));return reply.result.value;};
+ const remote=async(namespace,method,args={})=>{const response=await fetch(origin+'/api/'+namespace+'/'+method,{method:'POST',headers:{cookie,origin,'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method:namespace+'/'+method,payload:{args}})});const reply=await response.json();assert.equal(reply.result?.ok,true,JSON.stringify(reply));return reply.result.value;};
+ const rpc=(method,args={})=>remote('pluginManager',method,args);
  const rows=await rpc('listPlugins');
  for(const moduleName of ['dsh-plugin-p7-company-models','dsh-plugin-p7-web-search','dsh-plugin-p7-mcp','dsh-streamfold']){
    const row=rows.find(row=>row.moduleName===moduleName);assert.equal(row?.fiberPhase,'active',JSON.stringify(row));report.checks.push({name:moduleName+' active',pass:true});
  }
+ for(const moduleName of ['dsh-better-sidebar','dsh-mnemon','dsh-mnemon-source-runtime','dsh-mnemon-source-documents','dsh-mnemon-source-memory-spaces','dsh-mnemon-strategy-default-three-tier']){
+   const matches=rows.filter(row=>row.moduleName===moduleName&&row.fiberPhase==='active');assert.equal(matches.length,1,JSON.stringify({moduleName,matches,rows:rows.filter(row=>row.moduleName===moduleName)}));
+   report.checks.push({name:moduleName+' is active exactly once',pass:true});
+ }
+ assert.ok(!rows.some(row=>row.moduleName==='dsh-mnemon-source-skills'&&row.fiberPhase==='active'),'Keep the existing Desktop Skill manager');
+ const described=await remote('settings','describe');
+ const sidebar=described.namespaces.find(row=>row.ns==='better-sidebar');
+ const memory=described.namespaces.find(row=>row.ns==='mnemon');
+ assert.ok(sidebar&&memory,JSON.stringify(described.namespaces.map(row=>row.ns)));
+ assert.equal(sidebar.value.autoOpenSubagent,false);assert.equal(sidebar.value.autoOpenJobs,false);
+ assert.equal(memory.value.idleReview.enabled,false);assert.equal(memory.value.embedding.enabled,false);
+ report.checks.push({name:'sidebar auto-open and memory background review disabled',pass:true});
+ assert.equal(memory.value.storageScope,'workspaces');assert.equal(memory.value.dataDir,join(home,'mnemon'));
+ assert.ok(memory.value.cliPath,'Native memory CLI must be bundled');
+ const memoryStore=join(home,'mnemon','verification-store');
+ // Yarn's development cache can carry a Windows Low Integrity label. The
+ // installer materializes the same bytes into its normal application directory.
+ const cliExecutable=process.platform==='win32'?join(output,'mnemon.exe'):memory.value.cliPath;
+ if(process.platform==='win32')copyFileSync(memory.value.cliPath,cliExecutable);
+ const cli=(args)=>{const result=spawnSync(cliExecutable,['--data-dir',memoryStore,...args],{encoding:'utf8',timeout:10000,windowsHide:true});assert.equal(result.status,0,result.stderr);return result.stdout;};
+ const marker='company-local-memory-2026110101';
+ cli(['remember',marker,'--no-diff','--source','user']);
+ assert.ok(cli(['recall',marker,'--basic']).includes(marker),'local memory must retrieve a stored record');
+ report.checks.push({name:'bundled native memory writes and recalls locally in isolated company storage',pass:true});
  const httpFetch=rows.find(row=>row.moduleName==='@deepseek-ai/dsh-web-fetch-http');
  assert.equal(httpFetch?.fiberPhase,'active','Company HTTP fetch provider must be active');
  assert.ok(!rows.some(row=>row.moduleName==='@deepseek-ai/dsh-web-deepseek-api'&&row.fiberPhase==='active'),'Unused DeepSeek API must not be active in a fresh Company profile');

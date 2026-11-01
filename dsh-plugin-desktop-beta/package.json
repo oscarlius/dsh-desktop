@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.30-beta.15",
-  "dshCompanyCompatibilityBuild": "2026103003",
+  "version": "2.0.31-beta.15",
+  "dshCompanyCompatibilityBuild": "2026110101",
   "dshDesktopFlavor": "companytest",
   "private": true,
   "description": "Desktop Beta integration for the DeepSeek Harness",
@@ -230,12 +230,15 @@
     "@deepseek-ai/dsh-working-directory": "0.2.1-rc.3",
     "@deepseek-ai/dsh-workspace": "0.2.1-rc.3",
     "@deepseek-ai/schemastery": "^3.18.5",
+    "@mnemon-dev/mnemon": "0.2.13",
+    "dsh-better-sidebar": "0.28.2",
     "dsh-community-market": "0.1.0-dev.0",
+    "dsh-mnemon": "0.5.37",
     "dsh-plugin-p7-company-models": "workspace:*",
     "dsh-plugin-p7-mcp": "workspace:*",
     "dsh-plugin-p7-web-search": "workspace:*",
     "dsh-streamfold": "0.7.9",
-    "dshmarket": "1.73.5",
+    "dshmarket": "1.73.7",
     "electron-updater": "6.8.9",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-gfm": "^3.1.0",
@@ -409,7 +412,7 @@
         "\\.(?:pak|dat|wasm)$",
         "/Contents/Resources/runtime/(?:arm64|x64)/primary-runtime(?:/|$)"
       ],
-      "x64ArchFiles": "{**/node_modules/{@dataiku/uv-darwin-*/**,@deepseek-ai/node-addon-system-darwin-*/**,node-pty/prebuilds/darwin-*/**,fs-ext/prebuilds/darwin-*/**,node-addon-require-builtin-darwin-*/**,@vscode/ripgrep-darwin-*/**,@img/sharp-darwin-*/**,@img/sharp-libvips-darwin-*/**,@koromix/koffi-darwin-*/**,@deepseek-ai/libreoffice-kit-darwin-*/**,meshcall-router-darwin-*/**,sherpa-onnx-darwin-*/**,@trycua/cua-driver-darwin-*/**,@ubjs/node-darwin-*/**,@reflink/reflink-darwin-*/**},Contents/Resources/runtime/**,Contents/Resources/runtime/**/.*/**}"
+      "x64ArchFiles": "{**/node_modules/{@dataiku/uv-darwin-*/**,@mnemon-dev/mnemon-darwin-*/**,@deepseek-ai/node-addon-system-darwin-*/**,node-pty/prebuilds/darwin-*/**,fs-ext/prebuilds/darwin-*/**,node-addon-require-builtin-darwin-*/**,@vscode/ripgrep-darwin-*/**,@img/sharp-darwin-*/**,@img/sharp-libvips-darwin-*/**,@koromix/koffi-darwin-*/**,@deepseek-ai/libreoffice-kit-darwin-*/**,meshcall-router-darwin-*/**,sherpa-onnx-darwin-*/**,@trycua/cua-driver-darwin-*/**,@ubjs/node-darwin-*/**,@reflink/reflink-darwin-*/**},Contents/Resources/runtime/**,Contents/Resources/runtime/**/.*/**}"
     },
     "win": {
       "compression": "normal",
@@ -488,7 +491,8 @@
       "**/node_modules/pnpm/**/*",
       ".desktop-build/payload/scripts/node-bin/**/*",
       ".desktop-build/payload/assets/**/*",
-      ".desktop-build/payload/build/**/*"
+      ".desktop-build/payload/build/**/*",
+      "**/@mnemon-dev/mnemon-*/bin/mnemon"
     ]
   }
 }
