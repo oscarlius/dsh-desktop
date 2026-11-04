@@ -31,6 +31,8 @@ export interface NextUpdateOptions {
   launchAutomatic?(): Promise<void>
   /** Windows automatic update is allowed only after a current-user install preflight. */
   canAutomaticApply?(): Promise<boolean>
+  /** A verified Windows sidecar owns replacement; do not boot the old Host beside it. */
+  automaticInProgress?(directory: string): Promise<boolean>
   /** Company feed/download ownership; omitted for ordinary upstream Beta builds. */
   company?: CompanyUpdateAdapter
 }
@@ -213,7 +215,15 @@ export class NextUpdates {
     const cache = join(this.options.userData, this.options.company.identity.cacheName)
     let pending
     try { pending = readPendingCompanyUpdate(cache) } catch (error) { this.options.log(error); return false }
-    if (!pending || pending.status !== 'pending' || pending.attempts !== 0 || pending.platform !== this.options.platform || pending.installPath !== this.installPath()) return false
+    if (!pending || pending.platform !== this.options.platform || pending.installPath !== this.installPath()) return false
+    if (pending.status === 'applying' && pending.platform === 'win32' && pending.version !== this.options.version) {
+      try {
+        if (await this.options.automaticInProgress?.(pending.installerDirectory)) return true
+        markPendingCompanyUpdate(cache, pending, 'failed')
+      } catch (error) { this.options.log(error) }
+      return false
+    }
+    if (pending.status !== 'pending' || pending.attempts !== 0) return false
     let attempted = false
     let applied = pending
     try {

@@ -9,7 +9,7 @@ import { DEFAULT_PREFERENCES, type DesktopState } from '../src/desktop-contract.
 import { NextUpdates, type NextUpdateOptions } from '../src/updates.ts'
 import { serveMacUpdate } from '../src/mac-update-feed.ts'
 import { updateAction, updateLabel } from '../src/update-state.ts'
-import { readPendingCompanyUpdate } from '../src/pending-update.ts'
+import { markPendingCompanyUpdate, readPendingCompanyUpdate } from '../src/pending-update.ts'
 import type { UpdateRequest } from '../../dsh-plugin-desktop/src/update-checker.ts'
 import type { UpdateArtifactRequest } from '../../dsh-plugin-desktop/src/update-download.ts'
 
@@ -154,6 +154,34 @@ it('marks a launched pending update failed and never launches it a second time',
   expect(readPendingCompanyUpdate(cache)).toMatchObject({ status: 'failed', attempts: 1 })
   expect(await restarted.applyPendingOnNextLaunch()).toBe(false)
   expect(launchAutomatic).toHaveBeenCalledOnce()
+})
+it('keeps the old Beta process out of Host startup while a verified Windows handoff is active', async () => {
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 9 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: async (_r: typeof release, directory: string) => { const path = join(directory, 'update.exe'); await writeFile(path, 'installer'); return path }, verify: vi.fn(async () => {}) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download(); await updates.dispose()
+  const cache = join(options.userData, 'company-cache'); const pending = readPendingCompanyUpdate(cache)!
+  markPendingCompanyUpdate(cache, pending, 'applying')
+  const stage = vi.fn(async () => {}); const launchAutomatic = vi.fn(async () => {})
+  const restarted = new NextUpdates({ ...options, version: '2.0.19-beta.1', company: company as never, stage, launchAutomatic, automaticInProgress: vi.fn(async () => true) }); owners.push(restarted)
+  await expect(restarted.applyPendingOnNextLaunch()).resolves.toBe(true)
+  expect(stage).not.toHaveBeenCalled(); expect(launchAutomatic).not.toHaveBeenCalled()
+  expect(readPendingCompanyUpdate(cache)).toMatchObject({ status: 'applying', attempts: 1 })
+})
+
+it('marks a dead Windows handoff failed without re-running automatic installation', async () => {
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 9 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: async (_r: typeof release, directory: string) => { const path = join(directory, 'update.exe'); await writeFile(path, 'installer'); return path }, verify: vi.fn(async () => {}) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download(); await updates.dispose()
+  const cache = join(options.userData, 'company-cache'); markPendingCompanyUpdate(cache, readPendingCompanyUpdate(cache)!, 'applying')
+  const stage = vi.fn(async () => {}); const launchAutomatic = vi.fn(async () => {})
+  const restarted = new NextUpdates({ ...options, version: '2.0.19-beta.1', company: company as never, stage, launchAutomatic, automaticInProgress: vi.fn(async () => false) }); owners.push(restarted)
+  await expect(restarted.applyPendingOnNextLaunch()).resolves.toBe(false)
+  expect(readPendingCompanyUpdate(cache)).toMatchObject({ status: 'failed', attempts: 1 })
+  expect(stage).not.toHaveBeenCalled(); expect(launchAutomatic).not.toHaveBeenCalled()
 })
 it('shows progress and an actionable downloaded state in both languages', () => {
   expect(updateLabel({ phase: 'downloading', installable: true, received: 25, total: 100 }, 'zh-CN')).toContain('25%')

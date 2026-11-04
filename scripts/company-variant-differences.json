@@ -214,7 +214,7 @@
     },
     {
       "path": "src/main.ts",
-      "betaSha256": "3a3756b52749eef9ec413fc34f00c3cde5990b3b4ac31583b18539aa53105cbd",
+      "betaSha256": "dcb408304005fa1fa63b9183aad1ca482da5dd7a5b585ce0fda8a30206e5b0e9",
       "nextSha256": "e4a50b19ab3e30cbe0dd8032dc3a02552450ef52e0649ee185d4abe2385b5ac5",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },
@@ -262,7 +262,7 @@
     },
     {
       "path": "src/updates.ts",
-      "betaSha256": "89e2555ba10ecf28ffb53421507a6e290482b3d2ecc13443b5c0b6461bafc7f3",
+      "betaSha256": "8cff06f788478b510037cb5aa3b0fc1cb05b3b2a46c997566dc6d1effb3f4eb0",
       "nextSha256": "917b2a48c6a7379e94f5219efb805a2bd76b673b186a14f3f19faa4dbfbb1dab",
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
@@ -418,7 +418,7 @@
     },
     {
       "path": "tests/updates.spec.ts",
-      "betaSha256": "c5b62c818cd413fa9ab97ecaf63f18d15429361b24a5ef18a024e8a0d1186d7d",
+      "betaSha256": "7a5dfb37daf50cb0caad1f602be040c554f5678da24b61eec5fa244b6f58c144",
       "nextSha256": "4c5c18cb9c8deb629370c3e581c733f7af3d64fa936d39b805b3e7b05c081759",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

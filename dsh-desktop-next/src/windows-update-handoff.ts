@@ -1,6 +1,6 @@
 /** Fail-closed, current-user-only Windows installer handoff for silent company updates. */
 import { execFile, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { access, lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve, win32 } from 'node:path'
@@ -14,17 +14,47 @@ const encoded = (script: string): string => Buffer.from(script, 'utf16le').toStr
 export const WINDOWS_UPDATE_HANDOFF_SCRIPT = [
   '$ErrorActionPreference = "Stop"',
   '$installer = $env:DSH_UPDATE_INSTALLER; $oldExe = $env:DSH_UPDATE_OLD_EXE; $installRoot = $env:DSH_UPDATE_INSTALL_ROOT; $status = $env:DSH_UPDATE_STATUS; $cancelled = $env:DSH_UPDATE_CANCELLED; $parent = [int]$env:DSH_UPDATE_PARENT_PID',
+  '$self = Get-Process -Id $PID -ErrorAction Stop; $helperPid = [int]$PID; $helperStartTicks = [string]$self.StartTime.Ticks; $installerPid = $null; $installerStartTicks = $null',
   'if (Test-Path -LiteralPath $cancelled) { exit 2 }',
-  'function Write-Status([string]$phase, [string]$detail = "") { $json = @{ phase = $phase; detail = $detail.Substring(0, [Math]::Min(240, $detail.Length)) } | ConvertTo-Json -Compress; $tmp = "$status.tmp"; [IO.File]::WriteAllText($tmp, $json, [Text.UTF8Encoding]::new($false)); Move-Item -LiteralPath $tmp -Destination $status -Force }',
+  'function Write-Status([string]$phase, [string]$detail = "") { $value = @{ phase = $phase; detail = $detail.Substring(0, [Math]::Min(240, $detail.Length)); helperPid = $helperPid; helperStartTicks = $helperStartTicks }; if ($null -ne $installerPid) { $value.installerPid = $installerPid; $value.installerStartTicks = $installerStartTicks }; $json = $value | ConvertTo-Json -Compress; $tmp = "$status.tmp"; [IO.File]::WriteAllText($tmp, $json, [Text.UTF8Encoding]::new($false)); Move-Item -LiteralPath $tmp -Destination $status -Force }',
   'try { if (!(Test-Path -LiteralPath $installer -PathType Leaf) -or !(Test-Path -LiteralPath $oldExe -PathType Leaf) -or !(Test-Path -LiteralPath $installRoot -PathType Container)) { throw "handoff paths are unavailable" }; $parentProcess=Get-Process -Id $parent -ErrorAction SilentlyContinue; if ($parentProcess) { $null=$parentProcess.Handle }; Write-Status "ready" } catch { Write-Status "failed" $_.Exception.Message; exit 1 }',
   // Open the original process before acknowledging readiness. A process can
   // remain queryable after exit, and a PID can later belong to another process.
   'if ($parentProcess -and !$parentProcess.WaitForExit(90000)) { Write-Status "parent-timeout"; exit 2 }',
   'if (Test-Path -LiteralPath $cancelled) { Write-Status "cancelled"; exit 2 }',
-  '$child = $null; try { $child = Start-Process -FilePath $installer -ArgumentList @("/S", "/currentuser", "--company-auto-update", "--updated", "--force-run", "/D=$installRoot") -WindowStyle Hidden -PassThru; $installerDeadline = [DateTime]::UtcNow.AddMinutes(10); while (!$child.HasExited -and [DateTime]::UtcNow -lt $installerDeadline) { Start-Sleep -Milliseconds 200; $child.Refresh() }; if (!$child.HasExited) { Write-Status "installer-timeout"; exit 4 }; if ($child.ExitCode -ne 0) { throw "installer exit $($child.ExitCode)" }; Write-Status "installed" } catch { Write-Status "failed" $_.Exception.Message; if ($null -eq $child -or $child.HasExited) { try { Start-Process -FilePath $oldExe -WindowStyle Hidden } catch {} }; exit 3 }',
+  '$child = $null; try { $child = Start-Process -FilePath $installer -ArgumentList @("/S", "/currentuser", "--company-auto-update", "--updated", "--force-run", "/D=$installRoot") -WindowStyle Hidden -PassThru; $installerPid = [int]$child.Id; $installerStartTicks = [string]$child.StartTime.Ticks; Write-Status "installing"; $installerDeadline = [DateTime]::UtcNow.AddMinutes(10); while (!$child.HasExited -and [DateTime]::UtcNow -lt $installerDeadline) { Start-Sleep -Milliseconds 200; $child.Refresh() }; if (!$child.HasExited) { Write-Status "installer-timeout"; exit 4 }; if ($child.ExitCode -ne 0) { throw "installer exit $($child.ExitCode)" }; Write-Status "installed" } catch { Write-Status "failed" $_.Exception.Message; if ($null -eq $child -or $child.HasExited) { try { Start-Process -FilePath $oldExe -WindowStyle Hidden } catch {} }; exit 3 }',
 ].join('\n')
 
 export type WindowsHandoffOptions = Readonly<{ executable: string; installer: string; parentPid?: number; statusDirectory?: string }>
+
+type HandoffStatus = Readonly<{ phase: 'ready' | 'installing' | 'installer-timeout'; helperPid: number; helperStartTicks: string; installerPid?: number; installerStartTicks?: string }>
+const validIdentity = (pid: unknown, ticks: unknown): pid is number => Number.isSafeInteger(pid) && Number(pid) > 0 && typeof ticks === 'string' && /^[1-9][0-9]{12,}$/u.test(ticks)
+function parseActiveStatus(directory: string): HandoffStatus | undefined {
+  const status = join(directory, 'status.json')
+  try {
+    const info = lstatSync(status, { throwIfNoEntry: false })
+    if (!info?.isFile() || info.isSymbolicLink() || info.size > 4096) return undefined
+    const value = JSON.parse(readFileSync(status, 'utf8').replace(/^\uFEFF/u, '')) as Record<string, unknown>
+    if (!['ready', 'installing', 'installer-timeout'].includes(String(value.phase)) || !validIdentity(value.helperPid, value.helperStartTicks)) return undefined
+    if ((value.installerPid !== undefined || value.installerStartTicks !== undefined) && !validIdentity(value.installerPid, value.installerStartTicks)) return undefined
+    return value as HandoffStatus
+  } catch { return undefined }
+}
+
+/** Proves a bounded status record still names the exact live handoff process(es), defeating PID reuse. */
+export async function isWindowsUpdateHandoffActive(directory: string): Promise<boolean> {
+  if (process.platform !== 'win32') return false
+  const status = parseActiveStatus(directory)
+  if (!status) return false
+  const script = '$ErrorActionPreference="Stop"; function Live($targetPid,$ticks) { try { $p=Get-Process -Id $targetPid -ErrorAction Stop; return !$p.HasExited -and ([string]$p.StartTime.Ticks -eq $ticks) } catch { return $false } }; $helper=Live ([int]$env:DSH_UPDATE_HELPER_PID) $env:DSH_UPDATE_HELPER_TICKS; $installer=$false; if($env:DSH_UPDATE_INSTALLER_PID){ $installer=Live ([int]$env:DSH_UPDATE_INSTALLER_PID) $env:DSH_UPDATE_INSTALLER_TICKS }; if($helper -or $installer){ exit 0 }; exit 1'
+  try {
+    await execute(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded(script)], { timeout: 5_000, windowsHide: true, env: { ...process.env,
+      DSH_UPDATE_HELPER_PID: String(status.helperPid), DSH_UPDATE_HELPER_TICKS: status.helperStartTicks,
+      ...(status.installerPid === undefined ? {} : { DSH_UPDATE_INSTALLER_PID: String(status.installerPid), DSH_UPDATE_INSTALLER_TICKS: status.installerStartTicks! }),
+    } })
+    return true
+  } catch { return false }
+}
 
 /** Proves an automatic handoff targets exactly a writable HKCU installer root. */
 export async function canAutomaticWindowsApply(executable: string, productName: string): Promise<boolean> {

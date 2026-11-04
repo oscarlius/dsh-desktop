@@ -46,7 +46,7 @@ import { createCompanyUpdateAdapter } from './company-updates.ts'
 import { companyBuildVersion } from './company-build-version.ts'
 import { createArtifactRequest } from './update-transport.ts'
 import { NextUpdateInstaller } from './update-installer.ts'
-import { canAutomaticWindowsApply } from './windows-update-handoff.ts'
+import { canAutomaticWindowsApply, isWindowsUpdateHandoffActive } from './windows-update-handoff.ts'
 import { updateLabel } from './update-state.ts'
 import { DESKTOP_SHUTDOWN_TIMEOUT_MS } from '../../dsh-plugin-desktop/src/shutdown.ts'
 import { isDesktopRendererStatus, NextRendererRecovery } from './renderer-recovery.ts'
@@ -265,6 +265,7 @@ const updates = new NextUpdates({ version, platform: process.platform, packaged:
   stage: () => updateInstaller.stage(),
   launchAutomatic: () => updateInstaller.launch(true),
   canAutomaticApply: () => canAutomaticWindowsApply(process.execPath, DESKTOP_PRODUCT_NAME),
+  ...(DESKTOP_COMPANY_SERVICE_ENABLED && process.platform === 'win32' ? { automaticInProgress: isWindowsUpdateHandoffActive } : {}),
   install: async () => {
     runtime.busy = true; native.refresh()
     try {

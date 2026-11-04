@@ -22,6 +22,13 @@ Var companyAutoUpdate
     Goto dsh_installer_app_stopped
   ${endIf}
 
+  ${if} $companyAutoUpdate == "1"
+    ; Another launch can appear after the original update owner exits. Wait
+    ; for it naturally; automatic maintenance must not ask its Agent to quit.
+    StrCpy $R1 0
+    Goto dsh_installer_wait_for_exit
+  ${endIf}
+
   IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0 dsh_installer_scoped_fallback
     ; Newer versions receive this through Electron's single-instance channel.
     ; 2.0.2 ignores it, so the scoped builder fallback remains necessary for

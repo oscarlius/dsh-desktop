@@ -8,7 +8,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 // This is a process-level harness; never inherit the mocked child_process used
 // by updater unit tests when Vitest reuses a worker.
 vi.unmock('node:child_process')
-const { canAutomaticWindowsApply, launchWindowsUpdateHandoff } = await import('../src/windows-update-handoff.ts')
+const { canAutomaticWindowsApply, launchWindowsUpdateHandoff, isWindowsUpdateHandoffActive } = await import('../src/windows-update-handoff.ts')
 const execute = promisify(execFile)
 const powershell = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe')
 const encoded = (script: string): string => Buffer.from(script, 'utf16le').toString('base64')
@@ -64,6 +64,13 @@ it.skipIf(process.platform !== 'win32')('waits for the exact parent exit before 
   const parent = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 8'], { windowsHide: true })
   try {
     await launchWindowsUpdateHandoff({ executable: oldExe, installer, parentPid: parent.pid!, statusDirectory: root })
+    expect(await isWindowsUpdateHandoffActive(root)).toBe(true)
+    const ready = JSON.parse(await readFile(join(root, 'status.json'), 'utf8'))
+    await writeFile(join(root, 'status.json'), JSON.stringify({ ...ready, helperStartTicks: '10000000000000000' }))
+    expect(await isWindowsUpdateHandoffActive(root)).toBe(false)
+    await writeFile(join(root, 'status.json'), JSON.stringify({ ...ready, phase: 'installer-timeout', helperPid: 2147483647, helperStartTicks: '10000000000000000', installerPid: ready.helperPid, installerStartTicks: ready.helperStartTicks }))
+    expect(await isWindowsUpdateHandoffActive(root)).toBe(true)
+    await writeFile(join(root, 'status.json'), JSON.stringify(ready))
     await new Promise(resolve => setTimeout(resolve, 300))
     await expect(readFile(marker, 'utf8')).rejects.toThrow()
     parent.kill()
