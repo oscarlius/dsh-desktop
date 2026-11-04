@@ -262,7 +262,7 @@
     },
     {
       "path": "src/updates.ts",
-      "betaSha256": "8cff06f788478b510037cb5aa3b0fc1cb05b3b2a46c997566dc6d1effb3f4eb0",
+      "betaSha256": "e995c914b853cb2c3eb0d077d09c5ef2fc60da8750926d70b35e14520ec79945",
       "nextSha256": "917b2a48c6a7379e94f5219efb805a2bd76b673b186a14f3f19faa4dbfbb1dab",
       "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
     },
@@ -418,7 +418,7 @@
     },
     {
       "path": "tests/updates.spec.ts",
-      "betaSha256": "7a5dfb37daf50cb0caad1f602be040c554f5678da24b61eec5fa244b6f58c144",
+      "betaSha256": "c3d54771c243bfc4157fc8a5e3dd05ce15e710e19b272af73af41e62b05a5b41",
       "nextSha256": "4c5c18cb9c8deb629370c3e581c733f7af3d64fa936d39b805b3e7b05c081759",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

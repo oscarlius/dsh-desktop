@@ -141,6 +141,22 @@ it('keeps the pending transaction untouched when Windows current-user preflight 
   expect(readPendingCompanyUpdate(join(options.userData, 'company-cache'))).toMatchObject({ status: 'pending', attempts: 0 })
   expect(stage).not.toHaveBeenCalled(); expect(launchAutomatic).not.toHaveBeenCalled()
 })
+
+it('owns a verified copy of the electron-updater cache while retaining its differential base', async () => {
+  const globalCache = await mkdtemp(join(tmpdir(), 'company-electron-delta-cache-')); roots.push(globalCache)
+  const cached = join(globalCache, 'update.exe'); await writeFile(cached, 'verified delta installer')
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 24 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: vi.fn(async () => cached), verify: vi.fn(async (path: string) => { expect(await readFile(path, 'utf8')).toBe('verified delta installer') }) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download()
+  expect(updates.snapshot()).toMatchObject({ phase: 'ready' })
+  const pending = readPendingCompanyUpdate(join(options.userData, 'company-cache'))!
+  expect(pending.installerPath).not.toBe(cached)
+  expect(pending.installerPath).toBe(join(pending.installerDirectory, 'P7-DSH-Company-Test-2.0.20-beta.2-x64-Setup.exe'))
+  expect(await readFile(cached, 'utf8')).toBe('verified delta installer')
+  expect(company.verify).toHaveBeenCalledWith(pending.installerPath, release, expect.any(AbortSignal))
+})
 it('marks a launched pending update failed and never launches it a second time', async () => {
   const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 9 }
   const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),

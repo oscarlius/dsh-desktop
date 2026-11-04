@@ -1,6 +1,7 @@
 /** Main-process update ownership survives a stopped or broken Profile Host. */
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { constants } from 'node:fs'
+import { copyFile, lstat, mkdtemp, readdir, rm } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { checkForDesktopUpdate, type UpdateRequest } from '../../dsh-plugin-desktop/src/update-checker.ts'
 import { desktopUpdateFilename, downloadDesktopUpdate, type UpdateArtifactRequest } from '../../dsh-plugin-desktop/src/update-download.ts'
 import { getOrCreateDesktopInstallationId } from '../../dsh-plugin-desktop/src/desktop-installation-id.ts'
@@ -171,10 +172,22 @@ export class NextUpdates {
             if (Date.now() - lastProgress < 250 && received !== total) return
             lastProgress = Date.now(); this.set({ received, total })
           }
-        const path = result.companyRelease === undefined
+        let path = result.companyRelease === undefined
           ? await downloadDesktopUpdate({ platform, version: result.latestVersion, channel: 'beta', destinationPath: join(directory, desktopUpdateFilename(platform, result.latestVersion, 'beta')), request: this.options.artifactRequest, signal: updateSignal, onProgress: progress })
           : await this.options.company!.download(result.companyRelease, directory, updateSignal, progress)
-        if (result.companyRelease !== undefined) await this.options.company!.verify(path, result.companyRelease, updateSignal)
+        if (result.companyRelease !== undefined) {
+          // electron-updater returns its shared delta cache, not this durable
+          // transaction directory. Retain that cache for the next delta base,
+          // and verify an exclusive copy owned by this pending transaction.
+          if (resolve(dirname(path)) !== resolve(directory)) {
+            const info = await lstat(path)
+            if (!info.isFile() || info.isSymbolicLink() || info.size > 1024 ** 3) throw new Error('Invalid company update cache file')
+            const owned = join(directory, platform === 'darwin' ? `P7-DSH-Company-Test-${result.latestVersion}-universal.dmg` : `P7-DSH-Company-Test-${result.latestVersion}-x64-Setup.exe`)
+            await copyFile(path, owned, constants.COPYFILE_EXCL)
+            path = owned
+          }
+          await this.options.company!.verify(path, result.companyRelease, updateSignal)
+        }
         signal.throwIfAborted()
         preparing = true; this.set({ phase: 'preparing' })
         await this.options.prepare(path, result.latestVersion, directory, signal)
