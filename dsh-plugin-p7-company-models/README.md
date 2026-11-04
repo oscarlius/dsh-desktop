@@ -1,5 +1,7 @@
 # DSH 公司模型（P7）
 
+公司插件的参数错误修正与未完成事项检查见 [有界任务恢复](docs/agent-recovery.md)。
+
 第一期 DSH 实现。P7 服务端由 Qorder 按 [接口契约](contracts/MODEL-CONFIG-V1.md) 独立开发，本目录用合成响应进行联调测试。
 
 ## 使用

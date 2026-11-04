@@ -17,6 +17,7 @@ import { installPersonalCredentialOverlay } from './personal-credential-overlay.
 import { DEFAULT_P7_PUBLIC_ORIGIN } from './defaults.js'
 import { installInlineThinkingNormalizer } from './inline-thinking.js'
 import { installToolProgressGuard, type ToolProgressGuardConfig } from './tool-progress-guard.js'
+import { installAgentContractGuard } from './agent-contract-guard.js'
 import { registerPersonalMemoryRoutes } from './personal-memory-routes.js'
 import { CompanyMemoryRuntime, type CompanyMemoryWorkspace } from './personal-memory-runtime.js'
 
@@ -31,6 +32,7 @@ export const inject = ['loader', 'webServer', 'settings', 'credentials', 'profil
 export const Config: Schema = Schema.object({
   bootstrapFile: Schema.string().default(''),
   requirePersonalLogin: Schema.boolean().default(false),
+  agentContractGuard: Schema.boolean().default(true),
   toolProgressGuard: Schema.object({
     patternWindow: Schema.number().default(8),
     maxDistinctPatterns: Schema.number().default(2),
@@ -41,9 +43,10 @@ export const Config: Schema = Schema.object({
 })
 
 /** Compose beside the official adapters without modifying the upstream runtime. */
-export function apply(ctx: Context, config: { bootstrapFile?: string; requirePersonalLogin?: boolean; toolProgressGuard?: ToolProgressGuardConfig } = {}): void {
+export function apply(ctx: Context, config: { bootstrapFile?: string; requirePersonalLogin?: boolean; toolProgressGuard?: ToolProgressGuardConfig; agentContractGuard?: boolean } = {}): void {
   installInlineThinkingNormalizer(ctx)
   installToolProgressGuard(ctx, config.toolProgressGuard)
+  if (config.agentContractGuard !== false) installAgentContractGuard(ctx)
   let host: CompanyHost | undefined
   const accountStore = ctx.get('p7AccountStore')
   const requirePersonalLogin = config.requirePersonalLogin === true
