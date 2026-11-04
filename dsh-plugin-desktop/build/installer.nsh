@@ -3,6 +3,11 @@
 Var pid
 Var companyAutoUpdate
 
+!macro customUnInit
+  ; The shared running-process check is also compiled into the uninstaller.
+  StrCpy $companyAutoUpdate "0"
+!macroend
+
 !macro customCheckAppRunning
   ${if} ${isUpdated}
   ${andIfNot} ${Silent}

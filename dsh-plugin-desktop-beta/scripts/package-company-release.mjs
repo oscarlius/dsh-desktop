@@ -1,7 +1,7 @@
 /** Build matching protected initial and public differential company installers. */
 import { spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { companyBuildVersion } from '../src/company-build-version.ts'
@@ -113,7 +113,10 @@ export function runCompanyRelease() {
     renameSync(plan.staging, plan.output)
     console.log(`Company Full and update release verified: ${plan.output}`)
   } catch (error) {
-    rmSync(plan.staging, { recursive: true, force: true })
+    // Keep failed artifacts available for diagnosis. An open native smoke can
+    // lock files; cleanup must not replace the original compiler failure.
+    try { writeFileSync(join(plan.staging, 'failed-build.json'), `${JSON.stringify({ failed: true, sourceCommit })}\n`, { encoding: 'utf8', flag: 'wx' }) } catch {}
+    console.error(`Incomplete candidate retained for diagnosis: ${plan.staging}`)
     throw error
   }
 }
