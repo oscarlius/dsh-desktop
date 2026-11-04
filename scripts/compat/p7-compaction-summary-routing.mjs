@@ -26,4 +26,5 @@ export function apply(ctx) {
     ctx.logger.info('P7 compaction summary: using existing Gemini backup; primary local route unchanged')
     yield* ctx.llm.stream({ ...options, provider: SUMMARY_PROVIDER, model: SUMMARY_MODEL })
   })
+  ctx.logger.info('P7 compaction summary routing ready: summaries may use Gemini; primary local capacity remains 262144')
 }
