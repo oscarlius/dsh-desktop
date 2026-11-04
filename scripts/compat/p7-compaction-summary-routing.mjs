@@ -1,0 +1,29 @@
+/**
+ * Profile-loadable recovery for existing P7 Agents with oversized history.
+ * Uses the public llm/stream routing waterfall; never changes prepared Agent
+ * requests, conversation history, provider capacities, or credentials.
+ */
+export const name = 'p7-compaction-summary-routing'
+export const inject = ['llm']
+
+const LOCAL_PROVIDERS = new Set(['p7-company-chat', 'p7-company-responses', 'p7-company-messages'])
+const LOCAL_MODELS = new Set(['DeepSeek-V4.1-Flash', 'Qwen3.8-Flash-Next'])
+const SUMMARY_PROVIDER = 'p7-company-chat'
+const SUMMARY_MODEL = 'gemini-3.8-flash-tiered'
+
+/** Existing Agents retain preset generations, so install at the Host LLM seam. */
+export function apply(ctx) {
+  ctx.on('llm/stream', async function* (options, next) {
+    if (options.purpose !== 'compaction'
+      || !LOCAL_PROVIDERS.has(options.provider)
+      || !LOCAL_MODELS.has(options.model)) {
+      yield* next()
+      return
+    }
+    // Re-enter once with a non-local model. The guard above delegates the
+    // nested call directly, resulting in exactly one provider HTTP request.
+    // Keep the same cancellation signal, payload, tools and token budget.
+    ctx.logger.info('P7 compaction summary: using existing Gemini backup; primary local route unchanged')
+    yield* ctx.llm.stream({ ...options, provider: SUMMARY_PROVIDER, model: SUMMARY_MODEL })
+  })
+}
