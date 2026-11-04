@@ -68,7 +68,7 @@ vi.mock('../src/desktop-terminal.ts', async importOriginal => ({ ...await import
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
   const app = Object.assign(new EventEmitter(), {
-    setName() {}, setAppUserModelId: vi.fn(), setPath: (name: string, path: string) => fixture.appPaths.set(name, path), getPath: (name: string) => fixture.appPaths.get(name) ?? process.env.DSH_DESKTOP_NEXT_HOME, getLocale: () => 'en-US', getPreferredSystemLanguages: () => ['zh-Hans-CN', 'en-US'], isReady: () => true, whenReady: async () => {},
+    setName() {}, setAppUserModelId: vi.fn(), setPath: (name: string, path: string) => fixture.appPaths.set(name, path), getPath: (name: string) => fixture.appPaths.get(name) ?? process.env.DSH_DESKTOP_NEXT_HOME, getVersion: () => '2.0.32-beta.16', getLocale: () => 'en-US', getPreferredSystemLanguages: () => ['zh-Hans-CN', 'en-US'], isReady: () => true, whenReady: async () => {},
     requestSingleInstanceLock: () => { fixture.lockPaths.push(fixture.appPaths.get('userData')!); return fixture.ownsInstance }, exit: vi.fn(), relaunch: vi.fn(), quit: vi.fn(() => app.emit('before-quit', { preventDefault() {} })),
   })
   class BrowserWindow extends EventEmitter {
@@ -164,7 +164,7 @@ it('sets the sealed company AppUserModelId before creating its window', async ()
     expect(app.setAppUserModelId).toHaveBeenCalledExactlyOnceWith('ai.deepseek.dsh.desktop.companytest')
     const window = fixture.windows[0]
     const current = fixture.handlers.get('dsh-next:state')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame })
-    expect(current).toMatchObject({ version: '2.0.31-beta.15', displayVersion: '2.0.18-beta.15', build: '2026110101' })
+    expect(current).toMatchObject({ version: '2.0.32-beta.16', displayVersion: '2.0.32-beta.16', build: '2026110401' })
   } finally { vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }) }
 })
 
@@ -433,6 +433,8 @@ it.each(['normal', '--next-safe-mode'])('stages an explicit update before hiding
     constructor(private options: { install(): Promise<void> }) {}
     snapshot() { return { phase: 'ready', version: '2.0.20-beta.2', installable: true } }
     start() {}
+    applyPendingOnNextLaunch = async () => false
+    confirmPendingAfterHealthyHost() {}
     dispose = async () => {}
     install = () => this.options.install()
   } }))
@@ -471,6 +473,8 @@ it.each(['timeout', 'failure'] as const)('still launches a staged update before 
     constructor(private options: { install(): Promise<void> }) {}
     snapshot() { return { phase: 'ready', version: '2.0.20-beta.2', installable: true } }
     start() {}
+    applyPendingOnNextLaunch = async () => false
+    confirmPendingAfterHealthyHost() {}
     dispose = async () => {}
     install = () => this.options.install()
   } }))

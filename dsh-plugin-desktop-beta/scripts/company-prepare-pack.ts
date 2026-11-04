@@ -19,6 +19,11 @@ export function applyCompanyBootstrapResources(config: CompanyResourceConfig, en
     if (reserved.length > 0) throw new Error('Public update contains a company bootstrap resource')
     return
   }
+  if (config.extraMetadata.dshDesktopPersonalLoginDistribution === true) {
+    if (env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION !== '1') throw new Error('Keyless Full requires its explicit personal-login distribution')
+    if (reserved.length > 0) throw new Error('Keyless Full contains a company bootstrap resource')
+    return
+  }
   const from = env.DSH_P7_BOOTSTRAP_FILE
   if (env.DSH_COMPANY_INITIAL_DISTRIBUTION !== '1' || !from) throw new Error('Company Full requires its explicit protected bootstrap')
   if (reserved.length > 0) throw new Error('Company bootstrap resource was configured more than once')

@@ -1,7 +1,9 @@
 /** Sequence existing Desktop setup content inside the official onboarding surface. */
 import { useEffect, useState, type ReactNode } from 'react'
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-account/client'
 import { Button, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DesktopOnboardingBridge, DesktopOnboardingSnapshot } from '../setup-onboarding-bridge.ts'
@@ -14,7 +16,7 @@ function pendingSnapshot(value: DesktopOnboardingSnapshot | null): DesktopOnboar
   return next?.required || next?.accountPending || next?.restartPending ? next : null
 }
 
-export function registerDesktopOnboarding(ctx: Context, content: SetupContent): void {
+export function registerDesktopOnboarding(ctx: ClientContext, content: SetupContent): void {
   const bridge = (window as unknown as { dshDesktopSetup?: DesktopOnboardingBridge }).dshDesktopSetup
   if (!bridge) {
     registerCompanyBrowserOnboarding(ctx)
@@ -26,7 +28,7 @@ export function registerDesktopOnboarding(ctx: Context, content: SetupContent): 
 }
 
 /** Plain browser URLs have no native query markers or Electron preload bridge. */
-export function registerCompanyBrowserOnboarding(ctx: Context): void {
+export function registerCompanyBrowserOnboarding(ctx: ClientContext): void {
   const policy = (window as unknown as { __DSH_COMPANY_POLICY__?: { accountOnboardingEnabled?: boolean } }).__DSH_COMPANY_POLICY__
   if (policy?.accountOnboardingEnabled !== false) return
   ctx.slots.inject('onboarding.desktop.before', () => ctx.slots.register({

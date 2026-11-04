@@ -29,6 +29,12 @@ if (betaPlugin.name !== 'dsh-plugin-desktop-beta') fail('the Beta Desktop worksp
 if (!['stable', 'beta'].includes(upstream.activeChannel)) fail('the pinned upstream checkout must follow a declared release channel')
 const activeUpstream = upstream.channels?.[upstream.activeChannel]
 if (activeUpstream === undefined) fail('the active upstream channel is missing')
+// npm prereleases can precede the corresponding public Git tag. Keep the
+// read-only desktop source checkout pinned separately from the runtime bytes.
+const checkoutUpstream = activeUpstream.releaseSource?.kind === 'npm'
+  ? upstream.channels?.[upstream.sourceCheckoutChannel]
+  : activeUpstream
+if (!checkoutUpstream || !/^[a-f0-9]{40}$/.test(checkoutUpstream.commit)) fail('the source checkout must name a recorded Git commit')
 
 if (workspace.packageManager !== 'yarn@4.18.0') {
   fail('the product workspace must pin yarn@4.18.0')
@@ -127,10 +133,10 @@ for (const [owner, manifest] of [
 
 const [mode, object] = run('git', ['ls-files', '--stage', '--', 'deepseek-harness']).split(/\s+/u)
 if (mode !== '160000') fail('deepseek-harness must be tracked as a Git submodule')
-if (object !== activeUpstream.commit) fail(`submodule index is ${object}, expected ${activeUpstream.commit}`)
+if (object !== checkoutUpstream.commit) fail(`submodule index is ${object}, expected ${checkoutUpstream.commit}`)
 
 const upstreamDir = resolve(root, 'deepseek-harness')
-if (run('git', ['rev-parse', 'HEAD'], upstreamDir) !== activeUpstream.commit) {
+if (run('git', ['rev-parse', 'HEAD'], upstreamDir) !== checkoutUpstream.commit) {
   fail('checked-out upstream commit differs from upstream.json')
 }
 if (run('git', ['status', '--porcelain'], upstreamDir) !== '') {
@@ -139,7 +145,7 @@ if (run('git', ['status', '--porcelain'], upstreamDir) !== '') {
 if (run('git', ['remote', 'get-url', 'origin'], upstreamDir) !== upstream.repository) {
   fail('deepseek-harness origin differs from upstream.json')
 }
-if (upstreamPackage.version !== activeUpstream.sourceVersion) {
+if (upstreamPackage.version !== checkoutUpstream.sourceVersion) {
   fail('deepseek-harness package version differs from upstream.json')
 }
 for (const [channel, plugin] of [['stable', stablePlugin], ['beta', betaPlugin]]) {
@@ -153,8 +159,9 @@ for (const [channel, plugin] of [['stable', stablePlugin], ['beta', betaPlugin]]
 }
 
 if (nextDesktop.name !== 'dsh-desktop-next' || nextDesktop.private !== true) fail('Next must remain a private experimental package')
+if (nextReference.commit !== checkoutUpstream.commit || nextReference.version !== checkoutUpstream.sourceVersion) fail('Next desktop source reference must match the retained source checkout')
 for (const [name, version] of Object.entries(nextDesktop.dependencies)) {
-  if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && version !== nextReference.version) fail(`Next ${name} must match the pinned upstream family`)
+  if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && version !== upstream.channels.beta.runtimePackageVersion) fail(`Next ${name} must match the pinned Beta runtime family`)
 }
 
 process.stdout.write(`verify-layout: Desktop workspaces including Next and upstream ${activeUpstream.commit.slice(0, 10)} are consistent\n`)

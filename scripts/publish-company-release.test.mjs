@@ -63,6 +63,20 @@ test('validates the paired source, role, checksums and differential coverage',as
   await assert.rejects(validateCompanyRelease(b.root),/Wrong role/)
 })
 
+test('accepts a personal-login Full only when no bootstrap is present', async t => {
+  const b = bundle(t)
+  const path = join(b.root, 'full/win-unpacked/resources/app/package.json')
+  const value = JSON.parse(readFileSync(path, 'utf8'))
+  value.dshDesktopPersonalLoginDistribution = true
+  writeFileSync(path, JSON.stringify(value))
+  await assert.rejects(validateCompanyRelease(b.root), /Personal-login Full must be credential-free/)
+  rmSync(join(b.root, 'full/win-unpacked/resources/p7-company-connection.json'))
+  await validateCompanyRelease(b.root)
+  delete value.dshDesktopPersonalLoginDistribution
+  writeFileSync(path, JSON.stringify(value))
+  await assert.rejects(validateCompanyRelease(b.root), /protected P7 bootstrap/)
+})
+
 test('validates actual ASAR metadata together with the old updater manifest', async t => {
   const b = bundle(t)
   const { createPackage } = createRequire(new URL('../dsh-plugin-desktop-beta/package.json', import.meta.url))('@electron/asar')

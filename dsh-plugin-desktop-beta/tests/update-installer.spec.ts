@@ -22,7 +22,7 @@ vi.mock('node:child_process', () => {
   }
 })
 
-import { assertCompanyAdHocMacSignature, assertCompanyMacUpdateSignature, assertNextMacBundle, assertNextWindowsInstaller, COMPANY_PRODUCT_NAME, MAC_UPDATE_SCRIPT, NextUpdateInstaller } from '../src/update-installer.ts'
+import { assertCompanyAdHocMacSignature, assertCompanyMacUpdateSignature, assertNextMacBundle, assertNextWindowsInstaller, COMPANY_PRODUCT_NAME, MAC_UPDATE_SCRIPT, nextWindowsInstallerArguments, NextUpdateInstaller } from '../src/update-installer.ts'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -39,6 +39,12 @@ function mockSpawnSuccess() {
     return child
   })
 }
+
+it('uses a distinct silent company handoff while keeping /D as the final NSIS argument', () => {
+  expect(nextWindowsInstallerArguments(COMPANY_PRODUCT_NAME, 'C:\\Users\\me\\P7 DSH\\P7 DSH Company Test.exe', true)).toEqual([
+    '/S', '/currentuser', '--company-auto-update', '--updated', '--force-run', '/D=C:\\Users\\me\\P7 DSH',
+  ])
+})
 
 it('rejects Stable installers and an unexpected release even when the archive is valid', () => {
   expect(() => assertNextMacBundle('ai.deepseek.dsh.desktop.beta', { name: 'dsh-plugin-desktop-beta', version: '2.0.14-beta.1' }, '2.0.14-beta.1')).not.toThrow()
@@ -121,6 +127,25 @@ it('keeps a company update in the exact executable directory, including Unicode 
   await installer.launch()
   expect(spawnMock).toHaveBeenCalledWith(exe, ['--updated', '--force-run', '/D=C:\\Program Files\\公司 DSH'],
     expect.objectContaining({ detached: true, stdio: 'ignore', shell: false, windowsHide: false }))
+})
+
+it('rejects an automatic Windows handoff before shutdown when the sidecar reports failure', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'next-company-handoff-')); roots.push(root)
+  const installerPath = join(root, 'update.exe'); const statusPath = join(root, 'status.json')
+  await writeFile(installerPath, 'installer')
+  await writeFile(statusPath, JSON.stringify({ phase: 'failed', detail: 'sidecar unavailable' }))
+  execFileMock.mockImplementation((_file: string, _args: string[], _opts: unknown, callback: (err: Error | null, stdout: string, stderr: string) => void) => callback(null, JSON.stringify({ ProductName: COMPANY_PRODUCT_NAME, ProductVersion: '2.0.20-beta.15' }), ''))
+  spawnMock.mockImplementation(() => {
+    const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn>; kill: ReturnType<typeof vi.fn>; exitCode: number | null }
+    child.unref = vi.fn(); child.kill = vi.fn(); child.exitCode = null
+    queueMicrotask(() => child.emit('error', new Error('sidecar unavailable')))
+    return child
+  })
+  const installer = new NextUpdateInstaller({ platform: 'win32', executable: installerPath, productName: COMPANY_PRODUCT_NAME, log: vi.fn() })
+  await installer.prepare(installerPath, '2.0.20-beta.15', root, new AbortController().signal)
+  await installer.stage()
+  await expect(installer.launch(true)).rejects.toThrow('sidecar unavailable')
+  expect(spawnMock).toHaveBeenCalledOnce()
 })
 
 it('stages the verified macOS app bundle and launches the detached progress updater script', async () => {

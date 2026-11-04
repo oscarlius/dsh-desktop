@@ -19,7 +19,7 @@ export function updateLabel(state: NextUpdateState, language: string): string {
       return t(`正在下载更新 ${progress}`, `Downloading update ${progress}`)
     }
     case 'preparing': return t('正在准备安装…', 'Preparing update…')
-    case 'ready': return t(`${state.version} 已下载，安装并重启`, `${state.version} downloaded — Install and restart`)
+    case 'ready': return t(`${state.version} 已准备，下次启动更新`, `${state.version} is ready and will update on next launch`)
     case 'installing': return t('正在安装并重启…', 'Installing and restarting…')
     case 'error':
       if (state.error === 'development') return t('开发环境可检查更新，请使用安装版进行更新。', 'Updates can be checked in development. Install a packaged build to update.')

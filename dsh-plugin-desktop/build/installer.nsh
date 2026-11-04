@@ -1,6 +1,7 @@
 ; Check the exact app process before launching the quit handoff. This preserves
 ; the #469 fix: unrelated helpers under $INSTDIR must never block an upgrade.
 Var pid
+Var companyAutoUpdate
 
 !macro customCheckAppRunning
   ${if} ${isUpdated}
@@ -38,6 +39,13 @@ Var pid
     ${endIf}
 
   dsh_installer_scoped_fallback:
+  ${if} $companyAutoUpdate == "1"
+    ; A next-launch update must never escalate to a forced close. A surviving
+    ; process means this one attempt is abandoned and the old app remains usable.
+    SetErrorLevel 1
+    Quit
+  ${endIf}
+
     ; The patched builder macros match DSH Desktop.exe, not every executable
     ; below $INSTDIR. They handle pre-handoff releases and stubborn processes.
     MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK dsh_installer_stop_app
@@ -75,8 +83,14 @@ Var pid
 ; the visible extraction progress window.
 !macro customInit
   !ifndef BUILD_UNINSTALLER
+    StrCpy $companyAutoUpdate "0"
+    ${StdUtils.TestParameter} $R0 "company-auto-update"
+    ${if} $R0 == "true"
+      StrCpy $companyAutoUpdate "1"
+    ${endIf}
     ${if} ${isUpdated}
     ${andIf} ${isForceRun}
+    ${andIf} $companyAutoUpdate != "1"
       SetSilent normal
     ${endIf}
   !endif
@@ -152,7 +166,19 @@ Var pid
 !macro customInstall
   ${if} ${isUpdated}
   ${andIf} ${isForceRun}
-  ${andIfNot} ${Silent}
+  ${if} $companyAutoUpdate == "1"
+    HideWindow
+    ${StdUtils.ExecShellAsUser} $0 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "open" "--updated"
+    ${if} $0 == "ok"
+      !insertmacro quitSuccess
+    ${orIf} $0 == "fallback"
+      !insertmacro quitSuccess
+    ${else}
+      SetErrorLevel 1
+      Quit
+    ${endIf}
+  ${else}
+  ${ifNot} ${Silent}
     HideWindow
     ${StdUtils.ExecShellAsUser} $0 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "open" "--updated"
     DetailPrint "Restarting updated application: $0"
@@ -164,5 +190,7 @@ Var pid
       ShowWindow $HWNDPARENT ${SW_SHOWNORMAL}
       MessageBox MB_ICONEXCLAMATION "The update is installed, but the application could not be reopened. Please open it from its installation folder."
     ${endIf}
+  ${endIf}
+  ${endIf}
   ${endIf}
 !macroend

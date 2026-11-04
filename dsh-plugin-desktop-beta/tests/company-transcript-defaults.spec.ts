@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { renderIndexInjections, type IndexInjection } from '@deepseek-ai/dsh-host-webserver'
+import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import { runInNewContext } from 'node:vm'
 import {
   COMPANY_TRANSCRIPT_DEFAULTS,
@@ -53,7 +54,7 @@ it('seeds before the upstream classic module-factory head script executes', () =
   const ctx = new Context()
   installCompanyTranscriptBoot(ctx)
   const table: IndexInjection[] = [{ kind: 'script', placement: 'head', text: 'globalThis.initialFold = JSON.parse(localStorage.getItem("dsh-streamfold") || "null")' }]
-  ctx.emit('webserver/index-inject', table)
+  ctx.emit('webserver/index-inject', table, {} as PeerScope)
   const html = renderIndexInjections('<html><head></head><body></body></html>', table)
   const scripts = [...html.split('</head>')[0]!.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gu)].map(match => match[1]).join('\n')
   const first: { localStorage: ReturnType<typeof storageWith>; initialFold?: { windowHeight: number } } = { localStorage: storageWith() }

@@ -4,6 +4,7 @@ import { constants } from 'node:fs'
 import { access, lstat, mkdir, readdir, readFile } from 'node:fs/promises'
 import { dirname, join, win32 } from 'node:path'
 import { promisify } from 'node:util'
+import { launchWindowsUpdateHandoff } from './windows-update-handoff.ts'
 
 const execute = promisify(execFile)
 export const NEXT_APP_ID = 'ai.deepseek.dsh.desktop.beta'
@@ -42,8 +43,8 @@ app.run;
 `
 
 export const MAC_UPDATE_SCRIPT = [
-  '/usr/bin/osascript -l JavaScript -e "$DSH_UPDATE_UI_SCRIPT" >/dev/null 2>&1 &',
-  'UI_PID=$!',
+  'UI_PID=',
+  'if [ "${DSH_UPDATE_SILENT:-}" != "1" ]; then /usr/bin/osascript -l JavaScript -e "$DSH_UPDATE_UI_SCRIPT" >/dev/null 2>&1 & UI_PID=$!; fi',
   'cleanup() { kill "$UI_PID" 2>/dev/null || true; }',
   'trap cleanup EXIT',
   'i=0',
@@ -52,7 +53,7 @@ export const MAC_UPDATE_SCRIPT = [
   '  [ "$i" -ge 150 ] && exit 1',
   '  sleep 0.2',
   'done',
-  'BACKUP="${DSH_UPDATE_INSTALLED}.backup-$$"',
+  'BACKUP="${DSH_UPDATE_BACKUP:-${DSH_UPDATE_INSTALLED}.backup-$$}"',
   'rm -rf "$BACKUP"',
   'mv "$DSH_UPDATE_INSTALLED" "$BACKUP" || exit 1',
   'if ! (mv "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED" 2>/dev/null || /usr/bin/ditto "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED"); then',
@@ -71,7 +72,7 @@ export const MAC_UPDATE_SCRIPT = [
   '  /usr/bin/open "$DSH_UPDATE_INSTALLED"',
   '  exit 1',
   'fi',
-  'rm -rf "$BACKUP" "$DSH_UPDATE_DIR"',
+  'if [ "${DSH_UPDATE_KEEP_BACKUP:-}" != "1" ]; then rm -rf "$BACKUP" "$DSH_UPDATE_DIR"; fi',
   'cleanup',
 ].join('\n')
 
@@ -129,8 +130,9 @@ export function assertNextWindowsInstaller(info: { ProductName?: unknown; Produc
 }
 
 /** Keep the company NSIS update in the directory of the running company executable. */
-export function nextWindowsInstallerArguments(productName: string | undefined, executable: string): readonly string[] {
+export function nextWindowsInstallerArguments(productName: string | undefined, executable: string, automatic = false): readonly string[] {
   return [
+    ...(automatic ? ['/S', '/currentuser', '--company-auto-update'] : []),
     '--updated',
     '--force-run',
     ...(productName === COMPANY_PRODUCT_NAME ? [`/D=${win32.dirname(executable)}`] : []),
@@ -206,7 +208,7 @@ export class NextUpdateInstaller {
     this.nativeReady = true
   }
   /** Called after the Host and windows have finished shutting down. */
-  async launch(): Promise<void> {
+  async launch(automatic = false): Promise<void> {
     if (this.options.platform === 'darwin') {
       const prepared = this.prepared
       if (!this.nativeReady || !prepared?.bundle || !prepared.installed || !prepared.directory) throw new Error('No prepared update installer')
@@ -222,9 +224,11 @@ export class NextUpdateInstaller {
             DSH_UPDATE_STAGED: prepared.bundle!,
             DSH_UPDATE_INSTALLED: prepared.installed!,
             DSH_UPDATE_DIR: prepared.directory!,
+            ...(automatic ? { DSH_UPDATE_BACKUP: `${prepared.installed!}.p7-pending-backup`, DSH_UPDATE_KEEP_BACKUP: '1' } : {}),
             DSH_UPDATE_TITLE: productName,
             DSH_UPDATE_MESSAGE: message,
             DSH_UPDATE_UI_SCRIPT: MAC_PROGRESS_UI_SCRIPT,
+            ...(automatic ? { DSH_UPDATE_SILENT: '1' } : {}),
           },
         })
         child.once('error', reject)
@@ -233,9 +237,15 @@ export class NextUpdateInstaller {
       return
     }
     if (this.options.platform !== 'win32' || !this.prepared) throw new Error('No prepared update installer')
+    if (automatic) {
+      // The cache directory survives the old process, retaining a bounded sidecar
+      // outcome beside the already-authenticated installer for recovery diagnosis.
+      await launchWindowsUpdateHandoff({ executable: this.options.executable, installer: this.prepared.path, statusDirectory: dirname(this.prepared.path) })
+      return
+    }
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(this.prepared!.path, nextWindowsInstallerArguments(this.options.productName, this.options.executable), {
-        detached: true, stdio: 'ignore', shell: false, windowsHide: false,
+      const child = spawn(this.prepared!.path, nextWindowsInstallerArguments(this.options.productName, this.options.executable, automatic), {
+        detached: true, stdio: 'ignore', shell: false, windowsHide: automatic,
       })
       child.once('error', reject)
       child.once('spawn', () => { child.off('error', reject); child.on('error', this.options.log); child.unref(); resolve() })

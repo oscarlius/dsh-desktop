@@ -1,0 +1,28 @@
+diff --git a/lib/types-DFdfvhLN.js b/lib/types-DFdfvhLN.js
+index 50457f5..12579a5 100644
+--- a/lib/types-DFdfvhLN.js
++++ b/lib/types-DFdfvhLN.js
+@@ -590,6 +590,23 @@ function hasForeignGrant(oldAcl, sidPtr) {
+ * @param worldSidPtr - the Everyone SID the ambient-delete deny names.
+ */
+ function grantWrite(api, path, sidPtr, lowLabelSidPtr, worldSidPtr) {
++	try { grantWriteOnce(api, path, sidPtr, lowLabelSidPtr, worldSidPtr); } catch (error) {
++		if (!(error instanceof Win32Error) || error.api !== "SetNamedSecurityInfoW" || error.win32Code !== 5) throw error;
++		try { grantOwnerWriteOwner(api, path); } catch { throw error; }
++		grantWriteOnce(api, path, sidPtr, lowLabelSidPtr, worldSidPtr);
++	}
++}
++function grantOwnerWriteOwner(api, path) {
++	withPathLock(api, path, () => {
++		const ownerSlot = allocPtrSlot(), groupSlot = allocPtrSlot(), daclSlot = allocPtrSlot(), saclSlot = allocPtrSlot(), descriptorSlot = allocPtrSlot();
++		const readResult = api.getNamedSecurityInfoW(path, 1, 5, ownerSlot, groupSlot, daclSlot, saclSlot, descriptorSlot);
++		if (readResult !== 0) throwWin32(api, "GetNamedSecurityInfoW", readResult, `grantOwnerWriteOwner(${path})`);
++		const owner = decodePtr(ownerSlot), descriptor = decodePtr(descriptorSlot);
++		if (owner === null) { if (descriptor !== null) api.localFree(descriptor); throw new Win32Error("GetNamedSecurityInfoW", 1336, `grantOwnerWriteOwner(${path}): no owner`); }
++		mergeAndApply(api, path, buildExplicitAccess(owner, 1, 524288), decodePtr(daclSlot), { kind: "keep" }, descriptor, "grantOwnerWriteOwner");
++	});
++}
++function grantWriteOnce(api, path, sidPtr, lowLabelSidPtr, worldSidPtr) {
+ 	withPathLock(api, path, () => {
+ 		const { oldAcl, labelAcl, descriptor } = readCurrentSecurity(api, path);
+ 		if (oldAcl !== null && labelAcl !== null && hasExactGrant(oldAcl, sidPtr) && hasExactDeny(oldAcl, worldSidPtr) && hasExactLabel(labelAcl, lowLabelSidPtr)) {

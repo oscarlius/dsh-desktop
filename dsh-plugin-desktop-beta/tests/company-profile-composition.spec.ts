@@ -23,6 +23,7 @@ it('patches the existing Web module without creating a nameless duplicate', () =
       expect(initial.find(row => row.id === id)).toMatchObject({ disabled: true })
     }
     expect(initial.find(row => row.id === 'p7-company-models')?.disabled).not.toBe(true)
+    expect(initial.find(row => row.id === 'p7-managed-mcp')).toMatchObject({ config: { mode: 'on-demand' } })
     const overlays = [overlayPath]
     const rows = applyEntryPatches([], readNextProfilePatches(directory, home, overlays), () => {})
     expect(rows.filter(row => row.id === 'web')).toHaveLength(1)
@@ -130,6 +131,14 @@ it('selects complete Company plugin bundles once while preserving Profile opt-ou
       skills: { evolution: false, autoBacktest: false },
     } })
     expect(patches.find(row => row.id === 'mnemon-source-skills')).toMatchObject({ disabled: true })
+    const memorySpaces = patches.find(
+      row => row.id === 'mnemon-source-memory-spaces' && 'config' in row,
+    )
+    const providers = (memorySpaces as { config: { providers: { instanceId: string }[] } } | undefined)?.config.providers ?? []
+    expect(providers.map(row => row.instanceId)).toEqual([
+      'mnemon-native', 'openviking', 'honcho', 'mem0', 'hindsight',
+      'holographic', 'retaindb', 'byterover', 'supermemory', 'p7-personal-memory',
+    ])
 
     // Volatile Settings writes live in the Profile patch and take precedence
     // over Company first-run defaults on every reload.

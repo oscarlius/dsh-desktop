@@ -57,3 +57,6 @@ describe('company inline thinking runtime integration', () => {
     } finally { vi.unstubAllGlobals(); await ctx.fiber.dispose() }
   })
 })
+declare module '@deepseek-ai/dsh-llm' {
+  interface LlmRequestPurposeMap { 'session-title': never }
+}

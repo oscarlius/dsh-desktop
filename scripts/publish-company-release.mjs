@@ -22,7 +22,7 @@ export function readCompanyPackagedManifest(resources) {
   const packaged = JSON.parse(extractFile(archive, 'package.json').toString('utf8'))
   if (existsSync(compatibilityPath)) {
     const compatibility = json(compatibilityPath)
-    for (const field of ['name', 'version', 'dshDesktopFlavor', 'dshDesktopUpdateDistribution',
+    for (const field of ['name', 'version', 'dshDesktopFlavor', 'dshDesktopUpdateDistribution', 'dshDesktopPersonalLoginDistribution',
       'dshCompanyReleaseSourceCommit', 'dshCompanyCompatibilityBuild']) {
       ensure(packaged[field] === compatibility[field], `ASAR compatibility manifest mismatch: ${field}`)
     }
@@ -69,9 +69,13 @@ export async function validateCompanyRelease(directory) {
     }
     const bootstrap = join(resource, 'p7-company-connection.json')
     if (kind === 'update') {
-      ensure(packaged.dshDesktopUpdateDistribution === true && !existsSync(bootstrap), 'Public update must be credential-free')
+      ensure(packaged.dshDesktopUpdateDistribution === true && packaged.dshDesktopPersonalLoginDistribution !== true && !existsSync(bootstrap), 'Public update must be credential-free')
     } else {
       ensure(packaged.dshDesktopUpdateDistribution !== true, 'Full was built as an update package')
+      if (packaged.dshDesktopPersonalLoginDistribution === true) {
+        ensure(!existsSync(bootstrap), 'Personal-login Full must be credential-free')
+        continue
+      }
       let value
       try { value = json(bootstrap) } catch { throw new Error('Full is missing a valid protected P7 bootstrap') }
       ensure(value.origin === P7_RELEASE_ORIGIN && typeof value.key === 'string' && /^p7k_[\x21-\x7e]+$/.test(value.key) && value.key.length <= 4096, 'Full is missing a valid protected P7 bootstrap')

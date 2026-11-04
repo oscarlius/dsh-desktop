@@ -6,6 +6,9 @@
 export interface P7McpToolStatus {
   phase: 'syncing' | 'registered' | 'unavailable'
   tools: { name: string }[]
+  mode?: 'eager' | 'on-demand'
+  authorizedToolCount?: number
+  agents?: { agentId: string; loadedToolCount: number; schemaBytes: number; tools: { name: string }[]; error?: string }[]
 }
 
 const REGISTRY = Symbol.for('dsh.p7.mcp-tool-status.registry')
@@ -18,5 +21,10 @@ function registry(): Map<string, P7McpToolStatus> | undefined {
 export function readP7McpToolStatus(profileId: string): P7McpToolStatus {
   const snapshot = registry()?.get(profileId)
   if (snapshot === undefined) return { phase: 'unavailable', tools: [] }
-  return { phase: snapshot.phase, tools: snapshot.tools.map(tool => ({ name: tool.name })) }
+  return { phase: snapshot.phase, tools: snapshot.tools.map(tool => ({ name: tool.name })),
+    ...(snapshot.mode ? { mode: snapshot.mode } : {}),
+    ...(snapshot.authorizedToolCount === undefined ? {} : { authorizedToolCount: snapshot.authorizedToolCount }),
+    ...(snapshot.agents ? { agents: snapshot.agents.map(agent => ({ agentId: agent.agentId,
+      loadedToolCount: agent.loadedToolCount, schemaBytes: agent.schemaBytes,
+      tools: agent.tools.map(tool => ({ name: tool.name })), ...(agent.error ? { error: agent.error } : {}) })) } : {}) }
 }

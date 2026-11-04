@@ -1,0 +1,34 @@
+diff --git a/lib/index.js b/lib/index.js
+index ffe4867..9a9ff0d 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -148,6 +148,12 @@ function versionOf(info) {
+ 	return FsVersion(`${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`);
+ }
+ /**
++* Normalize the leading slash left by a Windows file URL's drive pathname.
++*/
++function windowsDrivePath(path) {
++	return process.platform === "win32" ? path.replace(/^[\\/](?=[A-Za-z]:[\\/])/u, "") : path;
++}
++/**
+ * Replace a leading `~` with the host user's home directory in a caller-supplied path.
+ * `~/` is recognized on every platform and `~\` only on Windows; `~user` and later `~`
+ * segments stay literal. The rest of the spelling is kept so parent traversal still resolves physically.
+@@ -166,6 +172,8 @@ function expandHomePrefix(path) {
+ * @returns absolute display spelling shared by target resolution and no-follow metadata.
+ */
+ function localDisplayPath(cwd, path) {
++	cwd = windowsDrivePath(cwd);
++	path = windowsDrivePath(path);
+ 	const absoluteCwd = isAbsolute(cwd) ? cwd : `${process.cwd()}${sep}${cwd}`;
+ 	const raw = isAbsolute(path) ? path : `${absoluteCwd}${sep}${path}`;
+ 	const physicalSpelling = /(?:^|[\\/])\.\.(?:[\\/]|$)/u.test(raw) ? raw : resolve(cwd, path);
+@@ -843,6 +851,7 @@ var LocalFileSystem = class extends FileSystem {
+ 		return String(target.targetKey);
+ 	}
+ 	processPathFromHostPath(hostPath) {
++		hostPath = windowsDrivePath(hostPath);
+ 		return isAbsolute(hostPath) ? resolve(hostPath) : void 0;
+ 	}
+ 	fileUrl(target) {

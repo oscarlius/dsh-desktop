@@ -4,6 +4,7 @@ export type CompanyPackageDistribution = 'full' | 'update'
 
 export interface CompanyPackageOptions {
   readonly distribution: CompanyPackageDistribution
+  readonly keylessFull?: boolean
   readonly output: string
   readonly bootstrapFile?: string
   readonly sourceCommit?: string
@@ -30,9 +31,10 @@ export function companyPayloadExtraMetadata(environment: NodeJS.ProcessEnv = pro
  */
 export function companyWindowsBuilderArguments(options: CompanyPackageOptions): readonly string[] {
   const initial = options.distribution === 'full'
-  if (initial && (options.bootstrapFile === undefined || options.bootstrapFile.length === 0)) {
+  if (initial && !options.keylessFull && (options.bootstrapFile === undefined || options.bootstrapFile.length === 0)) {
     throw new Error('Company Full packaging requires DSH_P7_BOOTSTRAP_FILE')
   }
+  if (options.keylessFull && !initial) throw new Error('Keyless company mode is only valid for Full')
   if (options.sourceCommit !== undefined && !SOURCE_COMMIT.test(options.sourceCommit)) throw new Error('Company package source commit must be a 40-character lowercase hexadecimal value')
   return [
     '--config.beforePack=scripts/company-prepare-pack.ts',
@@ -43,6 +45,7 @@ export function companyWindowsBuilderArguments(options: CompanyPackageOptions): 
     `--config.directories.output=${options.output}`,
     `--config.nsis.artifactName=${initial ? 'P7-DSH-Company-Full-${version}-${arch}-Setup.${ext}' : 'P7-DSH-Company-Test-${version}-${arch}-Setup.${ext}'}`,
     ...(options.sourceCommit === undefined ? [] : [`--config.extraMetadata.dshCompanyReleaseSourceCommit=${options.sourceCommit}`]),
+    ...(options.keylessFull ? ['--config.extraMetadata.dshDesktopPersonalLoginDistribution=true'] : []),
     ...(initial ? [] : ['--config.extraMetadata.dshDesktopUpdateDistribution=true']),
   ]
 }

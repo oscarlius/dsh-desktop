@@ -11,15 +11,14 @@ index a6ae2cc..824f9b3 100644
  			const updatableNames = Object.keys(installed).filter((name) => name !== selfName && !effectiveDisabledSet.has(name) && isPluginUpdatable(name, String(installed[name]), updates[name], updatedNames));
  			const batchUpdatableNames = updatableNames.filter((name) => updates[name]?.restoreRequired !== true);
  			const ignoredUpdateSet = (0, react.useMemo)(() => new Set(ignoredUpdateNames), [ignoredUpdateNames]);
-@@ -13033,7 +13033,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
- 											children: exportState === "busy" ? t("exportingLog") : t("exportLog")
- 										}),
- 										(() => {
--											const self = installed["dshmarket"] !== void 0 ? "dshmarket" : "dsh-market";
-+											const self = installed["dshmarket"] !== void 0 || updates["dshmarket"] !== void 0 ? "dshmarket" : "dsh-market";
- 											const status = updates[self];
- 											return status && status.updateAvailable && !updatedNames.includes(self) && !quietUpdateSet.has(self) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
- 												variant: "primary",
+@@ -14640,6 +14640,6 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
+ 			const batchActions = /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+ 				(() => {
+-					const self = installed["dshmarket"] !== void 0 ? "dshmarket" : "dsh-market";
++					const self = installed["dshmarket"] !== void 0 || updates["dshmarket"] !== void 0 ? "dshmarket" : "dsh-market";
+ 					const status = updates[self];
+ 					return status && status.updateAvailable && !updatedNames.includes(self) && !quietUpdateSet.has(self) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+ 						variant: "primary",
 diff --git a/lib/routes.js b/lib/routes.js
 index 5093897..eaa3b55 100644
 --- a/lib/routes.js

@@ -61,7 +61,7 @@ function fixture() {
     if (id === '@deepseek-ai/dsh-client-ui-primitives') return new Proxy({}, { get: (_, name) => (props: Node['props']) => jsx(String(name), props) })
     if (id === '@deepseek-ai/dsh-client-ui-slots') return { resolveSlotLabel: (label: unknown) => label }
     if (id === '@deepseek-ai/dsh-client-store') return {
-      createSnapshotStore: (state: unknown) => ({ getSnapshot: () => state }),
+      createSnapshotStore: (state: unknown) => ({ getSnapshot: () => state, set: vi.fn() }),
       defineStore: ({ init, actions }: any) => ({ create: () => {
         const state = init()
         return { getSnapshot: () => state, actions: Object.fromEntries(Object.entries(actions).map(([name, action]) =>
@@ -72,7 +72,7 @@ function fixture() {
   }
   runInNewContext(source, { window: { __ModuleLoader__: { load: (entry: { factory: (require: unknown) => { apply: typeof apply } }) => { apply = entry.factory(require).apply } } } })
   const noop = () => () => {}
-  apply!({ effect: (effect: () => void) => effect(), on: noop,
+  apply!({ effect: (effect: () => void) => effect(), on: noop, provide: noop, remoteAccess: { whenAccess: (_path: string, access: () => Generator<unknown>) => { for (const _value of access()) {} } },
     locale: { register: noop, bind: () => (key: string) => key }, remote: { $on: noop },
     layout: { panelInfo: { subscribe: noop }, selectPanel: vi.fn() }, reflect: { provide: noop },
     configForms: { describe: () => ({ getSnapshot: () => ({}), subscribe: noop }), get: () => undefined },
@@ -87,7 +87,7 @@ function fixture() {
   const remote = { name: '@agents-anywhere/dsh-bridge-next', enabled: true, installed: false, optional: true, official: true,
     version: '0.1.0', description: 'Remote connection', rows: [{ entryId: undefined as string | undefined, rowId: 'bridge', moduleName: 'bridge', enabled: true, phase: 'active' }] }
   const official = { ...remote, name: 'official-team', rows: [] }
-  const state = { status: 'ready', packages: [official, remote], busy: [] as string[], notice: null, highlight: null, confirm: null,
+  const state = { status: 'ready', packages: [official, remote], busy: [] as string[], notice: null, highlight: null, confirm: null, versions: {}, refreshStatus: 'idle', update: null,
     install: { open: false } }
   const item = { id: 'desktop-next-computer-use', label: 'Computer Use' }
   const ledger = { items: [item], bundles: new Set([remote.name]), rows: new Set(),
@@ -97,7 +97,7 @@ function fixture() {
   const setRowEnabled = vi.fn()
   const props = {
     useStore: (select: (state: unknown) => unknown) => select(navigation.getSnapshot()), actions: navigation.actions,
-    t: (key: string) => key, ensure: vi.fn(), resolveText: (text: string) => text,
+    t: (key: string) => key, ensure: vi.fn(), resolveText: (text: string) => text, useBundleDetails: (select: (state: unknown) => unknown) => select({}), useLocale: (select: (state: unknown) => unknown) => select({ active: 'en' }), configForm: () => ({ getSnapshot: () => ({}), mutate: vi.fn() }), clearHighlight: vi.fn(), createHeaderRef: () => ({ current: null }),
     useConfigurations: () => [], usePluginManager: () => state, useConfigLedger: () => ledger, usePluginTabs: () => [], setEnabled, setRowEnabled,
     renderSlot: (name: string, owner: Record<string, unknown>, options?: unknown) => {
       if (name === 'plugins.overview') overview = owner as typeof overview
@@ -125,7 +125,7 @@ it('opens an overview-owned bundle through the official detail with native heade
   expect(nodes(header).some(node => Array.isArray(node.props.children) && node.props.children.includes(top.props.actions))).toBe(true)
   expect(nodes(top.props.actions).some(node => node.props.name === 'plugins.detail.actions')).toBe(true)
   const toggle = render(component(top.props.actions, 'EnableSwitch')!)
-  toggle.props.onChange(false)
+  nodes(toggle).find(node => node.props.checked === true)!.props.onChange(false)
   expect(app.setEnabled).toHaveBeenCalledWith(app.remote.name, false)
   expect(nodes(body).some(node => node.props.name === 'plugins.bundle.config')).toBe(true)
   expect(component(body, 'RowsSection')?.props.rows).toEqual(app.remote.rows)
@@ -194,9 +194,9 @@ it('keeps an official optional bundle in the extensions group with its artwork, 
     },
   }
   registerPluginControls(ctx as unknown as Context)
-  const name = '@deepseek-ai/dsh-experimental-inspector-profile'
+  const name = '@deepseek-ai/dsh-experimental-agent-team-profile'
   const { meta } = JSON.parse(readFileSync(createRequire(import.meta.url).resolve(`${name}/locale/zh.json`), 'utf8'))
-  const inspector = { ...app.remote, name, enabled: false, meta: { ...meta, icon: '/inspector/icon.svg' },
+  const inspector = { ...app.remote, name, enabled: false, installed: true, meta: { ...meta, icon: '/inspector/icon.svg' },
     rows: [{ rowId: 'session-inspector', moduleName: '@deepseek-ai/dsh-experimental-session-inspector', entryId: 'include:session-inspector', enabled: false, phase: 'disabled' }] }
   app.state.packages.push(inspector)
   const findCard = () => nodes(app.page()).find(node => typeof node.type === 'function' && node.type.name === 'PackageCard' && node.props.pkg.name === name)!
@@ -205,22 +205,22 @@ it('keeps an official optional bundle in the extensions group with its artwork, 
   expect(groups(app.page())).toEqual(['extensions'])
   expect(cardCount(app.page())).toBe(2)
   const head = component(render(card), 'CardHead')!
-  expect(head.props.title).toBe('开发者工具')
+  expect(head.props.title).toBe(meta.title)
   expect(head.props.description).toBe(meta.description)
   expect(head.props.icon.props.src).toBe('/inspector/icon.svg')
   expect(nodes(head.props.tags).some(node => node.props.children === 'statusBeta')).toBe(true)
-  const toggle = render(component(head.props.end, 'EnableSwitch')!)
+  const toggle = nodes(render(component(head.props.end, 'EnableSwitch')!)).find(node => node.props.checked !== undefined)!
   expect(toggle.props.checked).toBe(false)
-  toggle.props.onChange(true)
+  nodes(toggle).find(node => node.props.checked === false)!.props.onChange(true)
   expect(app.setEnabled).toHaveBeenCalledExactlyOnceWith(name, true)
   inspector.enabled = true
   const activeHead = component(render(findCard()), 'CardHead')!
-  expect(render(component(activeHead.props.end, 'EnableSwitch')!).props.checked).toBe(true)
+  expect(nodes(render(component(activeHead.props.end, 'EnableSwitch')!)).find(node => node.props.checked !== undefined)!.props.checked).toBe(true)
   card.props.onOpen()
   const detail = render(component(app.page(), 'PackageDetail')!)
   expect(component(detail, 'RowsSection')?.props.rows).toEqual(inspector.rows)
   const top = component(detail, 'DetailTop')!
-  render(component(top.props.actions, 'EnableSwitch')!).props.onChange(false)
+  nodes(render(component(top.props.actions, 'EnableSwitch')!)).find(node => node.props.checked === true)!.props.onChange(false)
   expect(app.setEnabled).toHaveBeenLastCalledWith(name, false)
 })
 

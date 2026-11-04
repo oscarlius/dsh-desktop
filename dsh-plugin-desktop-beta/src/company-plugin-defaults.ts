@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { unpackedPath } from './asar-archive-policy.ts'
+import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 
 export const COMPANY_DEFAULT_PLUGIN_BUNDLES = ['dsh-better-sidebar', 'dsh-mnemon'] as const
 
@@ -33,7 +34,24 @@ export function companyMnemonCliPath(installAnchor: string): string | undefined 
 }
 
 /** Applied before Profile-owned patches so saved settings continue to win. */
-export function companyPluginDefaultPatches(mnemonDataDir: string, mnemonCliPath: string | undefined) {
+export function companyMemorySpaceProviders(installAnchor: string) {
+  const packageFile = createRequire(installAnchor).resolve('dsh-mnemon/package.json')
+  const patches = loadOverlayPatches('dsh-mnemon', join(dirname(packageFile), 'cordis.patch.yml'))
+  const find = (value: unknown): unknown => {
+    if (Array.isArray(value)) { for (const row of value) { const found = find(row); if (found) return found } }
+    else if (value && typeof value === 'object') {
+      const row = value as Record<string, unknown>
+      if (row.id === 'mnemon-source-memory-spaces') return (row.config as { providers?: unknown })?.providers
+      return find(row.insert) ?? find(row.config)
+    }
+    return undefined
+  }
+  const providers = find(patches)
+  if (!Array.isArray(providers) || !providers.length) throw new Error('Cannot preserve bundled Memory Spaces providers')
+  return [...providers, { use: 'dsh-plugin-p7-company-models/personal-memory-space-provider', instanceId: 'p7-personal-memory' }]
+}
+
+export function companyPluginDefaultPatches(mnemonDataDir: string, mnemonCliPath: string | undefined, installAnchor = import.meta.url) {
   return [
     { id: 'better-sidebar', config: { autoOpenSubagent: false, autoOpenJobs: false } },
     { id: 'mnemon', config: {
@@ -49,5 +67,8 @@ export function companyPluginDefaultPatches(mnemonDataDir: string, mnemonCliPath
     // Desktop owns its existing Skill management surface. Do not mount Mnemon's
     // experimental second Skills page/source beside it.
     { id: 'mnemon-source-skills', disabled: true },
+    { id: 'mnemon-source-memory-spaces', config: {
+      providers: companyMemorySpaceProviders(installAnchor),
+    } },
   ]
 }

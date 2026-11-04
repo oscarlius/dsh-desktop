@@ -2,6 +2,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import { describe, expect, it, vi } from 'vitest'
 import { API_PATHS } from '../src/http-contract.js'
 import { registerCompanyRoutes, type CompanyWebServer } from '../src/routes.js'
+import { PERSONAL_MEMORY_ROUTE_PATHS, registerPersonalMemoryRoutes } from '../src/personal-memory-routes.js'
 
 const listen = (server: Server) => new Promise<number>((resolve, reject) => {
   server.once('error', reject); server.listen(0, '127.0.0.1', () => resolve((server.address() as import('node:net').AddressInfo).port))
@@ -47,5 +48,39 @@ describe('company host routes', () => {
       const response = await call(app.port, API_PATHS.connect, 'POST', { Host: `127.0.0.1:${app.port}`, Origin: app.origin, 'Content-Type': 'application/json' }, JSON.stringify({ origin: 'https://p7.example', apiKey: secret }))
       expect(response.status).toBe(200); expect(app.host.connect).toHaveBeenCalledWith('https://p7.example', secret); expect(response.body).not.toContain(secret)
     } finally { await app.close() }
+  })
+})
+
+describe('personal memory loopback routes', () => {
+  it('forwards only same-origin owner requests, validates mutation bodies, and derives a project workspace key', async () => {
+    const handlers = new Map<string, (req: IncomingMessage, res: ServerResponse) => Promise<void>>(); let origin = ''
+    const web: CompanyWebServer = { getOrigin: () => origin, register: route => { handlers.set(route.path, route.handler); return () => { handlers.delete(route.path) } } }
+    const fetcher = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(String(input).includes('/status') ? { syncEnabled: true, itemCount: 0, sizeBytes: 0, maxBytes: 1, maxItems: 1, userId: 'u', organizationId: 'o', rawChatCapture: false } : { id: 'm1', revision: 1, kind: 'document', workspaceKey: 'project:hash', title: 'Title', content: 'Body', sourceId: 'manual:m1', deleted: false, updatedAt: 'now', userId: 'u', organizationId: 'o' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    const account = { status: () => ({ profile: { userId: 'u', organizationId: 'o' } }), connection: () => ({ origin: 'https://p7.example' }), getValidAccessToken: async () => 'personal-token' }
+    const dispose = registerPersonalMemoryRoutes(web, account as never)
+    const server = createServer((req, res) => { const [path = ''] = (req.url ?? '').split('?'); const handler = handlers.get(path); if (!handler) { res.statusCode = 404; res.end(); return }; void handler(req, res) })
+    const port = await listen(server); origin = `http://127.0.0.1:${port}`
+    try {
+      const denied = await call(port, PERSONAL_MEMORY_ROUTE_PATHS.status, 'GET', { Host: `127.0.0.1:${port}` })
+      expect(denied.status).toBe(403)
+      const invalid = await call(port, PERSONAL_MEMORY_ROUTE_PATHS.put, 'POST', { Host: `127.0.0.1:${port}`, Origin: origin, 'Content-Type': 'application/json' }, JSON.stringify({ id: 'm1' }))
+      expect(invalid.status).toBe(422)
+      const invalidWorkspace = await call(port, PERSONAL_MEMORY_ROUTE_PATHS.put, 'POST', { Host: `127.0.0.1:${port}`, Origin: origin, 'Content-Type': 'application/json' }, JSON.stringify({ id: 'm1', kind: 'document', workspaceKey: 'project:not-server-valid', title: 'Title', content: 'Body', sourceId: 'manual:m1', expectedRevision: 0 }))
+      expect(invalidWorkspace.status).toBe(422)
+      const saved = await call(port, PERSONAL_MEMORY_ROUTE_PATHS.put, 'POST', { Host: `127.0.0.1:${port}`, Origin: origin, 'Content-Type': 'application/json' }, JSON.stringify({ id: 'm1', kind: 'document', projectKey: 'Finance', title: 'Title', content: 'Body', sourceId: 'manual:m1', expectedRevision: 0 }))
+      expect(saved.status).toBe(200)
+      const [, init] = fetcher.mock.calls[0]!
+      expect(init?.headers).toMatchObject({ authorization: 'Bearer personal-token' })
+      expect(String(init?.body)).toMatch(/[a-f0-9]{64}/)
+      expect(String(init?.body)).not.toContain('Finance')
+      const dreams = await call(port, PERSONAL_MEMORY_ROUTE_PATHS.dreams, 'GET', { Host: `127.0.0.1:${port}`, Origin: origin })
+      expect(dreams.status).toBe(200)
+      const invalidReview = await call(port, PERSONAL_MEMORY_ROUTE_PATHS.dreamReview, 'POST', { Host: `127.0.0.1:${port}`, Origin: origin, 'Content-Type': 'application/json' }, JSON.stringify({ id: 'dream-1', decision: 'accept', workspaceKey: 'not-a-workspace' }))
+      expect(invalidReview.status).toBe(422)
+      const review = await call(port, PERSONAL_MEMORY_ROUTE_PATHS.dreamReview, 'POST', { Host: `127.0.0.1:${port}`, Origin: origin, 'Content-Type': 'application/json' }, JSON.stringify({ id: 'dream-1', decision: 'reject' }))
+      expect(review.status).toBe(200)
+      expect(String(fetcher.mock.calls.at(-1)?.[0])).toContain('/dreams/dream-1/review')
+    } finally { dispose(); await new Promise<void>(resolve => server.close(() => resolve())); vi.unstubAllGlobals() }
   })
 })

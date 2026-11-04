@@ -36,6 +36,7 @@ const host = new DesktopHostProcess(process.execPath, root, profile, undefined,
   undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
   async () => ({}), async () => { throw Error('No real login in client boot fixture') })
 let browser, page
+let runError
 const errors = []
 const report = { scope: 'Actual official frontend and module Loader against isolated Host; no production account or inference', version: manifest.version }
 try {
@@ -59,7 +60,7 @@ try {
   await context.addInitScript(() => {
     globalThis.dshDesktop = { protocolVersion: 1 }
     globalThis.dshDesktopBoot = { ready: () => globalThis.__desktopBoot(), failed: message => { globalThis.__desktopFailure = message } }
-    globalThis.dshDesktopSetup = { read: async () => ({ required: false, accountPending: false }) }
+    globalThis.dshDesktopSetup = { read: async () => ({ required: false, accountPending: false, accountOnboardingEnabled: false }) }
     globalThis.desktopNext = {
       state: () => globalThis.__desktopState(), command: async () => {},
       renderer: { profile: () => 'desktop', report: async status => { globalThis.__desktopHealth = status } },
@@ -74,12 +75,24 @@ try {
   assert.equal(boot.health, 'healthy')
   assert.equal(boot.skillStyles, true, 'Desktop Skill client must activate in the real module Loader')
   if (manifest.dshDesktopFlavor === 'companytest' && manifest.dependencies?.['dsh-mnemon']) {
+    const headers = { cookie, origin }
+    const [companyResponse, accountResponse] = await Promise.all([
+      fetch(origin + '/p7-company-models/status', { headers }),
+      fetch(origin + '/p7-company-models/account/status', { headers }),
+    ])
+    assert.equal(companyResponse.status, 200, 'Company status route must be mounted in the real Host')
+    assert.equal(accountResponse.status, 200, 'Company account route must be mounted in the real Host')
+    const company = await companyResponse.json()
+    assert.equal(company.loginRequired, true)
+    assert.equal(company.tools?.mode, 'on-demand')
+    assert.ok(['syncing', 'registered', 'unavailable'].includes(company.tools?.phase))
     await page.waitForFunction(() => document.querySelector('style[data-plugin="dsh-better-sidebar"]')
       && document.querySelector('style[data-plugin-css^="dsh-mnemon/"]'), undefined, { timeout: 15_000 })
     boot.companyPlugins = await page.evaluate(() => ({
       sidebarStyles: !!document.querySelector('style[data-plugin="dsh-better-sidebar"]'),
       memoryStyles: !!document.querySelector('style[data-plugin-css^="dsh-mnemon/"]'),
     }))
+    boot.company = { phase: company.phase, tools: company.tools.phase }
     assert.equal(boot.companyPlugins.sidebarStyles, true)
     assert.equal(boot.companyPlugins.memoryStyles, true)
   }
@@ -88,13 +101,21 @@ try {
   await page.screenshot({ path: join(output, 'client-boot.png') })
   console.log(JSON.stringify(report))
 } catch (error) {
+  runError = error
   Object.assign(report, { passed: false, error: String(error), errors })
   await page?.screenshot({ path: join(output, 'client-boot-failed.png') }).catch(() => {})
   throw error
 } finally {
-  await browser?.close()
-  await host.stop(true)
-  writeFileSync(join(output, 'report.json'), JSON.stringify(report, null, 2))
-  rmSync(home, { recursive: true, force: true })
+  let cleanupError
+  try { await browser?.close() } catch (error) { cleanupError ??= error }
+  try { await host.stop(true) } catch (error) { cleanupError ??= error }
+  if (runError === undefined && cleanupError !== undefined) {
+    Object.assign(report, { passed: false, error: String(cleanupError), errors })
+  }
+  // Always leave the primary boot diagnostic and clean its isolated profile;
+  // an acknowledgement failure during cleanup must not mask either action.
+  try { writeFileSync(join(output, 'report.json'), JSON.stringify(report, null, 2)) }
+  finally { rmSync(home, { recursive: true, force: true }) }
+  if (runError === undefined && cleanupError !== undefined) throw cleanupError
 }
 

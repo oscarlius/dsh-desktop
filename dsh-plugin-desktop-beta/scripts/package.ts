@@ -148,14 +148,16 @@ if (mode === 'dir') {
 } else if (mode === 'company-win') {
   const update = process.env.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
   const initial = process.env.DSH_COMPANY_INITIAL_DISTRIBUTION === '1'
-  if (update === initial) throw new Error('Select exactly one company package distribution')
+  const personal = process.env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION === '1'
+  if ([initial, update, personal].filter(Boolean).length !== 1) throw new Error('Select exactly one company package distribution')
   await prepareInterpreters()
   packageWindowsInstaller({ ...createWindowsPackageOptions(), desktopRoot, workspaceRoot, run, prepareRuntime,
     verifier: join(desktopRoot, 'scripts/company-test-windows-verify.mjs'),
     builderArguments: companyWindowsBuilderArguments({
-      distribution: initial ? 'full' : 'update',
+      distribution: initial || personal ? 'full' : 'update',
       output: process.env.DSH_COMPANY_PACKAGE_OUTPUT ?? join(desktopRoot, 'dist'),
       bootstrapFile: process.env.DSH_P7_BOOTSTRAP_FILE,
+      keylessFull: personal,
       sourceCommit: process.env.DSH_COMPANY_RELEASE_SOURCE_COMMIT,
     }),
   })

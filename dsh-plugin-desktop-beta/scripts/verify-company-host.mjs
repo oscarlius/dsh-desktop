@@ -47,6 +47,15 @@ try{
  report.checks.push({name:'sidebar auto-open and memory background review disabled',pass:true});
  assert.equal(memory.value.storageScope,'workspaces');assert.equal(memory.value.dataDir,join(home,'mnemon'));
  assert.ok(memory.value.cliPath,'Native memory CLI must be bundled');
+ const providerResponse=await remote('dshMnemon','read',{endpoint:'provider-services',payload:{}});
+ assert.equal(providerResponse.ok,true);
+ assert.ok(Array.isArray(providerResponse.value?.providers));
+ assert.ok(Array.isArray(providerResponse.value?.items));
+ const providerIds=providerResponse.value.providers.map(provider=>provider.id);
+ assert.ok(providerIds.includes('p7-personal-memory'));
+ assert.ok(providerIds.includes('openviking'));
+ assert.equal(providerIds.length,9,'P7 must append to the eight bundled non-native providers');
+ report.checks.push({name:'Memory Spaces catalog preserves bundled providers and adds P7 personal memory',pass:true});
  const memoryStore=join(home,'mnemon','verification-store');
  // Yarn's development cache can carry a Windows Low Integrity label. The
  // installer materializes the same bytes into its normal application directory.

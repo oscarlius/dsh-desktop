@@ -3,7 +3,8 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSy
 import { createRequire } from 'node:module'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { initProfile, loadOverlayPatches, loadProfileDirectory, PROFILE_TEMPLATES, readProfilePatches, type Profile, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import { initProfile, loadOverlayPatches, loadProfileDirectory, readProfilePatches, type Profile, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { atomicJson, atomicText, readPrivateFile } from './private-files.ts'
 import { NextRecovery } from './recovery.ts'
@@ -346,12 +347,12 @@ export function loadNextProfile(projectDir: string, home: string, installAnchor 
   const profile = loadProfileDirectory('dsh-desktop-next', projectDir, installAnchor)
   profile.layers.push({ packageName: 'dsh-desktop-next', packageDir: target,
     patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches(home, installAnchor) })
-  const overlay = [
-    { id: 'agents-anywhere-bridge-next', config: {
-      dshHome: home,
-      ...archivedAgentsAnywhereConfig(installAnchor),
-    } },
-  ]
+  const overlay = profile.layers.some(layer => layer.packageName === AA_PACKAGE)
+    ? [{ id: 'agents-anywhere-bridge-next', config: {
+        dshHome: home,
+        ...archivedAgentsAnywhereConfig(installAnchor),
+      } }]
+    : []
   // Leave AA stateRoot unset to share its default credentials and device binding with Stable/Beta.
   // Rewriting the generated overlay also removes the former per-Profile stateRoot on upgrade.
   // The official manager still owns per-Profile bundle/row enablement.

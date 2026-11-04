@@ -46,6 +46,7 @@ import { createCompanyUpdateAdapter } from './company-updates.ts'
 import { companyBuildVersion } from './company-build-version.ts'
 import { createArtifactRequest } from './update-transport.ts'
 import { NextUpdateInstaller } from './update-installer.ts'
+import { canAutomaticWindowsApply } from './windows-update-handoff.ts'
 import { updateLabel } from './update-state.ts'
 import { DESKTOP_SHUTDOWN_TIMEOUT_MS } from '../../dsh-plugin-desktop/src/shutdown.ts'
 import { isDesktopRendererStatus, NextRendererRecovery } from './renderer-recovery.ts'
@@ -231,11 +232,18 @@ const platformLogin = new PlatformLoginWindow({
 const native = new NativeDesktop({ root, language: () => windowsLanguage, state, window: () => mainWindow,
   show: openMain, run, warn: error => runtime.diagnostics.append(String(error), 'warn') })
 const permissions = createNativePermissions()
+let pendingUpdateRuntimeHealthy = !app.isPackaged
+let pendingUpdateHostHealthy = false
+let pendingUpdateClientHealthy = false
+function confirmHealthyPendingUpdate(): void {
+  if (pendingUpdateHostHealthy && pendingUpdateClientHealthy) updates.confirmPendingAfterHealthyHost(app.getVersion(), pendingUpdateRuntimeHealthy)
+}
 const updateInstaller = new NextUpdateInstaller({ platform: process.platform, executable: process.execPath,
   language: () => windowsLanguage,
   productName: DESKTOP_PRODUCT_NAME,
   log: error => runtime.diagnostics.append(String(error), 'warn') })
 const updates = new NextUpdates({ version, platform: process.platform, packaged: app.isPackaged, userData: electronData,
+  executable: process.execPath,
   request: (url, init) => net.fetch(url, { ...init, credentials: 'omit' }),
   artifactRequest: createArtifactRequest(),
   ...(DESKTOP_COMPANY_SERVICE_ENABLED ? { company: createCompanyUpdateAdapter({
@@ -254,6 +262,9 @@ const updates = new NextUpdates({ version, platform: process.platform, packaged:
   },
   log: error => runtime.diagnostics.append(String(error), 'warn'),
   prepare: (path, nextVersion, directory, signal) => updateInstaller.prepare(path, nextVersion, directory, signal),
+  stage: () => updateInstaller.stage(),
+  launchAutomatic: () => updateInstaller.launch(true),
+  canAutomaticApply: () => canAutomaticWindowsApply(process.execPath, DESKTOP_PRODUCT_NAME),
   install: async () => {
     runtime.busy = true; native.refresh()
     try {
@@ -987,6 +998,8 @@ async function main(): Promise<void> {
     if (!isDesktopRendererStatus(status)) throw new Error('Invalid renderer status')
     if (documentId !== rendererDocumentId || !documentId) return
     rendererRecovery?.report(status)
+    pendingUpdateClientHealthy = true
+    confirmHealthyPendingUpdate()
   })
   ipcMain.handle(IPC.failed, (event, message: unknown, documentId: unknown) => {
     assertSender(event, mainWindow, APP_URL)
@@ -1117,12 +1130,19 @@ async function main(): Promise<void> {
   })
   runtime.safeMode = safeModeRequested
   runtime.recoveryMode = process.argv.includes(RECOVERY_ARGUMENT)
+  // This boundary intentionally precedes profile/Host initialization: pending
+  // installers are re-authorized against the current P7 release, then hand
+  // off without ever interrupting an already-running agent task.
+  if (await updates.applyPendingOnNextLaunch()) { app.exit(0); return }
   runtime.initialize()
   void prepareHostEnvironment()
   if (dataLocation.error && !runtime.safeMode) { runtime.recoveryMode = true; runtime.report(dataLocation.error) }
   if (app.isPackaged) {
     // Packaging sealed the payload with the shell, dsh, platform and architectures it was released for.
-    try { verifyPackagedRuntimeIdentity(join(root, DESKTOP_RUNTIME_FILE), { version, dshVersion: readInstalledPackageVersion(root, '@deepseek-ai/dsh'), platform: process.platform, arch: process.arch }) }
+    try {
+      verifyPackagedRuntimeIdentity(join(root, DESKTOP_RUNTIME_FILE), { version, dshVersion: readInstalledPackageVersion(root, '@deepseek-ai/dsh'), platform: process.platform, arch: process.arch })
+      pendingUpdateRuntimeHealthy = true
+    }
     catch (error) { runtime.recoveryMode = true; runtime.report(error) }
   }
   if (!runtime.safeMode && !runtime.recoveryMode) {
@@ -1174,7 +1194,10 @@ async function main(): Promise<void> {
   }
   if (runtime.recoveryMode) openControls('recovery')
   else if (onboarding) openControls('onboarding')
-  else { void runtime.start().catch(() => {}); openMain() }
+  else {
+    void runtime.start().then(() => { pendingUpdateHostHealthy = true; confirmHealthyPendingUpdate() }).catch(() => {})
+    openMain()
+  }
   app.on('activate', openMain)
   app.on('window-all-closed', () => { if (process.platform !== 'darwin' && !native.available && !replacingWindow) app.quit() })
 }

@@ -24,14 +24,14 @@ function sameOrigin(req: IncomingMessage, expected: string, mutating: boolean): 
   if (mutating || req.headers['sec-fetch-site'] !== 'same-origin') return false
   try { return new URL(req.headers.referer ?? '').origin === expected } catch { return false }
 }
-async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function body(req: IncomingMessage, maxBytes = 8192): Promise<Record<string, unknown>> {
   if (req.headers['content-type']?.split(';')[0]?.trim().toLowerCase() !== 'application/json') throw new Error('invalid-body')
-  if (req.headers['content-length'] && (!/^\d+$/.test(req.headers['content-length']) || Number(req.headers['content-length']) > 8192)) throw new Error('invalid-body')
+  if (req.headers['content-length'] && (!/^\d+$/.test(req.headers['content-length']) || Number(req.headers['content-length']) > maxBytes)) throw new Error('invalid-body')
   const chunks: Buffer[] = []; let size = 0
   for await (const chunk of req) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array)
     size += bytes.length
-    if (size > 8192) throw new Error('invalid-body')
+    if (size > maxBytes) throw new Error('invalid-body')
     chunks.push(bytes)
   }
   const value: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
@@ -73,3 +73,4 @@ export function registerCompanyRoutes(server: CompanyWebServer, host: Pick<Compa
   }))
   return () => { for (const dispose of remove.reverse()) dispose() }
 }
+export { sameOrigin as companyRouteOriginAllowed, body as readCompanyRouteBody, reply as replyCompanyRoute }

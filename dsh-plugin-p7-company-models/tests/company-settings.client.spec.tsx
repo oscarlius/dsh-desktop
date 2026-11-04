@@ -242,7 +242,14 @@ describe('P7 company-model settings section', () => {
     expect(screen.getByText('mcp__p7__gildata__FinQuery')).toBeTruthy()
     expect(screen.getByText('mcp__p7__search__web_search')).toBeTruthy()
     expect(screen.getByText('Registered')).toBeTruthy()
-    expect(screen.getByText(/may not call one every turn/)).toBeTruthy()
+    expect(screen.getByText(/does not mean a tool was called/)).toBeTruthy()
+  })
+
+  it('shows on-demand authorization separately from the tools loaded for each Agent', async () => {
+    const api = { status: vi.fn(async () => ({ ...READY, tools: { ...READY.tools, mode: 'on-demand' as const, authorizedToolCount: 5, agents: [{ agentId: 'research', loadedToolCount: 2, schemaBytes: 400, tools: [] }] } })), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(), accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(), accountLogout: vi.fn(), accountUsage: vi.fn(async () => USAGE) }
+    render(<CompanySettingsSection {...({ api, t } as unknown as CompanySettingsSectionProps)} />)
+    expect(await screen.findByText('On-demand loading (authorized tools): 5')).toBeTruthy()
+    expect(screen.getByText('research: Tools loaded this turn 2 (400 bytes)')).toBeTruthy()
   })
 
   it('lets the user cancel the current key input and aborts a pending request on unmount', async () => {

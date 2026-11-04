@@ -32,8 +32,11 @@ function nodes(file, predicate) {
 for (const workspace of ['dsh-plugin-desktop', 'dsh-plugin-desktop-beta', 'dsh-desktop-next']) {
   test(`${workspace}: official Reload DevTools completes through the hosted embedder callback`, { skip }, () => {
     const require = createRequire(resolve(workspace, 'package.json'))
+    const workspaceManifest = JSON.parse(readFileSync(resolve(workspace, 'package.json'), 'utf8'))
+    const expectedVersion = workspaceManifest.dependencies['@deepseek-ai/dsh-experimental-inspector']
+    assert.equal(typeof expectedVersion, 'string', `${workspace} must declare its inspector runtime`)
     const manifest = require.resolve('@deepseek-ai/dsh-experimental-inspector/package.json')
-    assert.equal(JSON.parse(readFileSync(manifest, 'utf8')).version, '0.2.1-rc.3')
+    assert.equal(JSON.parse(readFileSync(manifest, 'utf8')).version, expectedVersion)
     const directory = join(dirname(manifest), 'lib/devtools/chunks')
     const parse = (prefix, marker) => {
       const files = readdirSync(directory).filter(name => name.startsWith(prefix + '-') && name.endsWith('.js')

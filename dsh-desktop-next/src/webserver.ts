@@ -1,6 +1,6 @@
 /** Keep upstream HTTP routing while requiring Host credentials for Market routes. */
 import { hostLog, hostOperation } from './host/logging.ts'
-import WebServer, { type WebRoute, type WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
+import WebServer, { type WebResourceRoute, type WebRoute, type WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import { decideDesktopBrowserAccess, nextBrowserAccess } from './desktop-browser-access.ts'
 import type { Duplex } from 'node:stream'
@@ -23,6 +23,11 @@ export default class NextWebServer extends WebServer {
   private permits(request: Parameters<WebRoute['handler']>[0]): boolean {
     const access = nextBrowserAccess()
     return !access || decideDesktopBrowserAccess(access, request) !== 'denied'
+  }
+
+  private permitsResource(request: Request): boolean {
+    const url = new URL(request.url)
+    return this.permits({ headers: Object.fromEntries(request.headers), url: `${url.pathname}${url.search}` } as Parameters<WebRoute['handler']>[0])
   }
 
   override register(route: WebRoute): () => void {
@@ -51,10 +56,14 @@ export default class NextWebServer extends WebServer {
     }
   }
 
-  override registerFallback(handler: WebRoute['handler']): () => void {
+  override registerFallback(fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resource'>): () => void {
+    if (typeof fallback !== 'function') return super.registerFallback({ resource: async (request, peer) => {
+      if (!this.permitsResource(request)) return new Response('Browser access is disabled', { status: 403, headers: { 'cache-control': 'no-store' } })
+      return fallback.resource(request, peer)
+    } })
     return super.registerFallback(this.observeHttp('fallback', async (request, response) => {
       if (!this.permits(request)) { response.writeHead(403, { 'cache-control': 'no-store' }); response.end('Browser access is disabled'); return }
-      await handler(request, response)
+      await fallback(request, response)
     }))
   }
 

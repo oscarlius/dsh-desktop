@@ -12,7 +12,7 @@
 
 在 Windows x64 构建机使用仓库的 Corepack/Yarn。更新 Beta `package.json` 版本，按 AGENTS 完成 Market 和 Agents Anywhere 准备，提交源码、锁文件与产物来源。构建要求工作树中的已跟踪源码已提交，Full 和更新包记录同一 Git 提交与版本。
 
-设置 `DSH_P7_BOOTSTRAP_FILE` 指向本机受保护的公司连接 JSON（沿用现有 Host 格式）。文件不要入库。设置 `P7_BOOTSTRAP_PASSWORD_FILE` 或 `P7_ADMIN_TOKEN_FILE` 指向受保护的管理认证文件；不要把凭据写到命令参数、发布说明或日志。
+推荐的 Full 包使用个人 Feishu 登录，不嵌入共享密钥：设置 `DSH_COMPANY_KEYLESS_FULL=1`，并确保运行时使用固定的 P7 网关地址完成登录。遗留的自动连接模式仍可设置 `DSH_P7_BOOTSTRAP_FILE` 指向本机受保护的公司连接 JSON（沿用现有 Host 格式）；文件不要入库。设置 `P7_BOOTSTRAP_PASSWORD_FILE` 或 `P7_ADMIN_TOKEN_FILE` 指向受保护的管理认证文件；不要把凭据写到命令参数、发布说明或日志。
 
 ## 一次生成并发布
 
@@ -20,7 +20,7 @@
 corepack yarn release:company --notes-file <发布说明文件> --reason "本次版本发布原因"
 ```
 
-默认输出 `dsh-plugin-desktop-beta/dist-company/<版本>/`。可用 `DSH_COMPANY_RELEASE_OUTPUT` 指定一个尚不存在的版本输出目录。Full 与更新包分别构建到独立目录，最终 NSIS 内容也会校验：Full 必须带公司初始化材料；公开更新包必须不带公司密钥。三个文件全部成功才会原子生成 `release-manifest.json`，记录版本、同一源码提交、文件用途、大小和哈希。不要把整个输出目录上传到公开 CI 附件或公开静态目录。
+默认输出 `dsh-plugin-desktop-beta/dist-company/<版本>/`。可用 `DSH_COMPANY_RELEASE_OUTPUT` 指定一个尚不存在的版本输出目录。Full 与更新包分别构建到独立目录；个人登录 Full 不含共享密钥，遗留 Full 才带受保护初始化材料，公开更新包始终不带公司密钥。三个文件全部成功才会原子生成 `release-manifest.json`，记录版本、同一源码提交、文件用途、大小和哈希。不要把整个输出目录上传到公开 CI 附件或公开静态目录。
 
 发布器先核验本地清单及打包内容，再上传 Full、更新包、差分索引。P7Pro 核验同一版本的三项文件后，最后一次事务切换公开更新版本；缺文件、错版、错用途、哈希错误或并发修订冲突时保留原发布。成功生成 `publication-receipt.json`，再从 P7Pro 的 DSH 客户端页面下载已发布 Full 包分发给新同事。
 

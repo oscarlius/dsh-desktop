@@ -5,6 +5,7 @@ import type { P7AccountStatus, P7Usage } from '../account-broker.js'
 import { DEFAULT_P7_PUBLIC_ORIGIN } from '../defaults.js'
 import { createCompanyModelsApi, type CompanyModelsApi } from './api.js'
 import type { CompanySettingsLocaleKey } from './locales.js'
+import { PersonalMemorySection } from './PersonalMemorySection.js'
 
 const POLL_MS = 5_000
 const ACCOUNT_PENDING_POLL_MS = 1_000
@@ -257,8 +258,11 @@ export function CompanySettingsSection({ api: suppliedApi, t }: CompanySettingsS
     <section className="dshP7CompanySettingsCatalog" aria-labelledby="p7-company-models-tools-title">
       <div className="dshP7CompanySettingsStatusHeader"><h3 id="p7-company-models-tools-title">{t('tools')}</h3><span className="dshP7CompanySettingsBadge" data-phase={status?.tools.phase ?? 'syncing'}>{t(toolStatusKey(status?.tools.phase ?? 'syncing'))}</span></div>
       <p className="dshP7CompanySettingsIntro">{t('toolsIntro')}</p>
+      {status?.tools.mode === 'on-demand' && <p className="dshP7CompanySettingsNotice">{t('toolsOnDemand')}: {status.tools.authorizedToolCount ?? status.tools.tools.length}</p>}
       {status?.tools.tools.length ? <ul className="dshP7CompanySettingsToolList">{status.tools.tools.map(tool => <li className="dshP7CompanySettingsTool" key={tool.name}>{toolLabel(tool.name, t) && <span>{toolLabel(tool.name, t)}</span>}<code>{tool.name}</code></li>)}</ul> : <p className="dshP7CompanySettingsEmpty">{t('noTools')}</p>}
+      {status?.tools.agents?.map(agent => <p className="dshP7CompanySettingsNotice" key={agent.agentId}>{agent.agentId}: {t('toolsAgentLoaded')} {agent.loadedToolCount} ({agent.schemaBytes} bytes){agent.error ? ` · ${agent.error}` : ''}</p>)}
       <p className="dshP7CompanySettingsNotice">{t('toolUsageNotice')}</p>
     </section>
+    <PersonalMemorySection key={account?.profile ? `${account.profile.organizationId}:${account.profile.userId}:${account.profile.sessionId}` : 'signed-out'} t={t} {...(account?.profile?.userId === undefined ? {} : { identityKey: account.profile.userId })} />
   </section>
 }

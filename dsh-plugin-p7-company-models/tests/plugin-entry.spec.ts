@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import * as plugin from '../src/index.js'
 import { API_PATHS } from '../src/http-contract.js'
+import { PERSONAL_MEMORY_ROUTE_PATHS } from '../src/personal-memory-routes.js'
 import { CompanyHost } from '../src/company-host.js'
 
 describe('published Cordis entrypoint', () => {
@@ -25,7 +26,7 @@ describe('published Cordis entrypoint', () => {
     ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'local', model: 'local-model' }), saveSelection: vi.fn() } as never)
     try {
       await ctx.plugin(plugin)
-      expect(paths).toEqual(new Set(Object.values(API_PATHS)))
+      expect(paths).toEqual(new Set([...Object.values(API_PATHS), ...Object.values(PERSONAL_MEMORY_ROUTE_PATHS)]))
       expect(initialize).not.toHaveBeenCalled()
       settle()
       await vi.waitFor(() => { expect(initialize).toHaveBeenCalledOnce() })

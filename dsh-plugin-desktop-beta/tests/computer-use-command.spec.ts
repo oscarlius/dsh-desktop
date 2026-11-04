@@ -9,8 +9,10 @@ import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import * as NativeExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import * as Provider from '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native'
 import {
   COMPUTER_USE_COMMAND_NAME,
@@ -112,6 +114,15 @@ describe('installComputerUseCommand', () => {
   let ctx: Context
   let routes: Map<string, RegisteredRoute>
 
+  async function executeTool(name: string, callId: string, arguments_: Record<string, unknown>, agent: Agent) {
+    const batch = await ctx.tools.execute({
+      calls: [{ type: 'tool-call', id: ToolCallId(callId), name, arguments: JSON.stringify(arguments_) }],
+      agent,
+      signal: new AbortController().signal,
+    })
+    return batch.results[0]!.result
+  }
+
   beforeEach(async () => {
     vi.clearAllMocks()
     profileDir = mkdtempSync(join(tmpdir(), 'dsh-computer-use-cmd-'))
@@ -132,18 +143,24 @@ describe('installComputerUseCommand', () => {
       },
     })
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeExecutor)
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(ComputerUseRegistry)
 
     ctx.tools.register(
-      defineContentToolFixture({
+      defineTool({
         name: 'ordinary_echo',
         description: 'Ordinary workspace tool',
         parameters: {},
-        execute: async () => [{ type: 'text', text: 'echo' }],
+        output: {
+          schema: { type: 'string' },
+          render: (_args, value) => [{ type: 'text', text: value }],
+        },
+        execute: async () => 'echo',
       }),
     )
   })
@@ -173,13 +190,7 @@ describe('installComputerUseCommand', () => {
     expect(assemblyA.sections.some(section => section.name === CUA_PROMPT_SECTION)).toBe(false)
 
     // Direct execution of CUA tool is rejected while gated
-    const denied = await ctx.tools.execute({
-      name: 'cua_driver_native__check_permissions',
-      callId: ToolCallId('call-denied'),
-      arguments: { prompt: false },
-      agent: agentA,
-      signal: new AbortController().signal,
-    })
+    const denied = await executeTool('cua_driver_native__check_permissions', 'call-denied', { prompt: false }, agentA)
     expect(denied.isError).toBe(true)
     expect(native.call).not.toHaveBeenCalled()
   })
@@ -220,13 +231,7 @@ describe('installComputerUseCommand', () => {
       ),
     ).toBe(true)
 
-    const allowed = await ctx.tools.execute({
-      name: 'cua_driver_native__check_permissions',
-      callId: ToolCallId('call-allowed'),
-      arguments: { prompt: false },
-      agent: agentA,
-      signal: new AbortController().signal,
-    })
+    const allowed = await executeTool('cua_driver_native__check_permissions', 'call-allowed', { prompt: false }, agentA)
     expect(allowed.isError).toBeFalsy()
     expect(native.call).toHaveBeenCalledTimes(1)
 

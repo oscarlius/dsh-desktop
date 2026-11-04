@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
-import { composeEntries, loadOverlayPatches, loadProfileDirectory, OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { composeEntries, loadOverlayPatches, loadProfileDirectory } from '@deepseek-ai/dsh-app-boot'
+import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { AA_PACKAGE, COMMUNITY_MARKET_PACKAGE, DSH_MARKET_PACKAGE, loadNextProfile, NEXT_PACKAGE, NextProfiles, OFFICIAL_MARKET_PACKAGE, profileName, readNextProfilePatches, WEB_BUNDLES } from '../src/profiles.ts'
 import { DEFAULT_OFFICIAL_MARKET_INDEX_URL } from '../src/profile-plugin-market.ts'
 import * as privateFiles from '../src/private-files.ts'
@@ -544,6 +545,7 @@ it('still loads the Profile when the projection sweep fails', () => {
 it('leaves no Profile link into an archived installation and points the AA bridge at its unpacked files', () => {
   const manager = profiles()
   const dir = manager.ensure('desktop')
+  manager.setFeatures('desktop', { remoteControl: true, market: false })
   const resources = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-next-resources-')))
   roots.push(resources)
   const archive = join(resources, 'app.asar')
@@ -563,12 +565,9 @@ it('leaves no Profile link into an archived installation and points the AA bridg
   expect(lstatSync(link, { throwIfNoEntry: false })).toBeUndefined()
   expect(profile.layers.map(layer => layer.packageName)).toContain('dsh-plugin-desktop-beta')
   const overlay = JSON.parse(readFileSync(join(dir, 'desktop-next.cordis.patch.json'), 'utf8')) as { id: string; config: Record<string, string> }[]
-  const unpacked = join(resources, 'app.asar.unpacked', 'node_modules')
-  expect(overlay[0]).toEqual({ id: 'agents-anywhere-bridge-next', config: {
-    dshHome: manager.home,
-    connectorSourceDir: join(unpacked, '@agents-anywhere', 'dsh-bridge-next', 'lib', 'bundled-connector'),
-    uvPath: join(unpacked, '@dataiku', `uv-${process.platform}-${process.arch}`, 'bin', process.platform === 'win32' ? 'uv.exe' : 'uv'),
-  } })
+  // This fixture intentionally exposes no AA bundle patch, so the bridge is
+  // unavailable and its configuration must not become a missing-row patch.
+  expect(overlay).toEqual([])
   // A physical installation keeps the managed link and the bridge's own defaults.
   loadNextProfile(dir, manager.home)
   expect(lstatSync(link).isSymbolicLink()).toBe(true)

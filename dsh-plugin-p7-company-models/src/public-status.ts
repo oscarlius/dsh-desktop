@@ -12,9 +12,6 @@ export interface CompanyStatus {
     api?: string; contextWindow?: number; maxOutputTokens?: number; inputModalities?: readonly string[]
   }[]
   /** Host registration snapshot; this is availability, never evidence of use in a conversation. */
-  tools: {
-    phase: 'syncing' | 'registered' | 'unavailable'
-    tools: { name: string }[]
-  }
+  tools: import('./mcp-tool-status.js').P7McpToolStatus
   message: string | null
 }

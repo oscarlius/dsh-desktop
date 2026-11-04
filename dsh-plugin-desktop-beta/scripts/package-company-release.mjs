@@ -63,7 +63,7 @@ export function releaseManifest(version, sourceCommit, output) {
     channel: 'companytest',
     version,
     displayVersion: presentation.visible,
-    build: presentation.build,
+    build: presentation.build ?? product.dshCompanyCompatibilityBuild,
     sourceCommit,
     artifacts: [
       artifact('initial-exe', output, full),
@@ -73,20 +73,24 @@ export function releaseManifest(version, sourceCommit, output) {
   }
 }
 
-function packageDistribution(staging, name, sourceCommit, updateDistribution) {
+function packageDistribution(staging, name, sourceCommit, updateDistribution, keylessFull = false) {
   const output = join(staging, name)
   const env = { ...process.env }
   // Clear caller state before defining this child distribution. In particular,
   // a caller's update flag must never turn the protected Full into a public one.
   delete env.DSH_COMPANY_UPDATE_DISTRIBUTION
   delete env.DSH_COMPANY_INITIAL_DISTRIBUTION
+  delete env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION
+  delete env.DSH_COMPANY_KEYLESS_FULL
   Object.assign(env, {
     DSH_COMPANY_TEST_WINDOWS: '1',
     DSH_COMPANY_PACKAGE_OUTPUT: output,
     DSH_COMPANY_RELEASE_SOURCE_COMMIT: sourceCommit,
   })
   if (updateDistribution) env.DSH_COMPANY_UPDATE_DISTRIBUTION = '1'
+  else if (keylessFull) env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION = '1'
   else env.DSH_COMPANY_INITIAL_DISTRIBUTION = '1'
+  if (updateDistribution || keylessFull) delete env.DSH_P7_BOOTSTRAP_FILE
   command(process.execPath, [join(packageRoot, 'scripts', 'package.ts'), 'company-win'], packageRoot, env)
 }
 
@@ -97,7 +101,8 @@ export function runCompanyRelease() {
   try {
     // Each child receives an explicit distribution mode so an inherited update
     // environment cannot remove the protected bootstrap from the Full package.
-    packageDistribution(plan.staging, 'full', sourceCommit, false)
+    const keylessFull = process.env.DSH_COMPANY_KEYLESS_FULL === '1'
+    packageDistribution(plan.staging, 'full', sourceCommit, false, keylessFull)
     packageDistribution(plan.staging, 'update', sourceCommit, true)
     if (gitCommit() !== sourceCommit) throw new Error('Source Git commit changed during company package generation')
     const manifest = releaseManifest(plan.version, sourceCommit, plan.staging)

@@ -49,9 +49,13 @@ export function registerCompanyModelPicker(ctx: Context): void {
       // Its inline model-label child remains the sole declaration of that seat.
       inject: (sessionId): ModelSelectInjected => {
         const directory = scope.modelDirectories.directoryFor(sessionId)
-        const available = scope.sessions.subagentAddress(sessionId) === undefined
+        // rc.1 exposes addressed subagents on the public session controller;
+        // the companion also runs in Stable's earlier session service.
+        const sessions = scope.sessions as typeof scope.sessions & { subagentAddress?(id: typeof sessionId): unknown }
+        const available = sessions.subagentAddress?.(sessionId) === undefined
         return { available, directory: directory.store,
           load: () => { if (available) void directory.load().catch(() => {}) },
+          resolveText: text => scope.locale.resolveText(text),
           select: selection => available ? directory.select(selection) : Promise.resolve(undefined),
         }
       },

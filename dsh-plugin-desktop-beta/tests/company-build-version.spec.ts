@@ -16,7 +16,7 @@ describe('beta15 compatibility bridge', () => {
     expect(companyBuildLabel('2.0.29-beta.15', '2026103002')).toBe('2.0.18-beta.15（构建 2026103002）')
     expect(companyBuildLabel('2.0.28-beta.15', '2026103001')).toBe('2.0.18-beta.15（构建 2026103001）')
     expect(companyBuildLabel('2.0.30-beta.15', '2026103003')).toBe('2.0.18-beta.15（构建 2026103003）')
-    expect(companyBuildLabel('2.0.31-beta.15', '2026110101')).toBe('2.0.18-beta.15（构建 2026110101）')
+    expect(companyBuildLabel('2.0.32-beta.16', '2026110401')).toBe('2.0.32-beta.16')
     expect(companyBuildVersion('2.0.18-beta.15.build.2026102102')).toEqual({ visible: '2.0.18-beta.15', build: '2026102102' })
     expect(companyBuildVersion('2.0.20')).toEqual({ visible: '2.0.20' })
   })

@@ -50,6 +50,20 @@ describe('company installer distributions', () => {
     expect(() => companyWindowsBuilderArguments({ distribution: 'full', output })).toThrow('DSH_P7_BOOTSTRAP_FILE')
   })
 
+  it('supports a keyless Full personal-login package without adding a bootstrap resource', () => {
+    const arguments_ = companyWindowsBuilderArguments({ distribution: 'full', output, keylessFull: true, sourceCommit: 'a'.repeat(40) })
+    expect(arguments_).toEqual(expect.arrayContaining([
+      '--config.extraMetadata.dshDesktopPersonalLoginDistribution=true',
+      '--config.nsis.artifactName=P7-DSH-Company-Full-${version}-${arch}-Setup.${ext}',
+    ]))
+    const config = { extraMetadata: { dshDesktopFlavor: 'companytest', dshDesktopPersonalLoginDistribution: true }, extraResources: [{ from: 'runtime', to: 'runtime' }] }
+    applyCompanyBootstrapResources(config, { DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION: '1' })
+    expect(config.extraResources).toEqual([{ from: 'runtime', to: 'runtime' }])
+    expect(() => applyCompanyBootstrapResources(config, {})).toThrow('explicit personal-login')
+    expect(() => companyWindowsBuilderArguments({ distribution: 'update', output, keylessFull: true })).toThrow('only valid for Full')
+    expect(() => applyCompanyBootstrapResources({ ...config, extraResources: [{ from: 'secret', to: 'p7-company-connection.json' }] }, { DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION: '1' })).toThrow('Keyless Full')
+  })
+
   it('adds the protected resource as a real FileSet only in the Full beforePack context', () => {
     const full = { extraMetadata: { dshDesktopFlavor: 'companytest' }, extraResources: [{ from: 'runtime', to: 'runtime' }] }
     const env = { DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_P7_BOOTSTRAP_FILE: 'C:/sealed/p7-company-connection.json' }

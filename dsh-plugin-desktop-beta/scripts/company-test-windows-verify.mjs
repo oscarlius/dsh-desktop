@@ -13,7 +13,10 @@ if (!/^\d+\.\d+\.\d+-beta\.\d+(?:\.build\.[1-9]\d*)?$/u.test(version)) throw new
 const dist = process.env.DSH_COMPANY_PACKAGE_OUTPUT ?? join(root, 'dist')
 const updateDistribution = process.env.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
 const initialDistribution = process.env.DSH_COMPANY_INITIAL_DISTRIBUTION === '1'
-const installer = join(dist, initialDistribution
+const personalLoginDistribution = process.env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION === '1'
+const fullDistribution = initialDistribution || personalLoginDistribution
+if ([updateDistribution, fullDistribution].filter(Boolean).length !== 1) throw new Error('Select exactly one company package distribution')
+const installer = join(dist, fullDistribution
   ? `P7-DSH-Company-Full-${version}-x64-Setup.exe`
   : `P7-DSH-Company-Test-${version}-x64-Setup.exe`)
 const application = join(dist, 'win-unpacked', 'P7 DSH Company Test.exe')
@@ -143,7 +146,12 @@ if (packaged.dshDesktopUpdateDistribution === true) {
   const blockmap = `${installer}.blockmap`
   if (!existsSync(blockmap) || statSync(blockmap).size === 0) throw new Error('Company update installer is missing its blockmap')
   console.log('Company update distribution has no bundled credential and includes a differential blockmap.')
+} else if (packaged.dshDesktopPersonalLoginDistribution === true) {
+  if (!personalLoginDistribution) throw new Error('Keyless Full marker requires the personal-login distribution mode')
+  if (existsSync(connectionPath)) throw new Error('Keyless Full installer must not carry a reusable P7 credential')
+  console.log('Keyless Full personal-login distribution has no bundled credential.')
 } else {
+  if (!initialDistribution) throw new Error('Legacy Full marker requires the protected initial distribution mode')
   const connection = JSON.parse(readFileSync(connectionPath, 'utf8'))
   if (connection.origin !== 'https://maas.zxrc.com.cn:8090' || typeof connection.key !== 'string' || !/^p7k_[\x21-\x7e]+$/.test(connection.key)) throw new Error('The company connection resource is missing or invalid')
   console.log('Company public gateway and dedicated connection resource verified (credential withheld).')
@@ -159,4 +167,4 @@ if (packaged.dshDesktopFlavor !== 'companytest') throw new Error('packaged runti
 if (packaged.dependencies?.['dsh-plugin-p7-company-models'] !== 'workspace:*') throw new Error('packaged runtime does not declare the bundled P7 dependency')
 console.log(`Company test packaged runtime verified: ${archive}`)
 verifyPackagedRuntime()
-verifyInstallerPayload(!updateDistribution)
+verifyInstallerPayload(!updateDistribution && !personalLoginDistribution)

@@ -3,7 +3,8 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSy
 import { createRequire } from 'node:module'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { initProfile, loadOverlayPatches, loadProfileDirectory, PROFILE_TEMPLATES, readProfilePatches, type Profile, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import { initProfile, loadOverlayPatches, loadProfileDirectory, readProfilePatches, type Profile, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { atomicJson, atomicText, readPrivateFile } from './private-files.ts'
 import { NextRecovery } from './recovery.ts'
@@ -19,10 +20,19 @@ import { COMPANY_DEFAULT_PLUGIN_BUNDLES, companyMnemonCliPath, companyPluginDefa
 export const NEXT_PACKAGE = fileURLToPath(new URL('../package.json', import.meta.url))
 export const WEB_BUNDLES = [...PROFILE_TEMPLATES.web!.bundles]
 const NEXT_BUNDLE_PATCH = fileURLToPath(new URL('../cordis.patch.yml', import.meta.url))
+function desktopPlatformPatches() {
+  return loadOverlayPatches('dsh-plugin-desktop-beta', NEXT_BUNDLE_PATCH)
+}
+
+function addDesktopCapabilityLayers(profile: Profile, home: string, installAnchor: string, packageDir: string): void {
+  profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir,
+    patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches(home, installAnchor) })
+}
+
 function desktopCapabilityPatches(home: string, installAnchor: string) {
   return [
-    ...loadOverlayPatches('dsh-plugin-desktop-beta', NEXT_BUNDLE_PATCH),
-    ...(DESKTOP_COMPANY_SERVICE_ENABLED ? companyPluginDefaultPatches(join(home, 'mnemon'), companyMnemonCliPath(installAnchor)) : []),
+    ...desktopPlatformPatches(),
+    ...(DESKTOP_COMPANY_SERVICE_ENABLED ? companyPluginDefaultPatches(join(home, 'mnemon'), companyMnemonCliPath(installAnchor), installAnchor) : []),
     ...(DESKTOP_COMPANY_SERVICE_ENABLED && !process.env.DSH_WEB_SEARCH_PROVIDER?.trim()
       ? [{ id: 'web', config: { searchProvider: 'p7' } }] : []),
   ]
@@ -414,19 +424,20 @@ export function loadNextProfile(projectDir: string, home: string, installAnchor 
   if (existingLink && (linkTarget === undefined || resolve(modules, readlinkSync(link)) !== linkTarget)) unlinkSync(link)
   if (linkTarget !== undefined && !lstatSync(link, { throwIfNoEntry: false })) symlinkSync(linkTarget, link, 'junction')
   const profile = loadProfileDirectory('dsh-plugin-desktop-beta', projectDir, installAnchor)
-  profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir: target,
-    patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches(home, installAnchor) })
+  addDesktopCapabilityLayers(profile, home, installAnchor, target)
   profile.patches.push(...companyAccountUiPolicyPatches())
   profile.patches.push(...companyWebFetchPolicyPatches(profile.patches))
   const overlay = [
-    { id: 'agents-anywhere-bridge-next', config: {
+    // AA owns an optional Profile bundle.  Patching it while disabled becomes
+    // an rc1 Loader error because its row has not been inserted.
+    ...(profile.layers.some(layer => layer.packageName === AA_PACKAGE) ? [{ id: 'agents-anywhere-bridge-next', config: {
       dshHome: home,
       ...archivedAgentsAnywhereConfig(installAnchor),
-    } },
+    } }] : []),
     ...(DESKTOP_COMPANY_SERVICE_ENABLED ? [{ insert: [
       { id: 'p7-company-models', name: 'dsh-plugin-p7-company-models', inject: ['p7AccountStore', 'p7AccountBrowser'], config: { requirePersonalLogin: true } },
       { id: 'p7-web-search', name: 'dsh-plugin-p7-web-search' },
-      { id: 'p7-managed-mcp', name: 'dsh-plugin-p7-mcp' },
+      { id: 'p7-managed-mcp', name: 'dsh-plugin-p7-mcp', config: { mode: 'on-demand' } },
       { id: 'dsh-streamfold', name: 'dsh-streamfold' },
     ] }] : []),
   ]
@@ -459,8 +470,7 @@ function archivedAgentsAnywhereConfig(installAnchor: string): { connectorSourceD
 /** Recompose Next's own layer before user/global patches on every manager or HMR read. */
 export function readNextProfilePatches(projectDir: string, home: string, overlays: readonly string[], profilePatches?: readonly Profile['patches'][number][]) {
   const profile = loadProfileDirectory('dsh-plugin-desktop-beta', projectDir, NEXT_PACKAGE, { userLayer: false })
-  profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir: dirname(NEXT_PACKAGE),
-    patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches(home, NEXT_PACKAGE) })
+  addDesktopCapabilityLayers(profile, home, NEXT_PACKAGE, dirname(NEXT_PACKAGE))
   profile.patches = profilePatches === undefined
     ? existsSync(profile.patchPath) ? loadOverlayPatches('dsh-plugin-desktop-beta', profile.patchPath) : []
     : [...profilePatches]

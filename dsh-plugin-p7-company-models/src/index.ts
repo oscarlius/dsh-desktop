@@ -16,6 +16,9 @@ import { AccountBroker, type P7AccountStore } from './account-broker.js'
 import { installPersonalCredentialOverlay } from './personal-credential-overlay.js'
 import { DEFAULT_P7_PUBLIC_ORIGIN } from './defaults.js'
 import { installInlineThinkingNormalizer } from './inline-thinking.js'
+import { installToolProgressGuard, type ToolProgressGuardConfig } from './tool-progress-guard.js'
+import { registerPersonalMemoryRoutes } from './personal-memory-routes.js'
+import { CompanyMemoryRuntime, type CompanyMemoryWorkspace } from './personal-memory-runtime.js'
 
 interface P7AccountBrowser { open(url: string): Promise<void> | void }
 
@@ -25,11 +28,22 @@ declare module '@deepseek-ai/cordis' {
 
 export const name = 'p7-company-models'
 export const inject = ['loader', 'webServer', 'settings', 'credentials', 'profileContext', 'llm', 'agentDefaultModel']
-export const Config = Schema.object({ bootstrapFile: Schema.string().default(''), requirePersonalLogin: Schema.boolean().default(false) })
+export const Config: Schema = Schema.object({
+  bootstrapFile: Schema.string().default(''),
+  requirePersonalLogin: Schema.boolean().default(false),
+  toolProgressGuard: Schema.object({
+    patternWindow: Schema.number().default(8),
+    maxDistinctPatterns: Schema.number().default(2),
+    repeatedPatternThreshold: Schema.number().default(8),
+    repeatedErrorThreshold: Schema.number().default(4),
+    ignoreToolNamePatterns: Schema.array(Schema.string()).default(['*poll*', '*watch*', '*stream*', '*subscribe*']),
+  }).default({}),
+})
 
 /** Compose beside the official adapters without modifying the upstream runtime. */
-export function apply(ctx: Context, config: { bootstrapFile?: string; requirePersonalLogin?: boolean } = {}): void {
+export function apply(ctx: Context, config: { bootstrapFile?: string; requirePersonalLogin?: boolean; toolProgressGuard?: ToolProgressGuardConfig } = {}): void {
   installInlineThinkingNormalizer(ctx)
+  installToolProgressGuard(ctx, config.toolProgressGuard)
   let host: CompanyHost | undefined
   const accountStore = ctx.get('p7AccountStore')
   const requirePersonalLogin = config.requirePersonalLogin === true
@@ -83,6 +97,21 @@ export function apply(ctx: Context, config: { bootstrapFile?: string; requirePer
     sync: async () => { await initialized; await companyHost.sync() },
     disconnect: async () => { await initialized; await companyHost.disconnect() },
   }, account), 'p7-company-models: local settings')
+  let memory: CompanyMemoryRuntime | undefined
+  ctx.effect(() => registerPersonalMemoryRoutes(ctx.webServer, account, () => memory?.snapshot()), 'p7-company-models: personal memory routes')
+  void initialized.then(() => {
+    if (disposed) return
+    const connection = ctx.get('connection') as { authenticatedUrl(origin: string): string } | undefined
+    const workspaces = ctx.get('workspaceRegistry') as { list(): readonly CompanyMemoryWorkspace[] } | undefined
+    if (!connection || !workspaces) return
+    try {
+      memory = new CompanyMemoryRuntime({ account, profileDirectory: ctx.profileContext.dir,
+        origin: () => ctx.webServer.getOrigin(), authenticatedUrl: value => connection.authenticatedUrl(value),
+        workspaces: () => workspaces.list(), log: code => ctx.logger.warn(code) })
+      memory.start()
+    } catch { ctx.logger.warn('memory_sync_checkpoint_unavailable') }
+  })
+  ctx.effect(() => () => memory?.dispose(), 'p7-company-models: personal memory synchronization')
 }
 export { CompanyHost } from './company-host.js'
 export { AccountBroker, getAccountBroker } from './account-broker.js'

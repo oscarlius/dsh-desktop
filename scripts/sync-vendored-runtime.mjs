@@ -36,6 +36,11 @@ const channel = requestedChannel ?? upstreamDocument.activeChannel
 if (channel !== 'stable' && channel !== 'beta') fail(`unknown release channel ${JSON.stringify(channel)}`)
 const upstream = upstreamDocument.channels?.[channel]
 if (upstream === undefined || typeof upstream !== 'object') fail(`missing upstream metadata for ${channel}`)
+if (upstream.releaseSource?.kind === 'npm') {
+  const { syncNpmVendoredRuntime } = await import('./sync-npm-vendored-runtime.mjs')
+  await syncNpmVendoredRuntime({ mode, channel, upstreamDocument, upstream })
+  process.exit(0)
+}
 const otherChannel = channel === 'stable' ? 'beta' : 'stable'
 const otherVersion = upstreamDocument.channels?.[otherChannel]?.sourceVersion
 if (typeof otherVersion !== 'string' || !/^[0-9A-Za-z][0-9A-Za-z.-]*$/u.test(otherVersion)) {
