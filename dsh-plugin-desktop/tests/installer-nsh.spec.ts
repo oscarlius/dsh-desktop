@@ -35,8 +35,13 @@ describe('Windows NSIS running-app handoff', () => {
     expect(script).not.toContain('getProcessInfo.nsh')
   })
 
-  it('skips wizard pages during --updated and auto-relaunches when --force-run completes visibly', () => {
-    const script = readFileSync(join(process.cwd(), 'build', 'installer.nsh'), 'utf8')
+  it.each(['build/installer.nsh', '../dsh-plugin-desktop-beta/build/installer.nsh'])('preserves automatic restart environment and manual restart behavior in %s', path => {
+    const script = readFileSync(join(process.cwd(), path), 'utf8')
+    const autoRestart = script.slice(
+      script.indexOf('${if} $companyAutoUpdate == "1"', script.indexOf('!macro customInstall')),
+      script.indexOf('${else}', script.indexOf('${if} $companyAutoUpdate == "1"', script.indexOf('!macro customInstall'))),
+    )
+    const manualRestart = script.slice(script.indexOf('${else}', script.indexOf('!macro customInstall')))
 
     expect(script).toContain('!macro customInit')
     expect(script).toContain('SetSilent normal')
@@ -46,7 +51,15 @@ describe('Windows NSIS running-app handoff', () => {
     expect(script).toContain('StrCpy $isForceMachineInstall "1"')
     expect(script).toContain('StrCpy $isForceCurrentInstall "1"')
     expect(script).toContain('!macro customInstall')
-    expect(script).toContain('${StdUtils.ExecShellAsUser} $0 "$INSTDIR\\${APP_EXECUTABLE_FILENAME}" "open" "--updated"')
+    expect(autoRestart).toContain('ClearErrors')
+    expect(autoRestart).toContain("Exec '\"$INSTDIR\\${APP_EXECUTABLE_FILENAME}\" --updated'")
+    expect(autoRestart).toContain('IfErrors dsh_installer_auto_restart_failed dsh_installer_auto_restart_succeeded')
+    expect(autoRestart).toContain('dsh_installer_auto_restart_failed:')
+    expect(autoRestart).toContain('SetErrorLevel 1')
+    expect(autoRestart).toContain('dsh_installer_auto_restart_succeeded:')
+    expect(autoRestart).toContain('!insertmacro quitSuccess')
+    expect(autoRestart).not.toContain('${StdUtils.ExecShellAsUser}')
+    expect(manualRestart).toContain('${StdUtils.ExecShellAsUser} $0 "$INSTDIR\\${APP_EXECUTABLE_FILENAME}" "open" "--updated"')
     expect(script).not.toContain('${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--updated"')
     expect(script).toContain('ReadRegStr $R0 HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation')
     expect(script).toContain('ReadRegStr $R0 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation')

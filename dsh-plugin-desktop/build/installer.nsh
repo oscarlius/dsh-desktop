@@ -180,15 +180,17 @@ Var companyAutoUpdate
   ${andIf} ${isForceRun}
   ${if} $companyAutoUpdate == "1"
     HideWindow
-    ${StdUtils.ExecShellAsUser} $0 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "open" "--updated"
-    ${if} $0 == "ok"
-      !insertmacro quitSuccess
-    ${orIf} $0 == "fallback"
-      !insertmacro quitSuccess
-    ${else}
-      SetErrorLevel 1
-      Quit
-    ${endIf}
+    ; This automatic path is already a current-user installer. Launch directly
+    ; so the restarted application inherits its APPDATA and DSH environment;
+    ; ExecShellAsUser routes through Explorer and drops those variables.
+    ClearErrors
+    Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --updated'
+    IfErrors dsh_installer_auto_restart_failed dsh_installer_auto_restart_succeeded
+  dsh_installer_auto_restart_failed:
+    SetErrorLevel 1
+    Quit
+  dsh_installer_auto_restart_succeeded:
+    !insertmacro quitSuccess
   ${else}
   ${ifNot} ${Silent}
     HideWindow
