@@ -30,7 +30,7 @@ async function waitForStatus(root: string, phase: string): Promise<Record<string
   throw new Error(`did not observe handoff status ${phase}${last ? `; last=${last}` : ''}`)
 }
 
-it.skipIf(process.platform !== 'win32')('accepts exactly one disposable current-user Electron Builder uninstall record when not elevated', async () => {
+it.skipIf(process.platform !== 'win32')('accepts only the exact product name or its complete Electron Builder SemVer suffix when not elevated', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-handoff-preflight-')); roots.push(root)
   const product = `DSH Handoff Test ${randomUUID()}`
   const executable = join(root, 'Desktop.exe'); const uninstaller = join(root, `Uninstall ${product}.exe`)
@@ -41,10 +41,17 @@ it.skipIf(process.platform !== 'win32')('accepts exactly one disposable current-
   const isElevated = await execute(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded(elevated)], { windowsHide: true }).then(() => true, () => false)
   if (isElevated) { await expect(canAutomaticWindowsApply(executable, product)).resolves.toBe(false); return }
   const create = '$p="HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"+$env:DSH_TEST_KEY; New-Item -Path $p -Force | Out-Null; New-ItemProperty -Path $p -Name DisplayName -Value $env:DSH_TEST_PRODUCT -PropertyType String -Force | Out-Null; New-ItemProperty -Path $p -Name UninstallString -Value ("`""+$env:DSH_TEST_UNINSTALLER+"`" /currentuser") -PropertyType String -Force | Out-Null'
+  const setDisplayName = '$p="HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"+$env:DSH_TEST_KEY; Set-ItemProperty -Path $p -Name DisplayName -Value $env:DSH_TEST_DISPLAY_NAME -Force'
   const cleanup = '$p="HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"+$env:DSH_TEST_KEY; Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue'
   try {
     await execute(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded(create)], { windowsHide: true, env: baseEnv })
     await expect(canAutomaticWindowsApply(executable, product)).resolves.toBe(true)
+    await execute(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded(setDisplayName)], { windowsHide: true, env: { ...baseEnv, DSH_TEST_DISPLAY_NAME: `${product} 2.0.32-next.15` } })
+    await expect(canAutomaticWindowsApply(executable, product)).resolves.toBe(true)
+    await execute(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded(setDisplayName)], { windowsHide: true, env: { ...baseEnv, DSH_TEST_DISPLAY_NAME: `Other ${product} 2.0.32-next.15` } })
+    await expect(canAutomaticWindowsApply(executable, product)).resolves.toBe(false)
+    await execute(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded(setDisplayName)], { windowsHide: true, env: { ...baseEnv, DSH_TEST_DISPLAY_NAME: `${product} 2.0.32-next.15 arbitrary` } })
+    await expect(canAutomaticWindowsApply(executable, product)).resolves.toBe(false)
   } finally { await execute(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded(cleanup)], { windowsHide: true, env: baseEnv }) }
 })
 

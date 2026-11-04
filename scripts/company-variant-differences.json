@@ -214,7 +214,7 @@
     },
     {
       "path": "src/main.ts",
-      "betaSha256": "dcb408304005fa1fa63b9183aad1ca482da5dd7a5b585ce0fda8a30206e5b0e9",
+      "betaSha256": "ba32a2a2bd0cb2d288f756b23ebb599caff100e70268506b3050b3ec8db002f9",
       "nextSha256": "e4a50b19ab3e30cbe0dd8032dc3a02552450ef52e0649ee185d4abe2385b5ac5",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },
@@ -370,7 +370,7 @@
     },
     {
       "path": "tests/main-lifecycle.spec.ts",
-      "betaSha256": "1b1ad71649e63779cf517b34fecc200fd5bd5fc97a15cb9e9cd81b0489459dcc",
+      "betaSha256": "133a9109f44394ef6d63589b553e8686601bb478a32f65d31f961f6c8bb7f0c3",
       "nextSha256": "c3cb4b923491a1d123fb62789c4c6cd3d8b30194a9fca5add0f119595b5de7fe",
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

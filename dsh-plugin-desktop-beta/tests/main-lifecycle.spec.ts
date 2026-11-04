@@ -249,6 +249,52 @@ it.each(['close', 'quit', 'host-failure'] as const)('cancels pending renderer re
   } finally { vi.useRealTimers(); vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }) }
 })
 
+it('keeps Company Chromium data at its legacy app-data path when only the DSH home is overridden', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'next-company-home-'))
+  const appData = mkdtempSync(join(tmpdir(), 'next-company-app-data-'))
+  const legacyState = join(appData, 'P7 DSH Company Test')
+  vi.stubEnv('DSH_DESKTOP_NEXT_HOME', home)
+  fixture.appPaths.set('appData', appData)
+  try {
+    await import('../src/main.ts')
+    await vi.waitFor(() => expect(fixture.windows).toHaveLength(1))
+    expect(fixture.lockPaths).toEqual([legacyState])
+    expect(fixture.appPaths.get('userData')).toBe(legacyState)
+    expect(fixture.appPaths.get('sessionData')).toBe(legacyState)
+  } finally { vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }); rmSync(appData, { recursive: true, force: true }) }
+})
+
+it('uses an absolute local Company user-data override without touching the legacy directory', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'next-company-home-'))
+  const appData = mkdtempSync(join(tmpdir(), 'next-company-app-data-'))
+  const isolated = mkdtempSync(join(tmpdir(), 'next-company-isolated-'))
+  const legacyState = join(appData, 'P7 DSH Company Test')
+  vi.stubEnv('DSH_DESKTOP_NEXT_HOME', home)
+  vi.stubEnv('DSH_DESKTOP_NEXT_USER_DATA', isolated)
+  fixture.appPaths.set('appData', appData)
+  try {
+    await import('../src/main.ts')
+    await vi.waitFor(() => expect(fixture.windows).toHaveLength(1))
+    expect(fixture.lockPaths).toEqual([isolated])
+    expect(fixture.appPaths.get('userData')).toBe(isolated)
+    expect(fixture.appPaths.get('sessionData')).toBe(isolated)
+    expect(existsSync(legacyState)).toBe(false)
+  } finally {
+    vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }); rmSync(appData, { recursive: true, force: true }); rmSync(isolated, { recursive: true, force: true })
+  }
+})
+
+it('rejects a relative Company user-data override before accessing legacy data', async () => {
+  const appData = mkdtempSync(join(tmpdir(), 'next-company-app-data-'))
+  const legacyState = join(appData, 'P7 DSH Company Test')
+  vi.stubEnv('DSH_DESKTOP_NEXT_USER_DATA', 'relative-user-data')
+  fixture.appPaths.set('appData', appData)
+  try {
+    await expect(import('../src/main.ts')).rejects.toThrow('DSH_DESKTOP_NEXT_USER_DATA must be an absolute path')
+    expect(existsSync(legacyState)).toBe(false)
+  } finally { vi.unstubAllEnvs(); rmSync(appData, { recursive: true, force: true }) }
+})
+
 it('starts Safe Mode with fresh desktop and Chromium state while preserving normal state and its instance lock', async () => {
   const home = mkdtempSync(join(tmpdir(), 'next-safe-desktop-state-'))
   const normalState = join(home, 'P7 DSH Company Test')

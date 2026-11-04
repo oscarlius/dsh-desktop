@@ -37,7 +37,7 @@ import { ONBOARDING_ARGUMENT, RECOVERY_ARGUMENT, SAFE_ARGUMENT, relaunchApp, rel
 import { DESKTOP_RUNTIME_FILE, readInstalledPackageVersion, verifyPackagedRuntimeIdentity } from './runtime-tree.ts'
 import { unpackedPath } from './asar-archive-policy.ts'
 import { createNativePermissions, installMediaPermissions } from './electron-permissions.ts'
-import { defaultDataDirectory, readDataDirectory, validateDataDirectory } from './data-directory.ts'
+import { defaultDataDirectory, readDataDirectory, resolveDesktopUserDataDirectory, validateDataDirectory } from './data-directory.ts'
 import { maskSecrets } from './mask-secrets.ts'
 import { DesktopBrowserGuests } from './browser-guests.ts'
 import { PlatformLoginWindow } from './platform-login-window.ts'
@@ -61,12 +61,15 @@ const root = dirname(NEXT_PACKAGE)
 // home remains explicit, but must never silently relocate an existing user.
 const defaultHome = resolve(process.env.DSH_DESKTOP_NEXT_HOME
   ?? (DESKTOP_COMPANY_SERVICE_ENABLED ? join(homedir(), DESKTOP_HOME_DIRECTORY_NAME) : defaultDataDirectory()))
+// A supplied user-data root is an explicit local isolation boundary for
+// Chromium, the P7 vault, and profile selection. It must be absolute so a
+// malformed override never falls back to the active install's data.
+const companyUserData = resolveDesktopUserDataDirectory(join(app.getPath('appData'), DESKTOP_PRODUCT_NAME))
 // The location preference stays at its former Next-owned anchor so previously
 // chosen custom directories survive a change to the default home.
 const locationRoot = process.env.DSH_DESKTOP_NEXT_HOME ? defaultHome
-  : app.isPackaged ? join(app.getPath('appData'), DESKTOP_PRODUCT_NAME, 'home') : join(root, '.desktop-next', 'home')
+  : app.isPackaged ? join(companyUserData, 'home') : join(root, '.desktop-next', 'home')
 const locationFile = join(locationRoot, 'desktop-next-location.json')
-const companyUserData = join(app.getPath('appData'), DESKTOP_PRODUCT_NAME)
 const nextDataLocation = readDataDirectory(defaultHome, locationRoot)
 const dataLocation = DESKTOP_COMPANY_SERVICE_ENABLED ? readCompanyDataLocation(companyUserData, nextDataLocation) : nextDataLocation
 const home = dataLocation.home

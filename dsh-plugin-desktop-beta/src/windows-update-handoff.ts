@@ -65,7 +65,10 @@ export async function canAutomaticWindowsApply(executable: string, productName: 
     // Electron Builder stores InstallLocation under Software/<GUID>, while
     // the uninstall record carries the authoritative quoted uninstaller path.
     'function Matches-Root($entry) { if (!$entry.UninstallString) { return $false }; $pathMatch=[regex]::Match($entry.UninstallString,\'^(?:")([^"\\r\\n]+)"(?:\\s|$)\'); if (!$pathMatch.Success) { return $false }; $expected=Join-Path $root ("Uninstall "+$env:DSH_UPDATE_PRODUCT_NAME+".exe"); return [IO.Path]::GetFullPath($pathMatch.Groups[1].Value) -eq $expected }',
-    '$match=@($keys | Where-Object { $_.DisplayName -ceq $env:DSH_UPDATE_PRODUCT_NAME -and (Matches-Root $_) -and $_.UninstallString -match \'(?:^|\\s)/currentuser(?:\\s|$)\' })',
+    // electron-builder appends the package SemVer to DisplayName. Permit only
+    // that exact suffix, never a product-name prefix or arbitrary trailing text.
+    'function Matches-DisplayName($entry) { $displayName=[string]$entry.DisplayName; $product=$env:DSH_UPDATE_PRODUCT_NAME; if ($displayName -ceq $product) { return $true }; return $displayName -cmatch (\'^\'+[regex]::Escape($product)+\' (?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-(?:(?:0|[1-9]\\d*)|(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))(?:\\.(?:(?:0|[1-9]\\d*)|(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$\') }',
+    '$match=@($keys | Where-Object { (Matches-DisplayName $_) -and (Matches-Root $_) -and $_.UninstallString -match \'(?:^|\\s)/currentuser(?:\\s|$)\' })',
     'if($match.Count -ne 1){ exit 2 }; $uninstaller=Join-Path $root ("Uninstall "+$env:DSH_UPDATE_PRODUCT_NAME+".exe"); if(!(Test-Path -LiteralPath $uninstaller -PathType Leaf)){ exit 2 }; $machine=Get-ChildItem "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall","HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall" -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath }; if(@($machine | Where-Object { Matches-Root $_ }).Count -ne 0){ exit 3 }',
     '$probe=Join-Path $root (".dsh-update-probe-"+[guid]::NewGuid().ToString("N")); try { [IO.File]::WriteAllText($probe,"ok"); Remove-Item -LiteralPath $probe -Force; exit 0 } catch { exit 4 }',
   ].join('; ')

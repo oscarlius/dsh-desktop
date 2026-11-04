@@ -6,6 +6,16 @@ import { privateDirectory, readPrivateFile } from './private-files.ts'
 
 export function defaultDataDirectory(userHome = homedir()): string { return join(userHome, '.dsh') }
 
+/**
+ * Resolve an explicitly isolated Chromium data root without changing the
+ * legacy product directory when the override is absent.
+ */
+export function resolveDesktopUserDataDirectory(legacy: string, override = process.env.DSH_DESKTOP_NEXT_USER_DATA): string {
+  if (override === undefined) return legacy
+  if (!isAbsolute(override) || override.includes('\0')) throw new Error('DSH_DESKTOP_NEXT_USER_DATA must be an absolute path')
+  return resolve(override)
+}
+
 export function readDataDirectory(defaultHome: string, locationRoot = defaultHome): { home: string; error?: string } {
   try {
     const value = JSON.parse(readPrivateFile(join(locationRoot, 'desktop-next-location.json')) ?? 'null') as unknown
