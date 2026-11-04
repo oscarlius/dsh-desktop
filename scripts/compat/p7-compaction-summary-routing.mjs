@@ -43,5 +43,5 @@ export function apply(ctx) {
     yield* this.stream({ ...options, provider: SUMMARY_PROVIDER, model: SUMMARY_MODEL })
   })
   recordState('ready')
-  ctx.logger.info('P7 compaction summary routing ready: summaries may use Gemini; primary local capacity remains 262144')
+  ctx.logger.warn('P7 compaction recovery activated: summaries may use Gemini; primary local capacity remains 262144')
 }
