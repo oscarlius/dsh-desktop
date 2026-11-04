@@ -10,7 +10,7 @@ function fixture() {
     on(event, fn) { assert.equal(event, 'llm/stream'); handler = fn },
     logger: { info() {} },
     llm: { stream(options) {
-      return handler(options, async function* () { delegated++; calls.push(options); yield { type: 'finish', reason: { kind: 'stop' } } })
+      return handler.call(ctx.llm, options, async function* () { delegated++; calls.push(options); yield { type: 'finish', reason: { kind: 'stop' } } })
     } },
   }
   apply(ctx)

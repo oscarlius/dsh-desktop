@@ -6,7 +6,6 @@
 import { writeFileSync } from 'node:fs'
 
 export const name = 'p7-compaction-summary-routing'
-export const inject = ['llm']
 
 const LOCAL_PROVIDERS = new Set(['p7-company-chat', 'p7-company-responses', 'p7-company-messages'])
 const LOCAL_MODELS = new Set(['DeepSeek-V4.1-Flash', 'Qwen3.8-Flash-Next'])
@@ -38,7 +37,10 @@ export function apply(ctx) {
     // Keep the same cancellation signal, payload, tools and token budget.
     ctx.logger.info('P7 compaction summary: using existing Gemini backup; primary local route unchanged')
     recordState('summary-routed')
-    yield* ctx.llm.stream({ ...options, provider: SUMMARY_PROVIDER, model: SUMMARY_MODEL })
+    // The public waterfall binds `this` to the actual LlmRuntime. This also
+    // works for retained preset generations without depending on the profile
+    // plugin's service lookup scope.
+    yield* this.stream({ ...options, provider: SUMMARY_PROVIDER, model: SUMMARY_MODEL })
   })
   recordState('ready')
   ctx.logger.info('P7 compaction summary routing ready: summaries may use Gemini; primary local capacity remains 262144')
