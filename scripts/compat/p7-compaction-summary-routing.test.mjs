@@ -8,7 +8,7 @@ function fixture() {
   let delegated = 0
   const ctx = {
     on(event, fn) { assert.equal(event, 'llm/stream'); handler = fn },
-    logger: { info() {} },
+    logger: { info() {}, warn() {} },
     llm: { stream(options) {
       return handler.call(ctx.llm, options, async function* () { delegated++; calls.push(options); yield { type: 'finish', reason: { kind: 'stop' } } })
     } },
