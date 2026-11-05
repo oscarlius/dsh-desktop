@@ -15,7 +15,7 @@ import { installLazyRuntime, LOAD_TOOL_NAME, SEARCH_TOOL_NAME } from '../src/laz
 // The model is scripted; registry, owned Agents, loop, admission and dispatch are real rc.1.
 class ScriptedAdapter extends LlmAdapter {
   readonly requests = new Map<string, string[][]>()
-  constructor(private readonly desired: ReadonlyMap<string, string>) { super() }
+  constructor(private readonly desired: ReadonlyMap<string, string>, private readonly discovery: typeof LOAD_TOOL_NAME | typeof SEARCH_TOOL_NAME) { super() }
   async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     const sessionId = String(options.sessionId)
     const desired = this.desired.get(sessionId)
@@ -25,8 +25,8 @@ class ScriptedAdapter extends LlmAdapter {
     const step = history.length
     history.push((options.tools ?? []).map(tool => tool.name).sort())
     if (step < 2) {
-      const name = step === 0 ? LOAD_TOOL_NAME : desired
-      const args = JSON.stringify(step === 0 ? { toolIds: [desired] } : {})
+      const name = step === 0 ? this.discovery : desired
+      const args = JSON.stringify(step === 0 ? this.discovery === SEARCH_TOOL_NAME ? { query: desired } : { toolIds: [desired] } : {})
       const id = ToolCallId(`${sessionId}-${step}`)
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args }
@@ -41,13 +41,13 @@ class ScriptedAdapter extends LlmAdapter {
   }
 }
 
-it('runs real parent and owned child AgentLoops with separate next-step MCP admission', async () => {
+it.each([LOAD_TOOL_NAME, SEARCH_TOOL_NAME] as const)('runs real parent and owned child AgentLoops with one %s discovery step', async (discovery) => {
   const ctx = new Context()
   const parentId = SessionId('mcp-loop-parent')
   const childId = SessionId('mcp-loop-child')
   const quote = 'p7_finance__quote'
   const macro = 'p7_macro__cpi'
-  const adapter = new ScriptedAdapter(new Map([[parentId, quote], [childId, macro]]))
+  const adapter = new ScriptedAdapter(new Map([[parentId, quote], [childId, macro]]), discovery)
   const calls: { name: string; agent: Agent | undefined }[] = []
   const handles: AgentHandle[] = []
   let lazy: ReturnType<typeof installLazyRuntime> | undefined

@@ -92,7 +92,7 @@ export function installLazyRuntime(
   const helpers: ToolDefinition[] = [
     {
       name: SEARCH_TOOL_NAME,
-      description: 'Search company MCP tools available to this Agent and activate relevant tools for its next step. This does not execute a business query. Use a focused query; tools are loaded only in this Agent.',
+      description: 'Search company MCP tools and load matches for this Agent. A loaded result means call the tool directly in the next step; no extra load or search is needed. A unique exact tool ID loads only that tool. This does not execute a business query.',
       parameters: {
         type: 'object',
         properties: { query: { type: 'string', minLength: 1, maxLength: 512 }, namespace: { type: 'string', maxLength: 64 }, limit: { type: 'integer', minimum: 1, maximum: 10 } },
@@ -117,7 +117,7 @@ export function installLazyRuntime(
     },
     {
       name: LOAD_TOOL_NAME,
-      description: 'Activate explicitly known company MCP tool IDs in this Agent. Existing permissions and Agent filters still apply. No business tool executes until a later tool call.',
+      description: 'Load explicitly known company MCP tool IDs for this Agent, then call them in the next step. Tools already loaded by search need no extra load. Existing permissions and Agent filters still apply. This does not execute a business query.',
       parameters: { type: 'object', properties: { toolIds: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 128 } }, required: ['toolIds'], additionalProperties: false },
       output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
       execute: async (input, execution) => {

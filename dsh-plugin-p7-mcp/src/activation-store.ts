@@ -188,14 +188,19 @@ export class ActivationStore<Agent extends object = object> {
     const normalizedNamespace = normalize(namespace ?? '')
     const terms = expandTerms(normalize(query))
     if (terms.length === 0) return { ok: true, tools: [] }
-    const tools = [...catalog.values()]
+    const eligible = [...catalog.values()]
       .filter((tool) => !normalizedNamespace || normalize(tool.namespace) === normalizedNamespace)
       .filter(isPolicyVisible)
+    // Keep exact identifiers case- and punctuation-sensitive. Normalizing them
+    // as search terms can otherwise activate several tools in the same namespace.
+    const exact = eligible.filter((tool) => tool.publicName === query.trim() || tool.wireName === query.trim())
+    const matches = exact.length === 1 ? exact : eligible
       .map((tool) => ({ tool, score: searchScore(tool, terms) }))
       .filter((candidate) => candidate.score > 0)
       .sort((left, right) => right.score - left.score || left.tool.publicName.localeCompare(right.tool.publicName))
       .slice(0, boundedLimit)
-      .map(({ tool }) => ({ toolId: tool.toolId, publicName: tool.publicName, namespace: tool.namespace, description: shortDescription(tool.description) }))
+      .map(({ tool }) => tool)
+    const tools = matches.map((tool) => ({ toolId: tool.toolId, publicName: tool.publicName, namespace: tool.namespace, description: shortDescription(tool.description) }))
     return { ok: true, tools }
   }
 

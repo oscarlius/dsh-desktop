@@ -116,4 +116,32 @@ describe('ActivationStore', () => {
     expect(subject.search(agent, '安全', undefined, undefined, () => false)).toEqual({ ok: true, tools: [] })
     expect(subject.search(agent, '查询GDP指标', 'macro', undefined, visible)).toMatchObject({ ok: true, tools: [{ toolId: 'p7_macro__gdp' }] })
   })
+
+  it.each(['p7_weknora__search_knowledge', 'weknora__search_knowledge'])('selects only a uniquely exact tool id: %s', (query) => {
+    const subject = store()
+    subject.publishCatalog([
+      tool('weknora__search_knowledge', 'Search company knowledge'),
+      tool('weknora__read_document', 'Read company knowledge'),
+      tool('weknora__wiki_search', 'Search company wiki knowledge'),
+    ])
+    expect(subject.search({}, ` ${query} `, undefined, undefined, visible)).toMatchObject({
+      ok: true, tools: [{ toolId: 'p7_weknora__search_knowledge' }],
+    })
+    const general = subject.search({}, 'company knowledge', undefined, undefined, visible)
+    expect(general.ok && general.tools.length).toBe(3)
+  })
+
+  it('applies namespace and policy before exact matching', () => {
+    const subject = store()
+    subject.publishCatalog([tool('weknora__search_knowledge')])
+    expect(subject.search({}, 'weknora__search_knowledge', 'wk', undefined, visible)).toEqual({ ok: true, tools: [] })
+    expect(subject.search({}, 'p7_weknora__search_knowledge', undefined, undefined, () => false)).toEqual({ ok: true, tools: [] })
+  })
+
+  it('keeps normal ranking when a public name also matches another wire name', () => {
+    const subject = store()
+    subject.publishCatalog([tool('quote'), tool('p7_quote')])
+    const result = subject.search({}, 'p7_quote', undefined, undefined, visible)
+    expect(result.ok && result.tools.map(tool => tool.toolId).sort()).toEqual(['p7_p7_quote', 'p7_quote'])
+  })
 })
