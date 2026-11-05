@@ -1,0 +1,61 @@
+diff --git a/lib/index.js b/lib/index.js
+index 1ed54d7ab3..aa30c8ee45 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -705,17 +705,7 @@ var SessionCommandController = class {
+ 		const agent = await this.resolveAgent(request.sessionId);
+ 		return this.agents.serializeImageAdmission(agent, async () => {
+ 			try {
+-				await this.requireModel(request);
+-				const selected = {
+-					provider: request.provider,
+-					model: request.model,
+-					...request.reasoningEffort === void 0 ? {} : { reasoningEffort: ReasoningEffortId(request.reasoningEffort) }
+-				};
+-				await this.ctx.llm.resolveCallConfig(selected);
+-				agent.model.select(selected);
+-				this.ctx.agentDefaultModel.saveSelection(selected).catch((error) => {
+-					this.ctx.logger.warn(`session-controller: model selection changed for the Session but the default was not saved: ${String(error)}`);
+-				});
++				const selected = await this.recordModelSelection(agent, request);
+ 				return { selected: { ...selected } };
+ 			} catch (error) {
+ 				if (remoteErrorOf(error) !== void 0) throw error;
+@@ -726,6 +716,29 @@ var SessionCommandController = class {
+ 			}
+ 		});
+ 	}
++	async recordModelSelection(agent, request) {
++		await this.requireModel(request);
++		const selected = { provider: request.provider, model: request.model, ...request.reasoningEffort === void 0 ? {} : { reasoningEffort: ReasoningEffortId(request.reasoningEffort) } };
++		await this.ctx.llm.resolveCallConfig(selected);
++		agent.model.select(selected);
++		this.ctx.agentDefaultModel.saveSelection(selected).catch((error) => { this.ctx.logger.warn(`session-controller: model selection changed for the Session but the default was not saved: ${String(error)}`); });
++		return selected;
++	}
++	async recoverManagedPromptModel(agent) {
++		const current = agent.model.current();
++		if (current === void 0) return;
++		const managed = this.ctx.get("p7CompanyModels");
++		const resolution = typeof managed?.resolveManagedModelSelection === "function" ? managed.resolveManagedModelSelection(current) : void 0;
++		if (resolution === void 0 || resolution.kind === "pending" || resolution.kind === "available") return;
++		if (resolution.kind === "migrate") {
++			try { await this.recordModelSelection(agent, resolution.selection); }
++			catch { throw new RemoteError("session/model-unavailable", "The company model directory changed while applying the replacement. Wait for it to finish, then choose a model and send again.", { provider: current.provider, model: current.model }); }
++			return;
++		}
++		try { if (await modelAvailable(this.ctx, current)) return; }
++		catch { throw new RemoteError("session/model-unavailable", "The company model directory is still loading. Wait for it to finish, then choose a model and send again.", { provider: current.provider, model: current.model }); }
++		throw new RemoteError("session/model-unavailable", "The selected company model is no longer available. Choose another model before sending a message.", { provider: current.provider, model: current.model });
++	}
+ 	/**
+ 	* Normalize and append a user-owned Session title.
+ 	* @param request - Session identity and proposed title.
+@@ -841,6 +854,7 @@ var SessionCommandController = class {
+ 					hasError: false
+ 				};
+ 				try {
++					await this.recoverManagedPromptModel(agent);
+ 					if (hasImage) {
+ 						const current = agent.model.current();
+ 						if (current !== void 0) {

@@ -30,6 +30,31 @@ const createHost = (fetch: typeof globalThis.fetch, persisted = state(), port = 
 }
 
 describe('CompanyHost integration', () => {
+  it('resolves a stale managed selection only after the current directory is ready', async () => {
+    const app = createHost(vi.fn(async () => response(config({ defaultModel: 'Qwen3.8-Flash-Next', models: [{
+      id: 'Qwen3.8-Flash-Next', displayName: 'Qwen', api: 'openai-responses', contextWindow: 262_144, maxOutputTokens: 8192,
+      inputModalities: ['text'], streaming: true, tools: true,
+    }] }))) as unknown as typeof globalThis.fetch)
+
+    expect(app.host.resolveManagedModelSelection({ provider: P7_PROVIDER_IDS['openai-completions'], model: 'Qwen3.8-Flash-Next' })).toEqual({ kind: 'pending' })
+    await app.host.initialize()
+    await app.host.connect('https://p7.example', 'p7k_valid-key')
+    await vi.waitFor(() => expect(app.host.status().phase).toBe('ready'))
+    expect(app.host.resolveManagedModelSelection({ provider: P7_PROVIDER_IDS['openai-completions'], model: 'Qwen3.8-Flash-Next', reasoningEffort: 'high' })).toEqual({
+      kind: 'migrate', selection: { provider: P7_PROVIDER_IDS['openai-responses'], model: 'Qwen3.8-Flash-Next' },
+    })
+    expect(app.host.resolveManagedModelSelection({ provider: P7_PROVIDER_IDS['openai-responses'], model: 'Qwen3.8-Flash-Next' })).toEqual({ kind: 'available' })
+    expect(app.host.resolveManagedModelSelection({ provider: 'custom-provider', model: 'Qwen3.8-Flash-Next' })).toBeUndefined()
+  })
+
+  it('marks a missing managed alias unavailable only from a settled directory', async () => {
+    const app = createHost(vi.fn(async () => response(config({ enabled: false, defaultModel: null, models: [] }))) as unknown as typeof globalThis.fetch)
+    await app.host.initialize()
+    await app.host.connect('https://p7.example', 'p7k_valid-key')
+    await vi.waitFor(() => expect(app.host.status().phase).toBe('ready'))
+    expect(app.host.resolveManagedModelSelection({ provider: P7_PROVIDER_IDS['openai-completions'], model: 'Qwen3.8-Flash-Next' })).toEqual({ kind: 'unavailable' })
+  })
+
   it('defaults an advertised company reasoning model to low without overriding an explicit same-model choice', async () => {
     const source = config()
     const catalog = { ...source, models: source.models.map(model => ({ ...model, reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' } })) }

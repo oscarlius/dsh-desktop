@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
-import type { ModelConfigV1, P7Snapshot } from './contracts.js'
+import type { ModelConfigV1, P7Snapshot, ReasoningEffort } from './contracts.js'
 import { createP7Client, validateP7Origin, type P7Fetch } from './p7-client.js'
-import { mapConfigToProviders } from './map-providers.js'
+import { mapConfigToProviders, P7_PROVIDER_IDS } from './map-providers.js'
 import { createSyncController, type ManagedConnection, type RecoveryFailureContext, type SyncController } from './sync-controller.js'
 import { ManagedProviderStore, type SettingsPort } from './managed-provider-store.js'
 import { CompanyPersistence } from './persistence.js'
@@ -27,6 +27,22 @@ export interface CompanyHostOptions {
   restorePersonalSession?(): Promise<void>
   onPersonalModeLoaded?(personalMode: boolean): void
 }
+
+export type ManagedModelResolution =
+  | { kind: 'pending' }
+  | { kind: 'available' }
+  | { kind: 'unavailable' }
+  | { kind: 'migrate'; selection: { provider: string; model: string; reasoningEffort?: string } }
+
+/**
+ * Resolve only selections owned by the current P7 directory.  A missing or
+ * synchronizing snapshot is deliberately inconclusive: it must never be
+ * presented as a revoked model while the dynamic directory is loading.
+ */
+export interface ManagedModelSelectionResolver {
+  resolveManagedModelSelection(selection: { provider: string; model: string; reasoningEffort?: string }): ManagedModelResolution | undefined
+}
+
 export class CompanyHost {
   private origin: string | null = null
   private snapshot: P7Snapshot | undefined
@@ -170,6 +186,25 @@ export class CompanyHost {
         }
         this.defaultAlias = identity
       }
+    }
+  }
+  resolveManagedModelSelection(selection: { provider: string; model: string; reasoningEffort?: string }): ManagedModelResolution | undefined {
+    if (!Object.values(P7_PROVIDER_IDS).includes(selection.provider)) return undefined
+    if (this.status().phase === 'syncing' || this.snapshot === undefined) return { kind: 'pending' }
+    const matches = this.snapshot.config.enabled
+      ? this.snapshot.config.models.filter(model => model.id === selection.model)
+      : []
+    const current = matches.find(model => P7_PROVIDER_IDS[model.api] === selection.provider)
+    if (current !== undefined) return { kind: 'available' }
+    if (matches.length !== 1) return { kind: 'unavailable' }
+    const target = matches[0]!
+    const effort = selection.reasoningEffort as ReasoningEffort | undefined
+    const reasoningEffort = effort !== undefined && target.reasoningEfforts !== false && target.reasoningEfforts?.[effort] !== undefined
+      ? effort
+      : undefined
+    return {
+      kind: 'migrate',
+      selection: { provider: P7_PROVIDER_IDS[target.api], model: target.id, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) },
     }
   }
   private serialize(action: () => Promise<void>): Promise<void> {

@@ -84,6 +84,15 @@ describe('company reasoning slider', () => {
     await waitFor(() => expect(screen.getByText('切换未成功，请重试。')).toBeTruthy())
     expect(app.select).toHaveBeenCalledTimes(1)
   })
+  it('warns when a removed company model has no unambiguous authorized replacement', async () => {
+    const app = fixture('Qwen3.8-Flash-Next')
+    app.update({ current: { provider: 'p7-company-chat', model: 'Qwen3.8-Flash-Next' }, routable: false, groups: [
+      { id: provider, name: 'Responses', models: [model('DeepSeek-V4.1-Flash')] },
+    ] })
+    render(<CompanyModelPicker {...app.props} />)
+    expect(screen.getByRole('alert').textContent).toContain('当前会话选择的公司模型已不在已授权目录中。请选择其他模型后再继续。')
+    expect(app.select).not.toHaveBeenCalled()
+  })
   it('uses Qwen metadata only and commits a drag once on release', async () => {
     const app = fixture(); render(<CompanyModelPicker {...app.props} />); const range = openSlider()
     expect(range.max).toBe('1'); fireEvent.change(range, { target: { value: '1' } }); expect(app.select).not.toHaveBeenCalled(); fireEvent.pointerUp(range)

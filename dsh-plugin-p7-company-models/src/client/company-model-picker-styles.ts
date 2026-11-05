@@ -4,6 +4,7 @@ export const COMPANY_MODEL_PICKER_CSS = `
 .p7ModelPicker>span { min-width:0; }
 .p7ReasoningPill>svg { flex-shrink:0; }
 .p7ModelPicker button { font-family:inherit; }
+.p7ModelUnavailable { max-width:280px;color:var(--dsw-alias-danger-primary,var(--dsw-alias-label-secondary));font-size:12px;line-height:16px; }
 .p7ModelButton,.p7ReasoningPill { display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;box-sizing:border-box;border:0;cursor:pointer;color:var(--dsw-alias-label-secondary);background:transparent;line-height:20px;white-space:nowrap;font-size:12px; }
 .p7ModelButton { padding:0 10px;min-width:0;max-width:min(240px,30cqw);border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:var(--dsw-alias-bg-layer-1); }
 .p7ModelName { display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }

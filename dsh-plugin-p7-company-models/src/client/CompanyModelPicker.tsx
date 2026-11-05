@@ -75,6 +75,8 @@ export function CompanyModelPicker({ available, locked, directory, load, select,
   const busy = saving || state.pending !== null
   const choices = useMemo(() => state.groups.flatMap(group => group.models.map(model => ({ group, model }))), [state.groups])
   const current = choices.find(({ group, model }) => group.id === state.current?.provider && model.id === state.current.model)
+  const unavailableCompanySelection = state.status === 'ready' && state.routable === false
+    && state.current !== null && P7_COMPANY_PROVIDER_IDS.has(state.current.provider)
   const effectiveEffort = state.current?.reasoningEffort ?? (current && modelDefault(current.group.id, current.model))
   const efforts = useMemo<EffortOption[]>(() => {
     if (!current?.model.reasoning?.efforts.length) return []
@@ -153,6 +155,7 @@ export function CompanyModelPicker({ available, locked, directory, load, select,
   const label = current?.model.name ?? state.current?.model ?? t('pickerChooseModel')
 
   return <div className="p7ModelPicker" ref={root} data-p7-model-picker="">
+    {unavailableCompanySelection && <span className="p7ModelUnavailable" role="alert">{t('pickerModelUnavailable')}</span>}
     <Menu open={open === 'model'} onClose={() => setOpen(null)} side="top" align="end" portal autoFocus
       listClassName="p7ModelMenu" anchor={<button type="button" className="p7ModelButton" disabled={locked || busy}
         aria-label={`${t('pickerChooseModel')}：${label}`} aria-haspopup="menu" aria-expanded={open === 'model'} aria-busy={busy}

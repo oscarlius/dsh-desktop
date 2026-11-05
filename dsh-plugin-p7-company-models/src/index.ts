@@ -9,7 +9,7 @@ import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { join } from 'node:path'
 import Schema from '@deepseek-ai/schemastery'
 import { readCompanyBootstrap } from './bootstrap.js'
-import { CompanyHost } from './company-host.js'
+import { CompanyHost, type ManagedModelSelectionResolver } from './company-host.js'
 import { CompanyPersistence } from './persistence.js'
 import { registerCompanyRoutes } from './routes.js'
 import { AccountBroker, type P7AccountStore } from './account-broker.js'
@@ -24,7 +24,7 @@ import { CompanyMemoryRuntime, type CompanyMemoryWorkspace } from './personal-me
 interface P7AccountBrowser { open(url: string): Promise<void> | void }
 
 declare module '@deepseek-ai/cordis' {
-  interface Context { p7Account: AccountBroker; p7AccountBrowser?: P7AccountBrowser; p7AccountStore?: P7AccountStore }
+  interface Context { p7Account: AccountBroker; p7AccountBrowser?: P7AccountBrowser; p7AccountStore?: P7AccountStore; p7CompanyModels?: ManagedModelSelectionResolver }
 }
 
 export const name = 'p7-company-models'
@@ -79,6 +79,7 @@ export function apply(ctx: Context, config: { bootstrapFile?: string; requirePer
   })
   const companyHost = host
   ctx.provide('p7Account', account)
+  ctx.provide('p7CompanyModels', companyHost)
   const browser = ctx.get('p7AccountBrowser')
   account.setBrowserLauncher(browser ? url => browser.open(url) : undefined)
   const removeCredentialOverlay = installPersonalCredentialOverlay(ctx.credentials, credentialRef(companyHost.credentialRef), account)

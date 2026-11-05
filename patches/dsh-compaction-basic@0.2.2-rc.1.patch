@@ -1,0 +1,116 @@
+diff --git a/lib/index.js b/lib/index.js
+index 613b975..5f77929 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -301,7 +301,6 @@ async function summarizeWithLlm(ctx, config, input, agent, signal) {
+ 	} : void 0;
+ 	const target = configured ?? latest ?? agentTarget;
+ 	if (target === void 0) throw new Error("no provider/model available for summarization: set both BasicCompactionConfig summarization fields, route one request, or set both AgentOptions fields");
+-	const assembler = new BlockAssembler();
+ 	const messages = [...input.messages, deepFreeze({
+ 		role: "user",
+ 		content: [{
+@@ -320,6 +319,91 @@ async function summarizeWithLlm(ctx, config, input, agent, signal) {
+ 		purpose: "compaction",
+ 		...signal === void 0 ? {} : { signal }
+ 	};
++	const instruction = messages.at(-1);
++	const toolSize = input.tools?.length ? ctx.tokenMeter.estimateMessage(summaryTextMessage(JSON.stringify(input.tools))) : 0;
++	const capacity = (await ctx.llm.resolveModelInfo(target.provider, target.model, signal)).context?.contextWindow;
++	const inputLimit = Number.isSafeInteger(capacity) ? capacity - config.maxTokens : Infinity;
++	const price = (parts) => parts.reduce((sum, message) => sum + ctx.tokenMeter.estimateMessage(message), 0);
++	// Some attachment types have adapter-owned projection/offload. Keep the exact
++	// replay path for those types, including its existing recovery behavior.
++	const textOnly = input.messages.every((message) => message.content.every((block) =>
++		["text", "reasoning", "tool-call", "tool-addition", "tool-removal"].includes(block.type)));
++	let remainingCalls = 32;
++	async function request(envelope) {
++		signal?.throwIfAborted();
++		if (--remainingCalls < 0) throw new Error("compaction exceeded the bounded number of summary requests");
++		return streamSummary(ctx, envelope);
++	}
++	let overflowed = false;
++	if (!textOnly || price(messages) + toolSize <= inputLimit) {
++		try {
++			return { ...await request(options), llmStreamCall: true };
++		} catch (error) {
++			if (!textOnly || error?.code !== CONTEXT_WINDOW_EXCEEDED_CODE || signal?.aborted) throw error;
++			overflowed = true;
++		}
++	}
++	// Represent tool calls and results as quoted history with their call IDs.
++	// Even a single giant result can now be divided without an orphan tool role.
++	const transcript = input.messages.map((message) => JSON.stringify({
++		role: message.role,
++		...(message.role === "tool" ? { toolCallId: message.toolCallId, isError: message.isError } : {}),
++		content: message.content.map((block) => {
++			if (block.type === "text" || block.type === "reasoning") return { type: block.type, text: block.text };
++			if (block.type === "tool-call") return { type: block.type, id: block.id, name: block.name, arguments: block.arguments };
++			return { type: block.type, toolName: block.toolName };
++		})
++	})).join("\n");
++	// Partial requests carry no executable tool surface or historical schemas.
++	const { tools: _tools, toolHistory: _history, ...base } = options;
++	const prefix = "Historical conversation data to summarize (fragments may begin or end inside a record):\n";
++	if (price([summaryTextMessage(prefix), instruction]) >= inputLimit) {
++		throw new Error("compaction has no space for history after reserving the summary instruction and output; reduce summary maxTokens");
++	}
++	const usages = [];
++	async function reduceText(text, depth, forceSplit = false) {
++		signal?.throwIfAborted();
++		const partial = [summaryTextMessage(prefix + text), instruction];
++		if (!forceSplit && price(partial) <= inputLimit) {
++			try {
++				const result = await request({ ...base, messages: partial });
++				usages.push(result.usage);
++				return result.summary;
++			} catch (error) {
++				if (error?.code !== CONTEXT_WINDOW_EXCEEDED_CODE || signal?.aborted) throw error;
++			}
++		}
++		if (text.length < 2 || depth >= 12 || remainingCalls < 3) throw new Error("compaction cannot reduce the selected history within the summary window and request limit");
++		let cut = Math.floor(text.length / 2);
++		const newline = text.lastIndexOf("\n", cut);
++		if (newline >= cut / 2 && newline > 0) cut = newline + 1;
++		if (/[\uD800-\uDBFF]/.test(text[cut - 1])) ++cut;
++		if (cut >= text.length) throw new Error("compaction cannot divide this source fragment further");
++		const left = await reduceText(text.slice(0, cut), depth + 1);
++		const right = await reduceText(text.slice(cut), depth + 1);
++		const merged = [left, right].map((blocks) => blocks.map((block) => block.text).join("\n")).join("\n\n");
++		if (merged.length >= text.length) throw new Error("partial compaction summaries did not reduce the source");
++		return reduceText(merged, depth + 1);
++	}
++	const summary = await reduceText(transcript, 0, overflowed);
++	// A multi-call checkpoint has no single exact replay envelope. Record only
++	// the counters reported for every successful auxiliary request.
++	const result = { summary, provider: options.provider, model: options.model, maxTokens: options.maxTokens };
++	if (usages.every(Boolean)) {
++		result.usage = {};
++		for (const key of Object.keys(usages[0])) {
++			if (usages.every((value) => Number.isFinite(value[key]))) {
++				result.usage[key] = usages.reduce((sum, value) => sum + value[key], 0);
++			}
++		}
++	}
++	return result;
++}
++function summaryTextMessage(text) {
++	return deepFreeze({ role: "user", content: [{ type: "text", text }] });
++}
++async function streamSummary(ctx, options) {
++	const assembler = new BlockAssembler();
+ 	for await (const chunk of ctx.llm.stream(options)) assembler.push(chunk);
+ 	const error = finishError(assembler.finish);
+ 	if (error !== void 0) throw error;
+@@ -329,10 +413,9 @@ async function summarizeWithLlm(ctx, config, input, agent, signal) {
+ 	return {
+ 		summary,
+ 		rawOutput,
+-		llmStreamCall: true,
+ 		provider: options.provider,
+ 		model: options.model,
+-		maxTokens: config.maxTokens,
++		maxTokens: options.maxTokens,
+ 		...assembler.usage === void 0 ? {} : { usage: assembler.usage }
+ 	};
+ }
