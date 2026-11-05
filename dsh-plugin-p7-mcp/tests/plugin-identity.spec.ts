@@ -93,6 +93,9 @@ it('waits for AgentRegistry before publishing an on-demand catalog', async () =>
     register: (definition: { name: string }) => { names.push(definition.name); return () => {} },
     resolve: async () => {}, guard: () => () => {}, schemas: () => [], get: () => undefined,
   } as never)
+  ctx.provide('systemPrompt', {
+    section: () => () => {}, getSectionOrder: () => 500,
+  } as never)
   const fiber = await ctx.plugin(plugin, { mode: 'on-demand' })
   try {
     await new Promise(complete => setImmediate(complete))

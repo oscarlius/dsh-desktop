@@ -56,7 +56,7 @@ export function apply(ctx: Context, input: PluginConfig = {}): void {
     // AgentRegistry can mount after the P7 account service. Wait through the
     // public injection lifecycle instead of failing or publishing eager tools.
     publishToolStatus(ctx.profileContext.dir, 'syncing', [], { mode: config.mode, authorizedToolCount: 0 })
-    ctx.inject(['agents'], inner => { mount(inner, config) })
+    ctx.inject(['agents', 'systemPrompt'], inner => { mount(inner, config) })
     ctx.effect(() => () => { clearToolStatus(ctx.profileContext.dir) }, 'p7-mcp pending lifecycle')
     return
   }

@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolDefinition, ToolRegistrationOptions } from '@deepseek-ai/dsh-tools'
 import { ActivationStore } from './activation-store.js'
 import type { CatalogEntry } from './activation-store.js'
@@ -7,6 +8,8 @@ import type { ResolvedConfig } from './config.js'
 
 export const SEARCH_TOOL_NAME = 'p7_mcp_search'
 export const LOAD_TOOL_NAME = 'p7_mcp_load'
+const DISCOVERY_PROMPT_SECTION = 'p7-mcp:on-demand-discovery'
+const DISCOVERY_PROMPT = 'For company financial or market-data requests (stocks, quotes, financial statements, earnings or profit forecasts, valuation, consensus, or macro data), use an already-loaded authorized company tool, or first use p7_mcp_search to discover one when available, unless the user explicitly requests another source. Call a loaded match directly on the next step. Do not repeat search or load for an already-loaded match; if no authorized match is available or it fails, use other sources only for the gap and state the limitation honestly.'
 
 export interface LazyRuntime {
   registrationOptions(name: string): ToolRegistrationOptions
@@ -92,7 +95,7 @@ export function installLazyRuntime(
   const helpers: ToolDefinition[] = [
     {
       name: SEARCH_TOOL_NAME,
-      description: 'Search company MCP tools and load matches for this Agent. A loaded result means call the tool directly in the next step; no extra load or search is needed. A unique exact tool ID loads only that tool. This does not execute a business query.',
+      description: 'Search authorized company MCP tools for this Agent and load matches. Use this first when no matching company tool is already loaded for financial or market data (stock/quote, financials, earnings or profit forecasts, valuation, consensus, macro) unless the user explicitly requests another source. A loaded result means call the tool directly in the next step; do not repeat search or load for an already-loaded match. A unique exact tool ID loads only that tool. This does not execute a business query or expand permissions.',
       parameters: {
         type: 'object',
         properties: { query: { type: 'string', minLength: 1, maxLength: 512 }, namespace: { type: 'string', maxLength: 64 }, limit: { type: 'integer', minimum: 1, maximum: 10 } },
@@ -140,6 +143,11 @@ export function installLazyRuntime(
   })
   const removers: Array<() => void> = []
   try {
+    removers.push(ctx.systemPrompt.section({
+      name: DISCOVERY_PROMPT_SECTION,
+      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
+      text: DISCOVERY_PROMPT,
+    }))
     removers.push(ctx.on('tools/change', () => { registryVersion++ }))
     for (const helper of helpers) removers.push(ctx.tools.register(helper))
     removers.push(ctx.on('agent/created', ({ agent }) => { initializeAgent(agent, false); return undefined }))

@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.36-beta.16",
-  "dshCompanyCompatibilityBuild": "2026110501",
+  "version": "2.0.37-beta.16",
+  "dshCompanyCompatibilityBuild": "2026110502",
   "dshDesktopFlavor": "companytest",
   "private": true,
   "description": "Desktop Beta integration for the DeepSeek Harness",

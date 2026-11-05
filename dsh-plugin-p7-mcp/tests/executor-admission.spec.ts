@@ -144,10 +144,15 @@ describe('executor admission follows lazy ToolSet snapshots', () => {
       const initialSet = await resolve(ctx, current)
       const initial = await ctx.systemPrompt.assemble({ scope: current, toolSet: initialSet })
       const initialSdk = initial.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
+      const discovery = initial.sections.find(section => section.name === 'p7-mcp:on-demand-discovery')?.text ?? ''
       expect(initial.tools.map(schema => schema.name)).toEqual(['run_code'])
       expect(initialSdk).toContain('local_info')
       expect(initialSdk).not.toContain('p7_finance__quote')
       expect(initialSdk).not.toContain('p7_macro__gdp')
+      expect(discovery).toContain('financial or market-data')
+      expect(discovery).toContain(SEARCH_TOOL_NAME)
+      expect(discovery).toContain('Do not repeat search or load for an already-loaded match')
+      expect(discovery).not.toContain('p7_finance__quote')
 
       await load(ctx, current, ['p7_finance__quote'])
       const loadedSet = await resolve(ctx, current)
@@ -155,6 +160,7 @@ describe('executor admission follows lazy ToolSet snapshots', () => {
       const loadedSdk = loaded.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
       expect(loadedSdk).toContain('p7_finance__quote')
       expect(loadedSdk).not.toContain('p7_macro__gdp')
+      expect(loaded.sections.find(section => section.name === 'p7-mcp:on-demand-discovery')?.text).toBe(discovery)
       initialSet.dispose(); loadedSet.dispose()
     } finally { runtime.dispose(); await ctx.fiber.dispose() }
   })

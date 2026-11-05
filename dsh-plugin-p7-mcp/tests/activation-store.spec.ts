@@ -117,6 +117,22 @@ describe('ActivationStore', () => {
     expect(subject.search(agent, '查询GDP指标', 'macro', undefined, visible)).toMatchObject({ ok: true, tools: [{ toolId: 'p7_macro__gdp' }] })
   })
 
+  it('matches natural Chinese closing-price and profit-forecast requests without bypassing policy', () => {
+    const subject = store()
+    subject.publishCatalog([
+      tool('market__daily_quote', 'Daily market quote and close price'),
+      tool('research__consensus_forecast', 'Analyst earnings and profit forecast consensus'),
+      tool('research__internal', 'Internal research only'),
+    ])
+    const result = subject.search({}, '中国科传昨天收盘价格和盈利预测', undefined, 10,
+      entry => entry.toolId !== 'p7_research__internal')
+    expect(result.ok && result.tools.map(candidate => candidate.toolId)).toEqual(expect.arrayContaining([
+      'p7_market__daily_quote',
+      'p7_research__consensus_forecast',
+    ]))
+    expect(result.ok && result.tools.map(candidate => candidate.toolId)).not.toContain('p7_research__internal')
+  })
+
   it.each(['p7_weknora__search_knowledge', 'weknora__search_knowledge'])('selects only a uniquely exact tool id: %s', (query) => {
     const subject = store()
     subject.publishCatalog([

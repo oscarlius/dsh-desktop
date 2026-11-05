@@ -5,7 +5,6 @@ import type { P7AccountStatus, P7Usage } from '../account-broker.js'
 import { DEFAULT_P7_PUBLIC_ORIGIN } from '../defaults.js'
 import { createCompanyModelsApi, type CompanyModelsApi } from './api.js'
 import type { CompanySettingsLocaleKey } from './locales.js'
-import { PersonalMemorySection } from './PersonalMemorySection.js'
 import { TOOL_GROUPS, toolCapability, toolCopy } from './tool-capabilities.js'
 
 const POLL_MS = 5_000
@@ -271,6 +270,5 @@ export function CompanySettingsSection({ api: suppliedApi, t }: CompanySettingsS
       {status?.tools.agents?.length ? <details className="dshP7CompanySettingsDiagnostics"><summary>{t('toolsAgentDiagnostics')}</summary><p>{t('toolsAgentDiagnosticsIntro')}</p>{status.tools.agents.map(agent => <p className="dshP7CompanySettingsNotice" key={agent.agentId}>{agent.agentId}: {t('toolsAgentLoaded')} {agent.loadedToolCount} ({agent.schemaBytes} bytes){agent.error ? ` · ${agent.error}` : ''}</p>)}</details> : null}
       <p className="dshP7CompanySettingsNotice">{t('toolUsageNotice')}</p>
     </section>
-    <PersonalMemorySection key={account?.profile ? `${account.profile.organizationId}:${account.profile.userId}:${account.profile.sessionId}` : 'signed-out'} t={t} {...(account?.profile?.userId === undefined ? {} : { identityKey: account.profile.userId })} />
   </section>
 }
