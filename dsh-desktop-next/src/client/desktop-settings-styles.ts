@@ -34,6 +34,28 @@ const CSS = `
   padding-top: 16px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
+.dshDesktopAcknowledgements {
+  margin-top: 32px;
+  padding-top: 0;
+  border-top: 0;
+  gap: 12px;
+}
+.dshDesktopAcknowledgements hr {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+.dshDesktopAcknowledgements p {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.dshDesktopAcknowledgements strong {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 700;
+}
 .dshDesktopSettingsList { display: grid; gap: 8px; }
 .dshDesktopSettingsChoice {
   display: flex;

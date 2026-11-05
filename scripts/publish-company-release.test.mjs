@@ -174,3 +174,14 @@ test('an immutable staged mismatch cannot be overwritten or published',async t=>
   await assert.rejects(publishCompanyRelease({...options(b,s),fetchImpl}),/Immutable server artifact differs/)
   assert.equal(s.uploads.length,0);assert.equal(s.current.revision,5)
 })
+
+for (const mode of ['full', 'update']) {
+  test(`rejects disabled automatic updates in ${mode} before any publication request`, async t => {
+    const b = bundle(t), remote = server(b.manifest)
+    const path = join(b.root, mode, 'win-unpacked/resources/app/package.json')
+    const packaged = JSON.parse(readFileSync(path, 'utf8'))
+    writeFileSync(path, JSON.stringify({ ...packaged, dshDesktopUpdatesEnabled: false }))
+    await assert.rejects(publishCompanyRelease(options(b, remote)), /must keep automatic updates enabled/)
+    assert.equal(remote.calls.length, 0)
+  })
+}

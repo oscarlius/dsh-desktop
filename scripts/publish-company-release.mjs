@@ -23,7 +23,7 @@ export function readCompanyPackagedManifest(resources) {
   if (existsSync(compatibilityPath)) {
     const compatibility = json(compatibilityPath)
     for (const field of ['name', 'version', 'dshDesktopFlavor', 'dshDesktopUpdateDistribution', 'dshDesktopPersonalLoginDistribution',
-      'dshCompanyReleaseSourceCommit', 'dshCompanyCompatibilityBuild']) {
+      'dshCompanyReleaseSourceCommit', 'dshCompanyCompatibilityBuild', 'dshDesktopUpdatesEnabled']) {
       ensure(packaged[field] === compatibility[field], `ASAR compatibility manifest mismatch: ${field}`)
     }
   }
@@ -67,6 +67,7 @@ export async function validateCompanyRelease(directory) {
         && typeof manifest.displayVersion === 'string'
         && packaged.dshCompanyCompatibilityBuild === manifest.build, `Packaged ${kind} build mismatch`)
     }
+    ensure(packaged.dshDesktopUpdatesEnabled !== false, `Packaged ${kind} must keep automatic updates enabled`)
     const bootstrap = join(resource, 'p7-company-connection.json')
     if (kind === 'update') {
       ensure(packaged.dshDesktopUpdateDistribution === true && packaged.dshDesktopPersonalLoginDistribution !== true && !existsSync(bootstrap), 'Public update must be credential-free')

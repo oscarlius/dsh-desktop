@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { releaseManifest } from '../scripts/package-company-release.mjs'
+import { releaseManifest, releasePlan } from '../scripts/package-company-release.mjs'
 
 describe('company release manifest', () => {
   let output
@@ -16,20 +16,24 @@ describe('company release manifest', () => {
     assert.equal(workspace.scripts['dist:win:company-release'], 'node scripts/package-company-release.mjs')
   })
 
+  it('rejects disabled automatic updates before building a company release', () => {
+    assert.throws(() => releasePlan({ DSH_COMPANY_DISABLE_UPDATES: '1' }), /require automatic updates/)
+  })
+
   it('publishes exactly the Full installer, update installer, and update blockmap', () => {
     output = mkdtempSync(join(tmpdir(), 'dsh-company-release-'))
     mkdirSync(join(output, 'full'))
     mkdirSync(join(output, 'update'))
-    writeFileSync(join(output, 'full', 'P7-DSH-Company-Full-2.0.38-beta.16-x64-Setup.exe'), 'full')
-    writeFileSync(join(output, 'update', 'P7-DSH-Company-Test-2.0.38-beta.16-x64-Setup.exe'), 'update')
-    writeFileSync(join(output, 'update', 'P7-DSH-Company-Test-2.0.38-beta.16-x64-Setup.exe.blockmap'), 'blockmap')
-    const manifest = releaseManifest('2.0.38-beta.16', 'a'.repeat(40), output)
-    assert.equal(manifest.displayVersion, '2.0.38-beta.16')
-    assert.equal(manifest.build, '2026110503')
+    writeFileSync(join(output, 'full', 'P7-DSH-Company-Full-2.0.39-beta.16-x64-Setup.exe'), 'full')
+    writeFileSync(join(output, 'update', 'P7-DSH-Company-Test-2.0.39-beta.16-x64-Setup.exe'), 'update')
+    writeFileSync(join(output, 'update', 'P7-DSH-Company-Test-2.0.39-beta.16-x64-Setup.exe.blockmap'), 'blockmap')
+    const manifest = releaseManifest('2.0.39-beta.16', 'a'.repeat(40), output)
+    assert.equal(manifest.displayVersion, '2.0.39-beta.16')
+    assert.equal(manifest.build, '2026110504')
     assert.deepEqual(manifest.artifacts.map(value => [value.component, value.path]), [
-      ['initial-exe', 'full/P7-DSH-Company-Full-2.0.38-beta.16-x64-Setup.exe'],
-      ['exe', 'update/P7-DSH-Company-Test-2.0.38-beta.16-x64-Setup.exe'],
-      ['blockmap', 'update/P7-DSH-Company-Test-2.0.38-beta.16-x64-Setup.exe.blockmap'],
+      ['initial-exe', 'full/P7-DSH-Company-Full-2.0.39-beta.16-x64-Setup.exe'],
+      ['exe', 'update/P7-DSH-Company-Test-2.0.39-beta.16-x64-Setup.exe'],
+      ['blockmap', 'update/P7-DSH-Company-Test-2.0.39-beta.16-x64-Setup.exe.blockmap'],
     ])
     for (const item of manifest.artifacts) {
       assert.match(item.sha256, /^[a-f0-9]{64}$/u)

@@ -33,6 +33,7 @@ function gitCommit() {
 }
 
 export function releasePlan(environment = process.env) {
+  if (environment.DSH_COMPANY_DISABLE_UPDATES === '1') throw new Error('Official company releases require automatic updates to remain enabled')
   const version = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).version
   if (typeof version !== 'string' || !VERSION.test(version)) throw new Error('Invalid company release version')
   const output = resolve(environment.DSH_COMPANY_RELEASE_OUTPUT ?? join(packageRoot, 'dist-company', version))
