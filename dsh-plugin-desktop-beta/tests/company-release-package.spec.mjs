@@ -20,16 +20,16 @@ describe('company release manifest', () => {
     output = mkdtempSync(join(tmpdir(), 'dsh-company-release-'))
     mkdirSync(join(output, 'full'))
     mkdirSync(join(output, 'update'))
-    writeFileSync(join(output, 'full', 'P7-DSH-Company-Full-2.0.32-beta.16-x64-Setup.exe'), 'full')
-    writeFileSync(join(output, 'update', 'P7-DSH-Company-Test-2.0.32-beta.16-x64-Setup.exe'), 'update')
-    writeFileSync(join(output, 'update', 'P7-DSH-Company-Test-2.0.32-beta.16-x64-Setup.exe.blockmap'), 'blockmap')
-    const manifest = releaseManifest('2.0.32-beta.16', 'a'.repeat(40), output)
-    assert.equal(manifest.displayVersion, '2.0.32-beta.16')
-    assert.equal(manifest.build, '2026110401')
+    writeFileSync(join(output, 'full', 'P7-DSH-Company-Full-2.0.36-beta.16-x64-Setup.exe'), 'full')
+    writeFileSync(join(output, 'update', 'P7-DSH-Company-Test-2.0.36-beta.16-x64-Setup.exe'), 'update')
+    writeFileSync(join(output, 'update', 'P7-DSH-Company-Test-2.0.36-beta.16-x64-Setup.exe.blockmap'), 'blockmap')
+    const manifest = releaseManifest('2.0.36-beta.16', 'a'.repeat(40), output)
+    assert.equal(manifest.displayVersion, '2.0.36-beta.16')
+    assert.equal(manifest.build, '2026110501')
     assert.deepEqual(manifest.artifacts.map(value => [value.component, value.path]), [
-      ['initial-exe', 'full/P7-DSH-Company-Full-2.0.32-beta.16-x64-Setup.exe'],
-      ['exe', 'update/P7-DSH-Company-Test-2.0.32-beta.16-x64-Setup.exe'],
-      ['blockmap', 'update/P7-DSH-Company-Test-2.0.32-beta.16-x64-Setup.exe.blockmap'],
+      ['initial-exe', 'full/P7-DSH-Company-Full-2.0.36-beta.16-x64-Setup.exe'],
+      ['exe', 'update/P7-DSH-Company-Test-2.0.36-beta.16-x64-Setup.exe'],
+      ['blockmap', 'update/P7-DSH-Company-Test-2.0.36-beta.16-x64-Setup.exe.blockmap'],
     ])
     for (const item of manifest.artifacts) {
       assert.match(item.sha256, /^[a-f0-9]{64}$/u)
