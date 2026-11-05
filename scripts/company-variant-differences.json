@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "package.json",
-      "betaSha256": "9aeec5a5547cba11a93c0700e7bd7917ac1bfb70c3a03b5d7b2aadf0a93738a2",
+      "betaSha256": "3a9204d418a4355767eabd8157645a4f1a662ec4e65e1362cd667cb30eac81c8",
       "nextSha256": "51972f15832bd5ed1e589bf211f74ba097ce099ef6943a211bd7a257a211f9fa",
       "reason": "Company transport/build metadata, P7 workspaces and release commands; ordinary Next keeps upstream identity."
     },
@@ -304,7 +304,7 @@
     },
     {
       "path": "tests/company-release-package.spec.mjs",
-      "betaSha256": "63976bbb77a9b4b06422907f5ddca83bc526dcdd648f349fb4552d6de82f7396",
+      "betaSha256": "9ab42e216380399fd7532e1823a030db69521ad2907746d3f53cda640fb29d60",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },
