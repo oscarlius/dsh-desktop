@@ -13,7 +13,12 @@ const READY: CompanyStatus = {
   loginRequired: false,
   phase: 'ready', origin: 'https://models.example.com', revision: 'r7', lastSyncedAt: 1_700_000_000_000,
   defaultModel: 'p7-default', models: [{ id: 'p7-default', displayName: 'P7 Default' }], message: null,
-  tools: { phase: 'registered', tools: [{ name: 'mcp__p7__gildata__FinQuery' }, { name: 'mcp__p7__search__web_search' }] },
+  tools: { phase: 'registered', tools: [
+    { name: 'mcp__p7__gildata__FinQuery' },
+    ...['ask', 'grep_chunks', 'list_documents', 'list_knowledge_bases', 'read_document', 'search_knowledge', 'wiki_index', 'wiki_read_page', 'wiki_search'].map(name => ({ name: `mcp__p7__weknora__${name}` })),
+    ...['search_law', 'search_law_keyword', 'search_law_article', 'search_case', 'search_case_keyword', 'legal_citation'].map(name => ({ name: `mcp__p7__wk__${name}` })),
+    { name: 'mcp__p7__search__web_search' },
+  ] },
 }
 const ACCOUNT_PROFILE = { userId: 'u1', organizationId: 'o1', displayName: 'Ada', role: 'employee', deviceId: 'd1', sessionId: 's1', scopes: [] }
 const SIGNED_IN = { phase: 'signed-in' as const, profile: ACCOUNT_PROFILE, expiresAt: Date.now() + 60_000, authorizationUrl: null, upgradeUrl: null, message: null }
@@ -231,25 +236,61 @@ describe('P7 company-model settings section', () => {
     expect(screen.getByText('r7')).toBeTruthy()
   })
 
-  it('shows Host-registered MCP/search tools without claiming that this conversation used them', async () => {
+  it('groups every authorized tool into collapsed capabilities without claiming service health or conversation use', async () => {
     const api = {
       status: vi.fn(async () => READY), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(),
       accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(async () => PENDING), accountLogout: vi.fn(async () => SIGNED_OUT), accountUsage: vi.fn(async () => USAGE),
     }
     render(<CompanySettingsSection {...({ api, t } as unknown as CompanySettingsSectionProps)} />)
-    expect(await screen.findByText('Gildata financial data query')).toBeTruthy()
-    expect(screen.getByText('Web search')).toBeTruthy()
+    expect(await screen.findByText('Financial data')).toBeTruthy()
+    expect(screen.getByText('Company knowledge')).toBeTruthy()
+    expect(screen.getByText('Legal research')).toBeTruthy()
+    expect(screen.getAllByText('Web search').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('9')).toBeTruthy()
+    expect(screen.getByText('6')).toBeTruthy()
+    const finance = screen.getByText('Financial data').closest('details')
+    expect(finance).not.toBeNull()
+    expect((finance as HTMLDetailsElement).open).toBe(false)
+    fireEvent.click(finance!.querySelector('summary')!)
+    expect((finance as HTMLDetailsElement).open).toBe(true)
+    expect(screen.getByText('Gildata financial data query')).toBeTruthy()
+    expect(screen.getByText('Queries financial and research data.')).toBeTruthy()
     expect(screen.getByText('mcp__p7__gildata__FinQuery')).toBeTruthy()
-    expect(screen.getByText('mcp__p7__search__web_search')).toBeTruthy()
+    const knowledge = screen.getByText('Company knowledge').closest('details')!
+    fireEvent.click(knowledge.querySelector('summary')!)
+    expect(screen.getByText('Company knowledge Q&A')).toBeTruthy()
+    expect(screen.getByText('Answers from company knowledge with citations; it may take minutes and uses a session.')).toBeTruthy()
+    const legal = screen.getByText('Legal research').closest('details')!
+    fireEvent.click(legal.querySelector('summary')!)
+    expect(screen.getByText('Legal citation identification')).toBeTruthy()
+    expect(screen.getByText('Identifies citations in legal material.')).toBeTruthy()
     expect(screen.getByText('Registered')).toBeTruthy()
-    expect(screen.getByText(/does not mean a tool was called/)).toBeTruthy()
+    expect(screen.getByText(/does not mean a tool was actually called/)).toBeTruthy()
   })
 
-  it('shows on-demand authorization separately from the tools loaded for each Agent', async () => {
-    const api = { status: vi.fn(async () => ({ ...READY, tools: { ...READY.tools, mode: 'on-demand' as const, authorizedToolCount: 5, agents: [{ agentId: 'research', loadedToolCount: 2, schemaBytes: 400, tools: [] }] } })), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(), accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(), accountLogout: vi.fn(), accountUsage: vi.fn(async () => USAGE) }
+  it('shows on-demand authorization separately from collapsed per-Agent diagnostics', async () => {
+    const api = { status: vi.fn(async () => ({ ...READY, tools: { ...READY.tools, tools: READY.tools.tools.slice(0, 5), mode: 'on-demand' as const, authorizedToolCount: 5, agents: [{ agentId: 'research', loadedToolCount: 2, schemaBytes: 400, tools: [] }] } })), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(), accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(), accountLogout: vi.fn(), accountUsage: vi.fn(async () => USAGE) }
     render(<CompanySettingsSection {...({ api, t } as unknown as CompanySettingsSectionProps)} />)
     expect(await screen.findByText('On-demand loading (authorized tools): 5')).toBeTruthy()
-    expect(screen.getByText('research: Tools loaded this turn 2 (400 bytes)')).toBeTruthy()
+    const diagnostics = screen.getByText('Per-Agent loading diagnostics').closest('details')
+    expect(diagnostics).not.toBeNull()
+    expect((diagnostics as HTMLDetailsElement).open).toBe(false)
+    fireEvent.click(diagnostics!.querySelector('summary')!)
+    expect((diagnostics as HTMLDetailsElement).open).toBe(true)
+    expect(screen.getByText('research: Tools currently loaded by this Agent 2 (400 bytes)')).toBeTruthy()
+  })
+
+  it('retains an unknown authorized namespace in a collapsed uncategorized detail without reporting health', async () => {
+    const api = { status: vi.fn(async () => ({ ...READY, tools: { ...READY.tools, tools: [...READY.tools.tools, { name: 'mcp__p7__future__inspect_status' }] } })), connect: vi.fn(), sync: vi.fn(), disconnect: vi.fn(), accountStatus: vi.fn(async () => SIGNED_IN), accountLogin: vi.fn(), accountLogout: vi.fn(), accountUsage: vi.fn(async () => USAGE) }
+    render(<CompanySettingsSection {...({ api, t } as unknown as CompanySettingsSectionProps)} />)
+    const uncategorized = await screen.findByText('Uncategorized tools')
+    const detail = uncategorized.closest('details')
+    expect(detail).not.toBeNull()
+    expect((detail as HTMLDetailsElement).open).toBe(false)
+    fireEvent.click(detail!.querySelector('summary')!)
+    expect(screen.getByText(/availability does not represent service health/)).toBeTruthy()
+    expect(screen.getByText('mcp__p7__future__inspect_status')).toBeTruthy()
   })
 
   it('lets the user cancel the current key input and aborts a pending request on unmount', async () => {

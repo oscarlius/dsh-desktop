@@ -6,6 +6,7 @@ import { DEFAULT_P7_PUBLIC_ORIGIN } from '../defaults.js'
 import { createCompanyModelsApi, type CompanyModelsApi } from './api.js'
 import type { CompanySettingsLocaleKey } from './locales.js'
 import { PersonalMemorySection } from './PersonalMemorySection.js'
+import { TOOL_GROUPS, toolCapability, toolCopy } from './tool-capabilities.js'
 
 const POLL_MS = 5_000
 const ACCOUNT_PENDING_POLL_MS = 1_000
@@ -21,12 +22,6 @@ function statusKey(phase: CompanyStatus['phase']): CompanySettingsLocaleKey {
 function toolStatusKey(phase: CompanyStatus['tools']['phase']): CompanySettingsLocaleKey {
   return phase === 'registered' ? 'toolsRegistered' : phase === 'syncing' ? 'toolsSyncing' : 'toolsUnavailable'
 }
-function toolLabel(name: string, t: CompanySettingsSectionProps['t']): string | undefined {
-  if (name === 'mcp__p7__gildata__FinQuery') return t('toolGildata')
-  if (name === 'mcp__p7__search__web_search') return t('toolWebSearch')
-  return undefined
-}
-
 function dateValue(value: number | null, t: CompanySettingsSectionProps['t']): string {
   return value === null ? t('never') : new Date(value).toLocaleString()
 }
@@ -258,9 +253,22 @@ export function CompanySettingsSection({ api: suppliedApi, t }: CompanySettingsS
     <section className="dshP7CompanySettingsCatalog" aria-labelledby="p7-company-models-tools-title">
       <div className="dshP7CompanySettingsStatusHeader"><h3 id="p7-company-models-tools-title">{t('tools')}</h3><span className="dshP7CompanySettingsBadge" data-phase={status?.tools.phase ?? 'syncing'}>{t(toolStatusKey(status?.tools.phase ?? 'syncing'))}</span></div>
       <p className="dshP7CompanySettingsIntro">{t('toolsIntro')}</p>
-      {status?.tools.mode === 'on-demand' && <p className="dshP7CompanySettingsNotice">{t('toolsOnDemand')}: {status.tools.authorizedToolCount ?? status.tools.tools.length}</p>}
-      {status?.tools.tools.length ? <ul className="dshP7CompanySettingsToolList">{status.tools.tools.map(tool => <li className="dshP7CompanySettingsTool" key={tool.name}>{toolLabel(tool.name, t) && <span>{toolLabel(tool.name, t)}</span>}<code>{tool.name}</code></li>)}</ul> : <p className="dshP7CompanySettingsEmpty">{t('noTools')}</p>}
-      {status?.tools.agents?.map(agent => <p className="dshP7CompanySettingsNotice" key={agent.agentId}>{agent.agentId}: {t('toolsAgentLoaded')} {agent.loadedToolCount} ({agent.schemaBytes} bytes){agent.error ? ` · ${agent.error}` : ''}</p>)}
+      {status?.tools.mode === 'on-demand' && <p className="dshP7CompanySettingsNotice">{t('toolsOnDemand')}: {status.tools.tools.length}</p>}
+      {status?.tools.tools.length ? <div className="dshP7CompanySettingsCapabilityGrid">{TOOL_GROUPS.map(group => {
+        const tools = status.tools.tools.filter(tool => toolCapability(tool.name) === group.id)
+        return <details className="dshP7CompanySettingsCapability" key={group.id}>
+          <summary><span><strong>{t(group.title)}</strong><small>{t(group.description)}</small></span><b>{tools.length}</b></summary>
+          {tools.length ? <ul className="dshP7CompanySettingsToolList">{tools.map(tool => {
+            const copy = toolCopy(tool.name, t)
+            return <li className="dshP7CompanySettingsTool" key={tool.name}><span>{copy.label}</span><p>{copy.purpose}</p><code>{tool.name}</code></li>
+          })}</ul> : <p className="dshP7CompanySettingsEmpty">{t('noToolsInCapability')}</p>}
+        </details>
+      })}</div> : <p className="dshP7CompanySettingsEmpty">{t('noTools')}</p>}
+      {status?.tools.tools.some(tool => toolCapability(tool.name) === undefined) && <details className="dshP7CompanySettingsDiagnostics"><summary>{t('toolsUncategorized')}</summary><p>{t('toolsUncategorizedIntro')}</p><ul className="dshP7CompanySettingsToolList">{status.tools.tools.filter(tool => toolCapability(tool.name) === undefined).map(tool => {
+        const copy = toolCopy(tool.name, t)
+        return <li className="dshP7CompanySettingsTool" key={tool.name}><span>{copy.label}</span><p>{copy.purpose}</p><code>{tool.name}</code></li>
+      })}</ul></details>}
+      {status?.tools.agents?.length ? <details className="dshP7CompanySettingsDiagnostics"><summary>{t('toolsAgentDiagnostics')}</summary><p>{t('toolsAgentDiagnosticsIntro')}</p>{status.tools.agents.map(agent => <p className="dshP7CompanySettingsNotice" key={agent.agentId}>{agent.agentId}: {t('toolsAgentLoaded')} {agent.loadedToolCount} ({agent.schemaBytes} bytes){agent.error ? ` · ${agent.error}` : ''}</p>)}</details> : null}
       <p className="dshP7CompanySettingsNotice">{t('toolUsageNotice')}</p>
     </section>
     <PersonalMemorySection key={account?.profile ? `${account.profile.organizationId}:${account.profile.userId}:${account.profile.sessionId}` : 'signed-out'} t={t} {...(account?.profile?.userId === undefined ? {} : { identityKey: account.profile.userId })} />

@@ -60,9 +60,23 @@ const STYLES = `
 .dshP7CompanySettingsToolList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .dshP7CompanySettingsTool { display: grid; gap: 4px; min-width: 0; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); border-radius: 8px; background: color-mix(in srgb, var(--dsw-alias-bg-module-platform, #fff) 92%, var(--dsw-alias-interactive-bg-hover, #f3f4f6)); }
 .dshP7CompanySettingsTool > span { color: var(--dsw-alias-label-primary, #1f2329); font-size: 13px; line-height: 20px; font-weight: 500; }
+.dshP7CompanySettingsTool > p { color: var(--dsw-alias-label-secondary, #5d6470); font-size: 12px; line-height: 18px; }
 .dshP7CompanySettingsTool code { overflow-wrap: anywhere; color: var(--dsw-alias-label-primary, #1f2329); font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Consolas, monospace); font-size: 12px; line-height: 18px; }
+.dshP7CompanySettingsCapabilityGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dshP7CompanySettingsCapability, .dshP7CompanySettingsDiagnostics { min-width: 0; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); border-radius: 10px; background: color-mix(in srgb, var(--dsw-alias-bg-module-platform, #fff) 92%, var(--dsw-alias-interactive-bg-hover, #f3f4f6)); }
+.dshP7CompanySettingsCapability > summary, .dshP7CompanySettingsDiagnostics > summary { display: flex; align-items: start; justify-content: space-between; gap: 10px; padding: 12px; cursor: pointer; list-style: none; }
+.dshP7CompanySettingsCapability > summary::-webkit-details-marker, .dshP7CompanySettingsDiagnostics > summary::-webkit-details-marker { display: none; }
+.dshP7CompanySettingsCapability > summary::after, .dshP7CompanySettingsDiagnostics > summary::after { content: '⌄'; flex: none; color: var(--dsw-alias-label-secondary, #5d6470); font-size: 16px; line-height: 20px; transition: transform .15s ease; }
+.dshP7CompanySettingsCapability[open] > summary::after, .dshP7CompanySettingsDiagnostics[open] > summary::after { transform: rotate(180deg); }
+.dshP7CompanySettingsCapability > summary span { display: grid; gap: 2px; min-width: 0; }
+.dshP7CompanySettingsCapability > summary strong { font-size: 14px; line-height: 20px; }
+.dshP7CompanySettingsCapability > summary small, .dshP7CompanySettingsDiagnostics > p { color: var(--dsw-alias-label-secondary, #5d6470); font-size: 12px; line-height: 18px; }
+.dshP7CompanySettingsCapability > summary b { flex: none; padding: 2px 7px; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover, #f3f4f6); font-size: 12px; line-height: 16px; }
+.dshP7CompanySettingsCapability > .dshP7CompanySettingsToolList, .dshP7CompanySettingsCapability > .dshP7CompanySettingsEmpty, .dshP7CompanySettingsDiagnostics > p, .dshP7CompanySettingsDiagnostics > .dshP7CompanySettingsToolList, .dshP7CompanySettingsDiagnostics > .dshP7CompanySettingsNotice { margin: 0 12px 12px; }
+.dshP7CompanySettingsDiagnostics { display: grid; gap: 10px; padding-bottom: 0; }
+.dshP7CompanySettingsDiagnostics > summary { justify-content: start; font-size: 13px; line-height: 20px; font-weight: 500; }
 .dshP7CompanySettingsEmpty { padding: 14px; border: 1px dashed var(--dsw-alias-border-l2, #d1d5db); border-radius: 10px; background: color-mix(in srgb, var(--dsw-alias-bg-module-platform, #fff) 92%, var(--dsw-alias-interactive-bg-hover, #f3f4f6)); }
-@media (max-width: 640px) { .dshP7CompanySettings { gap: 18px; } .dshP7CompanySettingsCard { padding: 14px; } .dshP7CompanySettingsDefinitionGrid { grid-template-columns: 1fr; gap: 0; } .dshP7CompanySettingsActions > .dshP7CompanySettingsButton { flex: 1 1 auto; } }
+@media (max-width: 640px) { .dshP7CompanySettings { gap: 18px; } .dshP7CompanySettingsCard { padding: 14px; } .dshP7CompanySettingsDefinitionGrid, .dshP7CompanySettingsCapabilityGrid { grid-template-columns: 1fr; gap: 0; } .dshP7CompanySettingsCapabilityGrid { gap: 10px; } .dshP7CompanySettingsActions > .dshP7CompanySettingsButton { flex: 1 1 auto; } }
 @media (prefers-color-scheme: dark) { .dshP7CompanySettingsCard { box-shadow: none; } .dshP7CompanySettingsInput { background: var(--dsw-alias-bg-module-platform, #1b1d22); } }
 `
 
