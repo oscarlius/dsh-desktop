@@ -93,7 +93,7 @@ index 84c0603..20bf455 100644
  			}, [highlight, clearHighlight]);
  			const noticeLine = state.notice === null || state.notice.kind === "refresh-failed" ? null : noticeText(state.notice, t);
 -			const listed = state.packages.filter((pkg) => !HIDDEN_BUNDLES.has(pkg.name) && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg)) && (pkg.installed || pkg.official || pkg.error !== void 0));
-+			const available = state.packages.filter((pkg) => !HIDDEN_BUNDLES.has(pkg.name) && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg)) && (pkg.installed || pkg.official || pkg.error !== void 0));
++			const available = state.packages.filter((pkg) => !HIDDEN_BUNDLES.has(pkg.name) && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg)) && (pkg.installed || pkg.official || pkg.error !== void 0 || pkg.enabled && pkg.availability === "installation"));
 +			const listed = available.filter((pkg) => !ledger.hiddenBundles.has(pkg.name));
  			const mine = listed.filter((pkg) => !pkg.official);
  			const official = listed.filter((pkg) => pkg.official);
