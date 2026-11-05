@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.39-beta.16",
-  "dshCompanyCompatibilityBuild": "2026110504",
+  "version": "2.0.40-beta.16",
+  "dshCompanyCompatibilityBuild": "2026110505",
   "dshDesktopFlavor": "companytest",
   "dshDesktopUpdatesEnabled": true,
   "private": true,

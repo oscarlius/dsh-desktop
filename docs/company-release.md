@@ -47,3 +47,9 @@ corepack yarn publish:company-release --bundle <版本目录> --notes-file <发�
 涉及客户端入口或运行时依赖的修改，发布前运行 `corepack yarn workspace dsh-plugin-desktop-beta verify:client-boot`，在隔离 Host 中启动真正的官方前端与模块 Loader，确认 Desktop factory 激活并报告健康。该检查不调用真实模型、不使用生产账号；如使用已安装的 Edge，可设置 `DSH_NEXT_TEST_BROWSER_CHANNEL=msedge`。组件预览和 Host HTTP 接口通过不能代替这条启动验证。
 
 运行 `corepack yarn test:company-release` 及两种 Desktop 打包门禁、变体一致性检查。正式发版核对 P7Pro 同版三文件状态和回执；对 Full 做空白配置自动连接及真实公司模型调用，对更新包核对差分/全量回退与既有配置保留。后台页面应清楚显示“新同事首次安装”和“已有用户更新”，并使用同一个本次发布版本。
+
+## 安装器临时目录回退
+
+公司双包构建通过 `scripts/company-nsis-runtime.mjs` 将官方 NSIS 3.12 工具链复制到本次候选的隔离目录，再覆盖已提交且经哈希校验的启动层 stub。编译器、插件、安装标识和 NSIS 差分格式沿用既有流程；不要修改公共 electron-builder 缓存。Full、更新包及其卸载程序使用同一修复。
+
+默认 TEMP/TMP 可写时保留原路径；不可用时，启动层先尝试当前用户 LocalAppData 下的专用临时目录，并让本次子进程继承它，再保留上游系统临时目录回退。该逻辑早于 `.onInit`，不需要同事额外运行启动器，不修改系统环境变量或权限。发布验证应覆盖故障临时路径启动及旧版到新版差分升级。

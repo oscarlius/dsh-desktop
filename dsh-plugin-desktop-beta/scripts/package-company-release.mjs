@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { companyBuildVersion } from '../src/company-build-version.ts'
+import { prepareCompanyNsisRuntime } from '../../scripts/company-nsis-runtime.mjs'
 
 const packageRoot = resolve(dirname(fileURLToPath(new URL('../package.json', import.meta.url))))
 const workspaceRoot = resolve(packageRoot, '..')
@@ -74,7 +75,7 @@ export function releaseManifest(version, sourceCommit, output) {
   }
 }
 
-function packageDistribution(staging, name, sourceCommit, updateDistribution, keylessFull = false) {
+function packageDistribution(staging, name, sourceCommit, updateDistribution, keylessFull = false, nsisDirectory) {
   const output = join(staging, name)
   const env = { ...process.env }
   // Clear caller state before defining this child distribution. In particular,
@@ -87,6 +88,7 @@ function packageDistribution(staging, name, sourceCommit, updateDistribution, ke
     DSH_COMPANY_TEST_WINDOWS: '1',
     DSH_COMPANY_PACKAGE_OUTPUT: output,
     DSH_COMPANY_RELEASE_SOURCE_COMMIT: sourceCommit,
+    ELECTRON_BUILDER_NSIS_DIR: nsisDirectory,
   })
   if (updateDistribution) env.DSH_COMPANY_UPDATE_DISTRIBUTION = '1'
   else if (keylessFull) env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION = '1'
@@ -95,18 +97,20 @@ function packageDistribution(staging, name, sourceCommit, updateDistribution, ke
   command(process.execPath, [join(packageRoot, 'scripts', 'package.ts'), 'company-win'], packageRoot, env)
 }
 
-export function runCompanyRelease() {
+export async function runCompanyRelease() {
   const plan = releasePlan()
   const sourceCommit = gitCommit()
   mkdirSync(plan.staging, { recursive: true })
   try {
+    const nsis = await prepareCompanyNsisRuntime(join(plan.staging, 'nsis-runtime'))
     // Each child receives an explicit distribution mode so an inherited update
     // environment cannot remove the protected bootstrap from the Full package.
     const keylessFull = process.env.DSH_COMPANY_KEYLESS_FULL === '1'
-    packageDistribution(plan.staging, 'full', sourceCommit, false, keylessFull)
-    packageDistribution(plan.staging, 'update', sourceCommit, true)
+    packageDistribution(plan.staging, 'full', sourceCommit, false, keylessFull, nsis.directory)
+    packageDistribution(plan.staging, 'update', sourceCommit, true, false, nsis.directory)
     if (gitCommit() !== sourceCommit) throw new Error('Source Git commit changed during company package generation')
     const manifest = releaseManifest(plan.version, sourceCommit, plan.staging)
+    manifest.installerRuntime = nsis.provenance
     const manifestPath = join(plan.staging, 'release-manifest.json')
     const temporaryManifest = `${manifestPath}.tmp`
     writeFileSync(temporaryManifest, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' })
@@ -124,7 +128,7 @@ export function runCompanyRelease() {
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    runCompanyRelease()
+    await runCompanyRelease()
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = 1
