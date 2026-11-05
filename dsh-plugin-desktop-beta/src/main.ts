@@ -50,7 +50,7 @@ import { canAutomaticWindowsApply, isWindowsUpdateHandoffActive } from './window
 import { updateLabel } from './update-state.ts'
 import { DESKTOP_SHUTDOWN_TIMEOUT_MS } from '../../dsh-plugin-desktop/src/shutdown.ts'
 import { isDesktopRendererStatus, NextRendererRecovery } from './renderer-recovery.ts'
-import { COMPANY_COMPATIBILITY_BUILD, COMPANY_TRANSPORT_VERSION, DESKTOP_APP_ID, DESKTOP_COMPANY_SERVICE_ENABLED, DESKTOP_HOME_DIRECTORY_NAME, DESKTOP_PRODUCT_NAME } from './product-identity.ts'
+import { COMPANY_COMPATIBILITY_BUILD, COMPANY_TRANSPORT_VERSION, DESKTOP_APP_ID, DESKTOP_COMPANY_SERVICE_ENABLED, DESKTOP_HOME_DIRECTORY_NAME, DESKTOP_PRODUCT_NAME, DESKTOP_UPDATES_ENABLED } from './product-identity.ts'
 import { createP7SessionVault } from './p7-session-vault.ts'
 
 // Inherit the package policy across the Host and every runtime child process.
@@ -239,13 +239,13 @@ let pendingUpdateRuntimeHealthy = !app.isPackaged
 let pendingUpdateHostHealthy = false
 let pendingUpdateClientHealthy = false
 function confirmHealthyPendingUpdate(): void {
-  if (pendingUpdateHostHealthy && pendingUpdateClientHealthy) updates.confirmPendingAfterHealthyHost(app.getVersion(), pendingUpdateRuntimeHealthy)
+  if (DESKTOP_UPDATES_ENABLED && pendingUpdateHostHealthy && pendingUpdateClientHealthy) updates.confirmPendingAfterHealthyHost(app.getVersion(), pendingUpdateRuntimeHealthy)
 }
 const updateInstaller = new NextUpdateInstaller({ platform: process.platform, executable: process.execPath,
   language: () => windowsLanguage,
   productName: DESKTOP_PRODUCT_NAME,
   log: error => runtime.diagnostics.append(String(error), 'warn') })
-const updates = new NextUpdates({ version, platform: process.platform, packaged: app.isPackaged, userData: electronData,
+const updates = new NextUpdates({ version, platform: process.platform, packaged: app.isPackaged && DESKTOP_UPDATES_ENABLED, userData: electronData,
   executable: process.execPath,
   request: (url, init) => net.fetch(url, { ...init, credentials: 'omit' }),
   artifactRequest: createArtifactRequest(),
@@ -256,13 +256,13 @@ const updates = new NextUpdates({ version, platform: process.platform, packaged:
     log: error => runtime.diagnostics.append(String(error), 'warn'),
   }) } : {}),
   changed: () => { if (app.isReady() && !quitting) native.refresh() },
-  available: nextVersion => {
+  ...(DESKTOP_UPDATES_ENABLED ? { available: (nextVersion: string) => {
     if (app.isReady() && !quitting) {
       native.notifyUpdate(nextVersion, () => {
         void promptAvailableUpdate().catch(error => runtime.diagnostics.append(String(error), 'warn'))
       })
     }
-  },
+  } } : {}),
   log: error => runtime.diagnostics.append(String(error), 'warn'),
   prepare: (path, nextVersion, directory, signal) => updateInstaller.prepare(path, nextVersion, directory, signal),
   stage: () => updateInstaller.stage(),
@@ -617,7 +617,7 @@ async function performCommand(input: Record<string, unknown>, type: string, sour
   if (type === 'close-controls') { shellWindow?.close(); return }
   if (type === 'quit') { app.quit(); return }
   if (['check-updates', 'download-update', 'install-update'].includes(type)) {
-    if (!['darwin', 'win32'].includes(process.platform) || quitting || runtime.busy) return
+    if (!DESKTOP_UPDATES_ENABLED || !['darwin', 'win32'].includes(process.platform) || quitting || runtime.busy) return
     if (type === 'check-updates') {
       void updates.check().then(async () => {
         if (source !== 'native' || quitting) return
@@ -1137,7 +1137,7 @@ async function main(): Promise<void> {
   // This boundary intentionally precedes profile/Host initialization: pending
   // installers are re-authorized against the current P7 release, then hand
   // off without ever interrupting an already-running agent task.
-  if (await updates.applyPendingOnNextLaunch()) { app.exit(0); return }
+  if (DESKTOP_UPDATES_ENABLED && await updates.applyPendingOnNextLaunch()) { app.exit(0); return }
   runtime.initialize()
   void prepareHostEnvironment()
   if (dataLocation.error && !runtime.safeMode) { runtime.recoveryMode = true; runtime.report(dataLocation.error) }
@@ -1161,7 +1161,7 @@ async function main(): Promise<void> {
     }
   }
   native.createTray()
-  updates.start()
+  if (DESKTOP_UPDATES_ENABLED) updates.start()
   Menu.setApplicationMenu(process.platform === 'win32' ? null : Menu.buildFromTemplate([
     { label: 'DSH Desktop Beta', submenu: native.items() }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
   ]))

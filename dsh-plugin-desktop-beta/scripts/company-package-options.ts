@@ -17,11 +17,12 @@ export function companyPayloadExtraMetadata(environment: NodeJS.ProcessEnv = pro
   const initial = environment.DSH_COMPANY_INITIAL_DISTRIBUTION === '1'
   const update = environment.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
   const personal = environment.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION === '1'
+  const updatesDisabled = environment.DSH_COMPANY_DISABLE_UPDATES === '1'
   const sourceCommit = environment.DSH_COMPANY_RELEASE_SOURCE_COMMIT
-  if (!initial && !update && !personal && sourceCommit === undefined) return undefined
+  if (!initial && !update && !personal && sourceCommit === undefined && !updatesDisabled) return undefined
   if ([initial, update, personal].filter(Boolean).length !== 1) throw new Error('Select exactly one company package distribution')
   if (sourceCommit === undefined || !SOURCE_COMMIT.test(sourceCommit)) throw new Error('Company payload requires a 40-character lowercase source commit')
-  return { dshCompanyReleaseSourceCommit: sourceCommit, ...(update ? { dshDesktopUpdateDistribution: true } : {}), ...(personal ? { dshDesktopPersonalLoginDistribution: true } : {}) }
+  return { dshCompanyReleaseSourceCommit: sourceCommit, ...(update ? { dshDesktopUpdateDistribution: true } : {}), ...(personal ? { dshDesktopPersonalLoginDistribution: true } : {}), ...(updatesDisabled ? { dshDesktopUpdatesEnabled: false } : {}) }
 }
 
 /**
@@ -29,7 +30,7 @@ export function companyPayloadExtraMetadata(environment: NodeJS.ProcessEnv = pro
  * distinct at the builder boundary. This function is intentionally side-effect free
  * so release tests can prove no bootstrap resource leaks into the update build.
  */
-export function companyWindowsBuilderArguments(options: CompanyPackageOptions): readonly string[] {
+export function companyWindowsBuilderArguments(options: CompanyPackageOptions, environment: NodeJS.ProcessEnv = process.env): readonly string[] {
   const initial = options.distribution === 'full'
   if (initial && !options.keylessFull && (options.bootstrapFile === undefined || options.bootstrapFile.length === 0)) {
     throw new Error('Company Full packaging requires DSH_P7_BOOTSTRAP_FILE')
@@ -47,5 +48,6 @@ export function companyWindowsBuilderArguments(options: CompanyPackageOptions): 
     ...(options.sourceCommit === undefined ? [] : [`--config.extraMetadata.dshCompanyReleaseSourceCommit=${options.sourceCommit}`]),
     ...(options.keylessFull ? ['--config.extraMetadata.dshDesktopPersonalLoginDistribution=true'] : []),
     ...(initial ? [] : ['--config.extraMetadata.dshDesktopUpdateDistribution=true']),
+    ...(environment.DSH_COMPANY_DISABLE_UPDATES === '1' ? ['--config.extraMetadata.dshDesktopUpdatesEnabled=false'] : []),
   ]
 }

@@ -168,6 +168,56 @@ it('sets the sealed company AppUserModelId before creating its window', async ()
   } finally { vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }) }
 })
 
+it('seals a Company Full build out of pending applies, polling, manual checks, and update notifications', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'next-company-updates-disabled-'))
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' })
+  const resourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
+  Object.defineProperty(process, 'resourcesPath', { value: home, configurable: true })
+  const { app } = await import('electron')
+  const packaged = Object.getOwnPropertyDescriptor(app, 'isPackaged')
+  Object.defineProperty(app, 'isPackaged', { value: true, configurable: true })
+  const start = vi.fn(); const applyPendingOnNextLaunch = vi.fn(async () => false)
+  const check = vi.fn(async () => {}); const download = vi.fn(async () => {}); const install = vi.fn(async () => {})
+  let options: { packaged: boolean, available?: (version: string) => void } | undefined
+  vi.doMock('../src/product-identity.ts', () => ({
+    COMPANY_COMPATIBILITY_BUILD: '2026110401', COMPANY_TRANSPORT_VERSION: '2.0.32-beta.16',
+    DESKTOP_APP_ID: 'ai.deepseek.dsh.desktop.companytest', DESKTOP_COMPANY_SERVICE_ENABLED: true,
+    DESKTOP_HOME_DIRECTORY_NAME: '.p7-dsh-companytest', DESKTOP_PRODUCT_NAME: 'P7 DSH Company Test', DESKTOP_UPDATES_ENABLED: false,
+  }))
+  vi.doMock('../src/updates.ts', () => ({ NextUpdates: class {
+    constructor(value: typeof options) { options = value }
+    snapshot() { return { phase: 'idle', installable: false } }
+    start = start
+    applyPendingOnNextLaunch = applyPendingOnNextLaunch
+    confirmPendingAfterHealthyHost() {}
+    dispose = async () => {}
+    check = check
+    download = download
+    install = install
+  } }))
+  vi.stubEnv('DSH_DESKTOP_NEXT_HOME', home)
+  try {
+    await import('../src/main.ts')
+    await vi.waitFor(() => expect(fixture.windows).toHaveLength(1))
+    expect(options).toMatchObject({ packaged: false })
+    expect(options!.available).toBeUndefined()
+    expect(applyPendingOnNextLaunch).not.toHaveBeenCalled()
+    expect(start).not.toHaveBeenCalled()
+    const window = fixture.windows[0]
+    await fixture.handlers.get('dsh-next:command')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, { type: 'check-updates' })
+    await fixture.handlers.get('dsh-next:command')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, { type: 'download-update' })
+    await fixture.handlers.get('dsh-next:command')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, { type: 'install-update' })
+    expect(check).not.toHaveBeenCalled(); expect(download).not.toHaveBeenCalled(); expect(install).not.toHaveBeenCalled()
+  } finally {
+    Object.defineProperty(process, 'platform', platform)
+    if (resourcesPath) Object.defineProperty(process, 'resourcesPath', resourcesPath); else Reflect.deleteProperty(process, 'resourcesPath')
+    if (packaged) Object.defineProperty(app, 'isPackaged', packaged); else Reflect.deleteProperty(app, 'isPackaged')
+    vi.doUnmock('../src/product-identity.ts'); vi.doUnmock('../src/updates.ts')
+    vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true })
+  }
+})
+
 it('repairs a crashed renderer and fences old document reports while preserving its Host', async () => {
   const home = mkdtempSync(join(tmpdir(), 'next-renderer-repair-'))
   vi.stubEnv('DSH_DESKTOP_NEXT_HOME', home)

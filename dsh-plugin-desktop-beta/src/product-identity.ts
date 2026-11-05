@@ -34,7 +34,15 @@ export const DESKTOP_RELEASE_IDENTITIES = Object.freeze({
   }),
 })
 
-export type DesktopProductIdentity = typeof DESKTOP_RELEASE_IDENTITIES[keyof typeof DESKTOP_RELEASE_IDENTITIES]
+export interface DesktopProductIdentity {
+  readonly releaseChannel: 'stable' | 'beta'
+  readonly packageName: string
+  readonly productName: string
+  readonly appId: string
+  readonly homeDirectoryName: string
+  readonly updatesEnabled: boolean
+  readonly accountOnboardingEnabled: boolean
+}
 
 /** Identify the Electron Builder test flavor sealed into the packaged app manifest. */
 export function desktopCompanyTestFlavor(manifestText: string | undefined): boolean {
@@ -51,11 +59,17 @@ export function desktopProductIdentityForManifest(manifestText: string | undefin
   if (manifestText === undefined) return DESKTOP_RELEASE_IDENTITIES.beta
   const manifest: unknown = JSON.parse(manifestText)
   if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('Invalid Desktop product manifest')
-  const flavor = (manifest as { dshDesktopFlavor?: unknown }).dshDesktopFlavor
+  const { dshDesktopFlavor: flavor, dshDesktopUpdatesEnabled: updatesEnabled } = manifest as {
+    dshDesktopFlavor?: unknown
+    dshDesktopUpdatesEnabled?: unknown
+  }
   if (flavor !== undefined && flavor !== 'companytest' && flavor !== 'beta') throw new Error('Unknown Desktop product flavor')
-  return flavor === 'companytest'
+  if (updatesEnabled !== undefined && typeof updatesEnabled !== 'boolean') throw new Error('Invalid Desktop updates policy')
+  if (updatesEnabled !== undefined && flavor !== 'companytest') throw new Error('Desktop updates policy is only valid for Company builds')
+  if (flavor !== 'companytest' || updatesEnabled !== false) return flavor === 'companytest'
     ? DESKTOP_RELEASE_IDENTITIES.companytest
     : DESKTOP_RELEASE_IDENTITIES.beta
+  return Object.freeze({ ...DESKTOP_RELEASE_IDENTITIES.companytest, updatesEnabled: false })
 }
 
 /** Electron also exposes resourcesPath in development and RUN_AS_NODE CLI mode. */
@@ -98,7 +112,7 @@ export const DESKTOP_APP_ID = DESKTOP_PRODUCT_IDENTITY.appId
 export const DESKTOP_RELEASE_CHANNEL = DESKTOP_PRODUCT_IDENTITY.releaseChannel
 export const DESKTOP_HOME_DIRECTORY_NAME = DESKTOP_PRODUCT_IDENTITY.homeDirectoryName
 export const DESKTOP_ACCOUNT_ONBOARDING_ENABLED = DESKTOP_PRODUCT_IDENTITY.accountOnboardingEnabled
-export const DESKTOP_COMPANY_SERVICE_ENABLED = DESKTOP_PRODUCT_IDENTITY === DESKTOP_RELEASE_IDENTITIES.companytest
+export const DESKTOP_COMPANY_SERVICE_ENABLED = DESKTOP_PRODUCT_IDENTITY.appId === DESKTOP_RELEASE_IDENTITIES.companytest.appId
 export const DESKTOP_UPDATES_ENABLED = DESKTOP_PRODUCT_IDENTITY.updatesEnabled
 
 /** Immutable Company transport/build values are sealed in the Beta manifest. */

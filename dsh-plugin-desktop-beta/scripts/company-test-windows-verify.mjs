@@ -106,18 +106,18 @@ function verifyInstallerPayload(expectConnection) {
   }
 }
 
-function verifyPackagedRuntime() {
+function verifyPackagedRuntime(expectedUpdatesEnabled) {
   const program = [
-    "import { readFileSync, readdirSync } from 'node:fs'",
+    "import { readFileSync } from 'node:fs'",
     "import { join } from 'node:path'",
     "import { pathToFileURL } from 'node:url'",
     "const app = join(process.resourcesPath, 'app.asar')",
     "const identity = await import(pathToFileURL(join(app, 'lib', 'product-identity.js')).href)",
-    "const product = Object.values(identity).find(value => value && typeof value === 'object' && value.appId === 'ai.deepseek.dsh.desktop.companytest')",
+    "const product = identity.DESKTOP_PRODUCT_IDENTITY",
     "if (!product) throw new Error('missing sealed company product identity')",
     "const p7 = await import(pathToFileURL(join(app, 'node_modules', 'dsh-plugin-p7-company-models', 'lib', 'index.js')).href)",
     "const value = { packageName: product.packageName, productName: product.productName, appId: product.appId, homeDirectoryName: product.homeDirectoryName, updatesEnabled: product.updatesEnabled, accountOnboardingEnabled: product.accountOnboardingEnabled, bundledP7: typeof p7.CompanyHost === 'function' }",
-    "if (value.packageName !== JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).name || value.productName !== 'P7 DSH Company Test' || value.appId !== 'ai.deepseek.dsh.desktop.companytest' || value.homeDirectoryName !== '.p7-dsh-companytest' || value.updatesEnabled !== true || value.accountOnboardingEnabled !== false || !value.bundledP7) process.exitCode = 1",
+    `if (value.packageName !== JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).name || value.productName !== 'P7 DSH Company Test' || value.appId !== 'ai.deepseek.dsh.desktop.companytest' || value.homeDirectoryName !== '.p7-dsh-companytest' || value.updatesEnabled !== ${expectedUpdatesEnabled} || value.accountOnboardingEnabled !== false || !value.bundledP7) process.exitCode = 1`,
     'console.log(JSON.stringify(value))',
   ].join('; ')
   const result = spawnSync(application, ['--input-type=module', '-e', program], {
@@ -166,5 +166,5 @@ if (sourceCommit !== undefined && packaged.dshCompanyReleaseSourceCommit !== sou
 if (packaged.dshDesktopFlavor !== 'companytest') throw new Error('packaged runtime does not carry the companytest flavor marker')
 if (packaged.dependencies?.['dsh-plugin-p7-company-models'] !== 'workspace:*') throw new Error('packaged runtime does not declare the bundled P7 dependency')
 console.log(`Company test packaged runtime verified: ${archive}`)
-verifyPackagedRuntime()
+verifyPackagedRuntime(process.env.DSH_COMPANY_DISABLE_UPDATES !== '1')
 verifyInstallerPayload(!updateDistribution && !personalLoginDistribution)

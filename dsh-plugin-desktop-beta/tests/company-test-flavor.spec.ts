@@ -29,6 +29,14 @@ describe('company test product flavor', () => {
     })
   })
 
+  it('honors only the sealed Company boolean opt-out for desktop updates', () => {
+    expect(desktopProductIdentityForManifest('{"dshDesktopFlavor":"companytest","dshDesktopUpdatesEnabled":false}').updatesEnabled).toBe(false)
+    expect(desktopProductIdentityForManifest('{"dshDesktopFlavor":"companytest","dshDesktopUpdatesEnabled":true}').updatesEnabled).toBe(true)
+    for (const text of ['{"dshDesktopFlavor":"companytest","dshDesktopUpdatesEnabled":"false"}', '{"dshDesktopFlavor":"beta","dshDesktopUpdatesEnabled":false}']) {
+      expect(() => desktopProductIdentityForManifest(text)).toThrow()
+    }
+  })
+
   it('keeps the installed npm package identity for launcher-owned plugins', () => {
     const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
     const identity = desktopProductIdentityForManifest(JSON.stringify({ ...manifest, dshDesktopFlavor: 'companytest' }))
@@ -58,10 +66,10 @@ describe('company test product flavor', () => {
       mkdirSync(join(directory, 'app'), { recursive: true })
       writeFileSync(join(directory, 'app/package.json'), '{not json')
       expect(invoke().status).not.toBe(0)
-      writeFileSync(join(directory, 'app/package.json'), '{"dshDesktopFlavor":"companytest","version":"2.0.20-beta.15","dshCompanyCompatibilityBuild":"2026102601"}')
+      writeFileSync(join(directory, 'app/package.json'), '{"dshDesktopFlavor":"companytest","dshDesktopUpdatesEnabled":false,"version":"2.0.20-beta.15","dshCompanyCompatibilityBuild":"2026102601"}')
       const company = invoke()
       expect(company.status, company.stderr).toBe(0)
-      expect(company.stdout).toContain('P7 DSH Company Test true')
+      expect(company.stdout).toContain('P7 DSH Company Test false')
     } finally { rmSync(directory, { recursive: true, force: true }) }
   })
 
@@ -73,10 +81,10 @@ describe('company test product flavor', () => {
       writeFileSync(source, readFileSync(new URL('../src/product-identity.ts', import.meta.url)))
       const invoke = () => spawnSync(process.execPath, ['--input-type=module', '-e', `delete process.resourcesPath; const m = await import(${JSON.stringify(pathToFileURL(source).href)}); console.log(m.DESKTOP_PRODUCT_NAME, m.DESKTOP_UPDATES_ENABLED)`], { encoding: 'utf8' })
       expect(invoke().status).not.toBe(0)
-      writeFileSync(join(directory, 'package.json'), '{"type":"module","dshDesktopFlavor":"companytest","version":"2.0.20-beta.15","dshCompanyCompatibilityBuild":"2026102601"}')
+      writeFileSync(join(directory, 'package.json'), '{"type":"module","dshDesktopFlavor":"companytest","dshDesktopUpdatesEnabled":false,"version":"2.0.20-beta.15","dshCompanyCompatibilityBuild":"2026102601"}')
       const company = invoke()
       expect(company.status, company.stderr).toBe(0)
-      expect(company.stdout).toContain('P7 DSH Company Test true')
+      expect(company.stdout).toContain('P7 DSH Company Test false')
     } finally { rmSync(directory, { recursive: true, force: true }) }
   })
 })

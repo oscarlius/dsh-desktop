@@ -11,6 +11,7 @@ describe('company installer distributions', () => {
     expect(companyPayloadExtraMetadata({ DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit })
     expect(companyPayloadExtraMetadata({ DSH_COMPANY_UPDATE_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit, dshDesktopUpdateDistribution: true })
     expect(companyPayloadExtraMetadata({ DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit, dshDesktopPersonalLoginDistribution: true })
+    expect(companyPayloadExtraMetadata({ DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION: '1', DSH_COMPANY_DISABLE_UPDATES: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toEqual({ dshCompanyReleaseSourceCommit: commit, dshDesktopPersonalLoginDistribution: true, dshDesktopUpdatesEnabled: false })
     expect(() => companyPayloadExtraMetadata({ DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION: '1', DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toThrow('exactly one')
     expect(companyPayloadExtraMetadata({})).toBeUndefined()
     expect(() => companyPayloadExtraMetadata({ DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_UPDATE_DISTRIBUTION: '1', DSH_COMPANY_RELEASE_SOURCE_COMMIT: commit })).toThrow('exactly one')
@@ -51,9 +52,10 @@ describe('company installer distributions', () => {
   })
 
   it('supports a keyless Full personal-login package without adding a bootstrap resource', () => {
-    const arguments_ = companyWindowsBuilderArguments({ distribution: 'full', output, keylessFull: true, sourceCommit: 'a'.repeat(40) })
+    const arguments_ = companyWindowsBuilderArguments({ distribution: 'full', output, keylessFull: true, sourceCommit: 'a'.repeat(40) }, { DSH_COMPANY_DISABLE_UPDATES: '1' })
     expect(arguments_).toEqual(expect.arrayContaining([
       '--config.extraMetadata.dshDesktopPersonalLoginDistribution=true',
+      '--config.extraMetadata.dshDesktopUpdatesEnabled=false',
       '--config.nsis.artifactName=P7-DSH-Company-Full-${version}-${arch}-Setup.${ext}',
     ]))
     const config = { extraMetadata: { dshDesktopFlavor: 'companytest', dshDesktopPersonalLoginDistribution: true }, extraResources: [{ from: 'runtime', to: 'runtime' }] }
