@@ -27,9 +27,15 @@ export function NextUpdateSettings({ state, language, run, heading }: { state: D
 /** The browser has no native bridge, so update controls are intentionally unavailable there. */
 export function NextVersionManagement({ state, language, run }: { state?: DesktopState; language: string; run?: (command: DesktopCommand) => void }) {
   const t = (zh: string, en: string) => language.startsWith('zh') ? zh : en
+  const acknowledgements = <p className="dshDesktopSettingsHint" data-desktop-acknowledgements style={{ marginTop: 24 }}>
+    {t('感谢每一位参与 AI Agent 测试、分享建议的同事。你们的反馈，让它在日常工作中变得更好。', 'Thank you to every colleague who has tested AI Agent and shared suggestions. Your feedback makes it more useful in our daily work.')}
+    <br />
+    {t('特别感谢刘雪迪发现并反馈 Windows 11 数字签名问题。', 'Special thanks to 刘雪迪 for identifying and reporting the Windows 11 digital signature issue.')}
+  </p>
   if (!state || !run) return <section className="dshDesktopSettingsGroup" data-next-version-management>
     <h3>{t('版本管理', 'Version management')}</h3>
     <p className="dshDesktopSettingsHint">{t('应用内更新仅可在 DSH Desktop 中使用。', 'In-app updates are available only in DSH Desktop.')}</p>
+    {acknowledgements}
   </section>
-  return <div data-next-version-management><NextUpdateSettings state={state} language={language} run={run} heading={t('版本管理', 'Version management')} /></div>
+  return <div data-next-version-management><NextUpdateSettings state={state} language={language} run={run} heading={t('版本管理', 'Version management')} />{acknowledgements}</div>
 }

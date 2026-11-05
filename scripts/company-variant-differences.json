@@ -142,8 +142,8 @@
     },
     {
       "path": "src/client/updates.tsx",
-      "betaSha256": "f34b60355ecb836ee3cc340ef3dcd09d52ee9ded0a876e00f881fc0479aef910",
-      "nextSha256": "07769baf94bbf230c7a191b7bbb50de215dc3d259cad725b1679832bad38b4a6",
+      "betaSha256": "a1c6aed16d1ab85ba727a9e750d2d9fae41f8f37d5bed2b571e2798307102302",
+      "nextSha256": "8b3f4a775e9f9d6dadd71f3f857355a9ea17f1fdd3d77a39d6c3870f9de7e06b",
       "reason": "Company display/build fields in the Desktop UI, retaining the transport SemVer for service requests."
     },
     {
