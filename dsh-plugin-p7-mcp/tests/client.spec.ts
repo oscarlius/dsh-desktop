@@ -18,6 +18,15 @@ function server(options: { tools?: unknown[]; wrongId?: boolean; oversized?: boo
 }
 
 describe('P7 managed MCP client', () => {
+  it('retains safe display titles and service metadata without changing protocol names or schemas', async () => {
+    const connection = async () => ({ origin: 'https://p7.example', apiKey: 'test' })
+    const listed = { ...tool, title: '网页检索', _meta: { 'com.p7/server': { name: '互联网检索', namespace: 'search', secret: 'not-public' } } }
+    expect(await new P7McpClient(connection, server({ tools: [listed] }).fetcher).list()).toEqual([
+      { ...tool, title: '网页检索', server: { name: '互联网检索', namespace: 'search' } },
+    ])
+    const annotation = { ...tool, title: '\u0000invalid', annotations: { title: '网页搜索' }, _meta: { 'com.p7/server': { name: '错误服务', namespace: 'weknora' } } }
+    expect(await new P7McpClient(connection, server({ tools: [annotation] }).fetcher).list()).toEqual([{ ...tool, title: '网页搜索' }])
+  })
   it('initializes and discovers, then resolves the current personal credential for every call', async () => {
     let token = 'test-person-a'; const wire = server()
     const client = new P7McpClient(async () => ({ origin: 'https://p7.example', apiKey: token }), wire.fetcher)

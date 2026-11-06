@@ -1,4 +1,5 @@
 import type { CompanySettingsLocaleKey } from './locales.js'
+import type { P7McpToolInfo } from '../mcp-tool-status.js'
 
 export type ToolCapability = 'finance' | 'knowledge' | 'legal' | 'search'
 
@@ -56,9 +57,33 @@ function parts(name: string): { namespace: string; operation: string } | undefin
   return match === null ? undefined : { namespace: match[1]!, operation: match[2]! }
 }
 
+const SERVER_LABELS: Readonly<Record<string, CompanySettingsLocaleKey>> = {
+  gildata: 'serverGildata', jydb: 'serverJydb', weknora: 'serverKnowledge', wk: 'serverLegal', search: 'serverSearch', research: 'serverResearch',
+}
+
+export function toolServerGroups(tools: readonly P7McpToolInfo[], t: (key: CompanySettingsLocaleKey) => string): { id: string; name: string; tools: P7McpToolInfo[] }[] {
+  const groups = new Map<string, { id: string; name: string; tools: P7McpToolInfo[] }>()
+  for (const tool of tools) {
+    const id = tool.server?.namespace ?? parts(tool.name)?.namespace ?? 'other'
+    const label = SERVER_LABELS[id]
+    const name = tool.server?.name ?? t(label ?? 'toolsOtherServer')
+    let group = groups.get(id)
+    if (group === undefined) { group = { id, name, tools: [] }; groups.set(id, group) }
+    group.tools.push(tool)
+  }
+  return [...groups.values()]
+}
+
 export function toolCapability(name: string): ToolCapability | undefined {
   const parsed = parts(name)
   return parsed === undefined ? undefined : GROUP_BY_NAMESPACE[parsed.namespace]
+}
+
+/** Protocol identities stay in data; normal UI uses declared or localized titles. */
+export function toolDisplayName(name: string, t: (key: CompanySettingsLocaleKey) => string, title?: string): string {
+  if (title) return title
+  const known = KNOWN_TOOL_COPY[name]
+  return known === undefined ? (name.startsWith('mcp__p7__') ? t('toolCompany') : name) : t(known.label)
 }
 
 export function toolCopy(name: string, t: (key: CompanySettingsLocaleKey) => string): { label: string; purpose: string } {

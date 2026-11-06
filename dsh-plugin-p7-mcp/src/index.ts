@@ -14,26 +14,28 @@ import { resolveConfig } from './config.js'
 import type { Config as PluginConfig, ResolvedConfig } from './config.js'
 import { installLazyRuntime } from './lazy-runtime.js'
 import type { LazyRuntime } from './lazy-runtime.js'
+import { mcpToolTitle, presentMcpToolDefinition } from './presentation.js'
 
 export { P7McpClient, P7McpError } from './client.js'
 export { Config } from './config.js'
 export const name = 'p7-managed-mcp'
 export const inject = ['p7Account', 'tools', 'credentials', 'profileContext']
 
+type PublicMcpTool = { name: string; title?: string; server?: { name: string; namespace: string } }
 export type PublicMcpToolStatus = {
   phase: 'syncing' | 'registered' | 'unavailable'
-  tools: { name: string }[]
+  tools: PublicMcpTool[]
   mode?: 'eager' | 'on-demand'
   authorizedToolCount?: number
-  agents?: { agentId: string; loadedToolCount: number; schemaBytes: number; tools: { name: string }[]; error?: string }[]
+  agents?: { agentId: string; loadedToolCount: number; schemaBytes: number; tools: PublicMcpTool[]; error?: string }[]
 }
 const TOOL_STATUS_REGISTRY = Symbol.for('dsh.p7.mcp-tool-status.registry')
 function toolStatusRegistry(): Map<string, PublicMcpToolStatus> {
   const host = globalThis as typeof globalThis & { [TOOL_STATUS_REGISTRY]?: Map<string, PublicMcpToolStatus> }
   return host[TOOL_STATUS_REGISTRY] ??= new Map()
 }
-function publishToolStatus(profileId: string, phase: PublicMcpToolStatus['phase'], names: readonly string[] = [], extra: Partial<PublicMcpToolStatus> = {}): void {
-  toolStatusRegistry().set(profileId, { ...extra, phase, tools: names.map(name => ({ name })) })
+function publishToolStatus(profileId: string, phase: PublicMcpToolStatus['phase'], tools: readonly PublicMcpTool[] = [], extra: Partial<PublicMcpToolStatus> = {}): void {
+  toolStatusRegistry().set(profileId, { ...extra, phase, tools: tools.map(tool => ({ ...tool, ...(tool.server ? { server: { ...tool.server } } : {}) })) })
 }
 function clearToolStatus(profileId: string): void { toolStatusRegistry().delete(profileId) }
 
@@ -75,7 +77,7 @@ function mount(ctx: Context, config: ResolvedConfig): void {
   let generation = 0; let disposed = false; let fingerprint = ''
   let connectionScope = new AbortController()
   let phase: PublicMcpToolStatus['phase'] = 'syncing'
-  let advertisedNames: string[] = []
+  let advertisedTools: PublicMcpTool[] = []
   const store = config.mode === 'on-demand' ? new ActivationStore({ nameMapper: publicToolName, ...config }) : undefined
   let lazy: LazyRuntime | undefined
   const publish = (): void => {
@@ -83,10 +85,10 @@ function mount(ctx: Context, config: ResolvedConfig): void {
       const visible = new Set(ctx.tools.schemas(agent).map(tool => tool.name))
       const active = store.active(agent, tool => visible.has(tool.publicName))
       const error = lazy?.errorFor(agent)
-      return { agentId: String(agent.id), loadedToolCount: active.length, schemaBytes: active.reduce((sum, tool) => sum + tool.schemaBytes, 0), tools: active.map(tool => ({ name: tool.publicName })), ...(error ? { error } : {}) }
+      return { agentId: String(agent.id), loadedToolCount: active.length, schemaBytes: active.reduce((sum, tool) => sum + tool.schemaBytes, 0), tools: active.map(tool => advertisedTools.find(item => item.name === tool.publicName) ?? { name: tool.publicName }), ...(error ? { error } : {}) }
     }) : undefined
-    publishToolStatus(ctx.profileContext.dir, phase, advertisedNames, {
-      mode: config.mode, authorizedToolCount: advertisedNames.length, ...(agents ? { agents } : {}),
+    publishToolStatus(ctx.profileContext.dir, phase, advertisedTools, {
+      mode: config.mode, authorizedToolCount: advertisedTools.length, ...(agents ? { agents } : {}),
     })
   }
   lazy = store ? installLazyRuntime(ctx, store, config, publish) : undefined
@@ -98,7 +100,7 @@ function mount(ctx: Context, config: ResolvedConfig): void {
       connectionScope = new AbortController()
     }
     store?.invalidateCatalog()
-    advertisedNames = []
+    advertisedTools = []
     clear()
   }
   publish()
@@ -109,7 +111,7 @@ function mount(ctx: Context, config: ResolvedConfig): void {
       if (disposed || generation !== current) return
       const next = JSON.stringify(tools)
       if (next === fingerprint) return
-      const definitions = tools.map(tool => createMcpToolDefinition(ctx, {
+      const definitions = tools.map(tool => presentMcpToolDefinition(createMcpToolDefinition(ctx, {
         name: publicToolName(tool.name), rawName: tool.name, description: tool.description,
         inputSchema: tool.inputSchema,
         call: async (args, execution) => {
@@ -127,13 +129,13 @@ function mount(ctx: Context, config: ResolvedConfig): void {
             throw new Error('公司工具请求未完成，请检查网络或服务状态，避免连续重试。')
           }
         },
-      }))
+      }), tool.name, tool.title))
       store?.publishCatalog(tools)
       clear()
       try {
         for (const definition of definitions) owned.push(ctx.tools.register(definition, lazy?.registrationOptions(definition.name)))
         fingerprint = next
-        advertisedNames = tools.map(tool => publicToolName(tool.name))
+        advertisedTools = tools.map(tool => ({ name: publicToolName(tool.name), title: mcpToolTitle(tool.name, tool.title), ...(tool.server ? { server: tool.server } : {}) }))
         phase = 'registered'
         lazy?.refresh()
         publish()

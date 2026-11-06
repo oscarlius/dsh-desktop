@@ -1,4 +1,6 @@
 export const zh = {
+  toolsServerIntro: '每个名称代表一个 MCP 服务，展开可查看其已授权工具，Agent 会按任务选择调用。',
+  serverGildata: '聚源数据', serverJydb: '聚源本地数据', serverKnowledge: '公司知识库', serverLegal: '威科法律检索', serverSearch: '互联网检索', serverResearch: '投研服务', toolsOtherServer: '其他公司服务', toolCompany: '公司工具',
   nav: 'P7 公司模型',
   title: 'P7 公司模型',
   intro: '连接公司模型服务，并查看当前下发的只读模型目录。',
@@ -58,6 +60,8 @@ export const zh = {
 export type CompanySettingsLocaleKey = keyof typeof zh
 
 export const en: Record<CompanySettingsLocaleKey, string> = {
+  toolsServerIntro: 'Each name represents one MCP service. Expand it to view authorized tools, which the Agent selects for the task.',
+  serverGildata: 'Gildata', serverJydb: 'Local JYDB data', serverKnowledge: 'Company knowledge base', serverLegal: 'Wolters Kluwer legal research', serverSearch: 'Internet search', serverResearch: 'Research service', toolsOtherServer: 'Other company service', toolCompany: 'Company tool',
   loginRestoringTitle: 'Restoring company sign-in', loginRestoringIntro: 'Checking saved authentication. You do not need to sign in again.',
   nav: 'P7 Company Models',
   title: 'P7 Company Models',

@@ -102,6 +102,8 @@ export function installLazyRuntime(
         required: ['query'], additionalProperties: false,
       },
       output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+      presentCall: () => ({ card: 'generic', title: '搜索公司工具' }),
+      presentResult: () => ({ card: 'generic', title: '搜索公司工具' }),
       execute: async (input, execution) => {
         const agent = requireAgent(execution.agent)
         const args = argumentsObject(input, ['query', 'namespace', 'limit'])
@@ -123,6 +125,8 @@ export function installLazyRuntime(
       description: 'Load explicitly known company MCP tool IDs for this Agent, then call them in the next step. Tools already loaded by search need no extra load. Existing permissions and Agent filters still apply. This does not execute a business query.',
       parameters: { type: 'object', properties: { toolIds: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 128 } }, required: ['toolIds'], additionalProperties: false },
       output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+      presentCall: () => ({ card: 'generic', title: '加载公司工具' }),
+      presentResult: () => ({ card: 'generic', title: '加载公司工具' }),
       execute: async (input, execution) => {
         const agent = requireAgent(execution.agent)
         const args = argumentsObject(input, ['toolIds'])

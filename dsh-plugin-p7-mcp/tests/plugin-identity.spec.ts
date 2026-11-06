@@ -73,7 +73,7 @@ it('waits for AgentRegistry before publishing an on-demand catalog', async () =>
   const prefix = 'p7-mcp-readiness-'
   const dir = await mkdtemp(join(tmpdir(), prefix))
   await writeFile(join(dir, '.p7-company-models.json'), JSON.stringify({ origin: 'https://p7.example' }))
-  const names: string[] = []
+  const registered: Array<{ name: string; presentCall?: (args: unknown) => unknown; presentResult?: (args: unknown, result: unknown) => unknown }> = []
   let requests = 0
   vi.stubGlobal('fetch', vi.fn(async (_input: unknown, init: RequestInit) => {
     requests++
@@ -90,7 +90,7 @@ it('waits for AgentRegistry before publishing an on-demand catalog', async () =>
     usesPersonalToken: () => true, getValidAccessToken: async () => 'synthetic-token', subscribe: () => () => {},
   } as never)
   ctx.provide('tools', {
-    register: (definition: { name: string }) => { names.push(definition.name); return () => {} },
+    register: (definition: { name: string; presentCall?: (args: unknown) => unknown; presentResult?: (args: unknown, result: unknown) => unknown }) => { registered.push(definition); return () => {} },
     resolve: async () => {}, guard: () => () => {}, schemas: () => [], get: () => undefined,
   } as never)
   ctx.provide('systemPrompt', {
@@ -99,10 +99,13 @@ it('waits for AgentRegistry before publishing an on-demand catalog', async () =>
   const fiber = await ctx.plugin(plugin, { mode: 'on-demand' })
   try {
     await new Promise(complete => setImmediate(complete))
-    expect(names).toEqual([])
+    expect(registered).toEqual([])
     expect(requests).toBe(0)
     ctx.provide('agents', { list: () => [] } as never)
-    await vi.waitFor(() => { expect(names).toEqual(['p7_mcp_search', 'p7_mcp_load', 'mcp__p7__jydb__get_daily_quotes']) })
+    await vi.waitFor(() => { expect(registered.map(definition => definition.name)).toEqual(['p7_mcp_search', 'p7_mcp_load', 'mcp__p7__jydb__get_daily_quotes']) })
+    expect(registered[0]!.presentCall?.({ query: 'quotes' })).toEqual({ card: 'generic', title: '搜索公司工具' })
+    expect(registered[0]!.presentResult?.({ query: 'quotes' }, { content: [], isError: true })).toEqual({ card: 'generic', title: '搜索公司工具' })
+    expect(registered[1]!.presentCall?.({ toolIds: ['mcp__p7__jydb__get_daily_quotes'] })).toEqual({ card: 'generic', title: '加载公司工具' })
   } finally {
     await fiber.dispose()
     const target = resolve(dir)

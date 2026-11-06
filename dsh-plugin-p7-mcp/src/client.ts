@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 
 export interface McpConnection { origin: string; apiKey: string }
-export interface McpTool { name: string; description: string; inputSchema: Record<string, unknown> }
+export interface McpTool { name: string; description: string; inputSchema: Record<string, unknown>; title?: string; server?: { name: string; namespace: string } }
+
+function displayText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : undefined
+}
 export type P7McpFailureCode = 'P7_AUTH_REQUIRED' | 'P7_TOOL_FORBIDDEN' | 'P7_TOOL_ARGUMENTS' | 'P7_TOOL_BUSY' | 'P7_TOOL_UPSTREAM' | 'P7_TOOL_UNAVAILABLE'
 export class P7McpError extends Error {
   readonly code: P7McpFailureCode
@@ -30,7 +34,14 @@ export class P7McpClient {
       if (!isRecord(tool) || typeof tool.name !== 'string' || !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(tool.name)
         || names.has(tool.name) || !isRecord(tool.inputSchema)) throw new P7McpError(502)
       names.add(tool.name)
-      return { name: tool.name, description: typeof tool.description === 'string' ? tool.description : '', inputSchema: tool.inputSchema }
+      const title = displayText(tool.title) ?? (isRecord(tool.annotations) ? displayText(tool.annotations.title) : undefined)
+      const metadata = isRecord(tool._meta) ? tool._meta['com.p7/server'] : undefined
+      const serverName = isRecord(metadata) ? displayText(metadata.name) : undefined
+      const server = isRecord(metadata) && serverName && typeof metadata.namespace === 'string'
+        && /^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(metadata.namespace) && tool.name.startsWith(metadata.namespace + '__')
+        ? { name: serverName, namespace: metadata.namespace } : undefined
+      return { name: tool.name, description: typeof tool.description === 'string' ? tool.description : '', inputSchema: tool.inputSchema,
+        ...(title ? { title } : {}), ...(server ? { server } : {}) }
     })
   }
   async call(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {

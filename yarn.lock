@@ -4185,6 +4185,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@deepseek-ai/dsh-client-ui-trajectory@patch:@deepseek-ai/dsh-client-ui-trajectory@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-client-ui-trajectory-0.2.2-rc.1.tgz#./patches/dsh-client-ui-trajectory@0.2.2-rc.1.patch::locator=deepseek-harness-desktop%40workspace%3A.":
+  version: 0.2.2-rc.1
+  resolution: "@deepseek-ai/dsh-client-ui-trajectory@patch:@deepseek-ai/dsh-client-ui-trajectory@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-client-ui-trajectory-0.2.2-rc.1.tgz%23vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-client-ui-trajectory-0.2.2-rc.1.tgz%3A%3Ahash=2369d5&locator=deepseek-harness-desktop%2540workspace%253A.#./patches/dsh-client-ui-trajectory@0.2.2-rc.1.patch::version=0.2.2-rc.1&hash=c616ab&locator=deepseek-harness-desktop%40workspace%3A."
+  dependencies:
+    "@deepseek-ai/dsh-typert-protocol": "npm:0.2.2-rc.1"
+    "@deepseek-ai/schemastery": "npm:~3.19.0"
+    zod: "npm:4.4.3"
+  peerDependencies:
+    "@deepseek-ai/cordis": ~4.1.0
+  checksum: 10c0/bcebed25f37e1d73daaa35af23d6162f114fda5cff0c30a4cdf26569cc4ad800829a075a81784a557c7acd14258d33cb0f088225b857e115d5f7ce2ce1729fd1
+  languageName: node
+  linkType: hard
+
 "@deepseek-ai/dsh-client-ui-user-questions@file:vendor/dsh-runtime/0.2.1-rc.3/deepseek-ai-dsh-client-ui-user-questions-0.2.1-rc.3.tgz::locator=deepseek-harness-desktop%40workspace%3A.":
   version: 0.2.1-rc.3
   resolution: "@deepseek-ai/dsh-client-ui-user-questions@file:vendor/dsh-runtime/0.2.1-rc.3/deepseek-ai-dsh-client-ui-user-questions-0.2.1-rc.3.tgz#vendor/dsh-runtime/0.2.1-rc.3/deepseek-ai-dsh-client-ui-user-questions-0.2.1-rc.3.tgz::hash=f1c92c&locator=deepseek-harness-desktop%40workspace%3A."

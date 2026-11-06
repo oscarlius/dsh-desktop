@@ -5,7 +5,7 @@ import type { P7AccountStatus, P7Usage } from '../account-broker.js'
 import { DEFAULT_P7_PUBLIC_ORIGIN } from '../defaults.js'
 import { createCompanyModelsApi, type CompanyModelsApi } from './api.js'
 import type { CompanySettingsLocaleKey } from './locales.js'
-import { TOOL_GROUPS, toolCapability, toolCopy } from './tool-capabilities.js'
+import { toolCopy, toolDisplayName, toolServerGroups } from './tool-capabilities.js'
 
 const POLL_MS = 5_000
 const ACCOUNT_PENDING_POLL_MS = 1_000
@@ -252,21 +252,18 @@ export function CompanySettingsSection({ api: suppliedApi, t }: CompanySettingsS
     <section className="dshP7CompanySettingsCatalog" aria-labelledby="p7-company-models-tools-title">
       <div className="dshP7CompanySettingsStatusHeader"><h3 id="p7-company-models-tools-title">{t('tools')}</h3><span className="dshP7CompanySettingsBadge" data-phase={status?.tools.phase ?? 'syncing'}>{t(toolStatusKey(status?.tools.phase ?? 'syncing'))}</span></div>
       <p className="dshP7CompanySettingsIntro">{t('toolsIntro')}</p>
+      <p className="dshP7CompanySettingsNotice">{t('toolsServerIntro')}</p>
       {status?.tools.mode === 'on-demand' && <p className="dshP7CompanySettingsNotice">{t('toolsOnDemand')}: {status.tools.tools.length}</p>}
-      {status?.tools.tools.length ? <div className="dshP7CompanySettingsCapabilityGrid">{TOOL_GROUPS.map(group => {
-        const tools = status.tools.tools.filter(tool => toolCapability(tool.name) === group.id)
+      {status?.tools.tools.length ? <div className="dshP7CompanySettingsCapabilityGrid">{toolServerGroups(status.tools.tools, t).map(group => {
+        const tools = group.tools
         return <details className="dshP7CompanySettingsCapability" key={group.id}>
-          <summary><span><strong>{t(group.title)}</strong><small>{t(group.description)}</small></span><b>{tools.length}</b></summary>
+          <summary><span><strong>{group.name}</strong></span><b>{tools.length}</b></summary>
           {tools.length ? <ul className="dshP7CompanySettingsToolList">{tools.map(tool => {
             const copy = toolCopy(tool.name, t)
-            return <li className="dshP7CompanySettingsTool" key={tool.name}><span>{copy.label}</span><p>{copy.purpose}</p><code>{tool.name}</code></li>
+            return <li className="dshP7CompanySettingsTool" key={tool.name}><span>{toolDisplayName(tool.name, t, tool.title)}</span><p>{copy.purpose}</p></li>
           })}</ul> : <p className="dshP7CompanySettingsEmpty">{t('noToolsInCapability')}</p>}
         </details>
       })}</div> : <p className="dshP7CompanySettingsEmpty">{t('noTools')}</p>}
-      {status?.tools.tools.some(tool => toolCapability(tool.name) === undefined) && <details className="dshP7CompanySettingsDiagnostics"><summary>{t('toolsUncategorized')}</summary><p>{t('toolsUncategorizedIntro')}</p><ul className="dshP7CompanySettingsToolList">{status.tools.tools.filter(tool => toolCapability(tool.name) === undefined).map(tool => {
-        const copy = toolCopy(tool.name, t)
-        return <li className="dshP7CompanySettingsTool" key={tool.name}><span>{copy.label}</span><p>{copy.purpose}</p><code>{tool.name}</code></li>
-      })}</ul></details>}
       {status?.tools.agents?.length ? <details className="dshP7CompanySettingsDiagnostics"><summary>{t('toolsAgentDiagnostics')}</summary><p>{t('toolsAgentDiagnosticsIntro')}</p>{status.tools.agents.map(agent => <p className="dshP7CompanySettingsNotice" key={agent.agentId}>{agent.agentId}: {t('toolsAgentLoaded')} {agent.loadedToolCount} ({agent.schemaBytes} bytes){agent.error ? ` · ${agent.error}` : ''}</p>)}</details> : null}
       <p className="dshP7CompanySettingsNotice">{t('toolUsageNotice')}</p>
     </section>
