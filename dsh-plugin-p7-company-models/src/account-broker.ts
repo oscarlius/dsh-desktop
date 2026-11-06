@@ -14,7 +14,7 @@ type BrokerRegistry = Map<string, AccountBroker>
 function registry(): BrokerRegistry { const host = globalThis as typeof globalThis & { [REGISTRY]?: BrokerRegistry }; return host[REGISTRY] ??= new Map() }
 /** Resolve the Host broker for one Profile across independently bundled plugins. */
 export function getAccountBroker(profileId: string): AccountBroker | undefined { return registry().get(profileId) }
-export interface P7AccountStore { readonly clientVersion?: string; load(origin: string): Promise<string | undefined>; save(origin: string, refreshToken: string): Promise<void>; clear(origin: string): Promise<void> }
+export interface P7AccountStore { readonly clientVersion?: string; readonly clientBuildNumber?: string; load(origin: string): Promise<string | undefined>; save(origin: string, refreshToken: string): Promise<void>; clear(origin: string): Promise<void> }
 class AccountHttpError extends Error { constructor(readonly status: number, readonly detail?: string, readonly minimumVersion?: string, readonly upgradeUrl?: string) { super(detail ?? `P7 identity request failed (${String(status)})`) } }
 
 /** Host-only P7 identity session. Tokens deliberately remain in process memory. */
@@ -31,7 +31,7 @@ export class AccountBroker {
   private authGeneration = 0
   private upgradeUrl: string | null = null
   private storeQueue: Promise<void> = Promise.resolve()
-  constructor(private readonly options: { origin(): string | null; profileId: string; requirePersonalLogin?: boolean; deviceFingerprint?(): string; clientVersion?: string; store?: P7AccountStore; fetch?: P7Fetch; openBrowser?(url: string): Promise<void> | void; now?(): number }) { this.personalMode = options.requirePersonalLogin === true; this.browserLauncher = options.openBrowser; registry().set(options.profileId, this) }
+  constructor(private readonly options: { origin(): string | null; profileId: string; requirePersonalLogin?: boolean; deviceFingerprint?(): string; clientVersion?: string; clientBuildNumber?: string; store?: P7AccountStore; fetch?: P7Fetch; openBrowser?(url: string): Promise<void> | void; now?(): number }) { this.personalMode = options.requirePersonalLogin === true; this.browserLauncher = options.openBrowser; registry().set(options.profileId, this) }
   status(): P7AccountStatus { return { phase: this.phase, profile: this.session?.profile ?? null, expiresAt: this.session?.expiresAt ?? null, authorizationUrl: this.pending?.authorizationUrl ?? null, upgradeUrl: this.upgradeUrl, message: this.message } }
   /** Gateway origin and a per-operation token getter for MCP/runtime consumers. */
   connection(): { origin: string | null; getValidAccessToken: () => Promise<string>; usesPersonalToken: () => boolean } { return { origin: this.options.origin(), getValidAccessToken: () => this.getValidAccessToken(), usesPersonalToken: () => this.usesPersonalToken() } }
@@ -59,7 +59,7 @@ export class AccountBroker {
     const port = await new Promise<number>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', () => resolve((server.address() as import('node:net').AddressInfo).port)) })
     const redirectUri = `http://127.0.0.1:${String(port)}/p7-desktop-auth/callback`
     try {
-      const response = await this.request(origin, '/api/v1/desktop-auth/login-transactions', { deviceFingerprint: this.options.deviceFingerprint?.() ?? createHash('sha256').update(this.options.profileId).digest('hex'), platform: process.platform, clientVersion: this.options.clientVersion ?? '2.0.18-beta.15', redirectUri, state, codeChallenge: challenge, codeChallengeMethod: 'S256' })
+      const response = await this.request(origin, '/api/v1/desktop-auth/login-transactions', { deviceFingerprint: this.options.deviceFingerprint?.() ?? createHash('sha256').update(this.options.profileId).digest('hex'), ...this.versionReport(), redirectUri, state, codeChallenge: challenge, codeChallengeMethod: 'S256' })
       if (!this.isCurrent(origin, generation)) throw new Error('P7 personal session changed.')
       const value = object(response); const transactionId = text(value.transactionId); const pollToken = text(value.pollToken); const authorizationUrl = text(value.authorizationUrl); const expiresAt = timestamp(value.expiresAt)
       if (!transactionId || !pollToken || !authorizationUrl || expiresAt === undefined) throw new Error('invalid login transaction')
@@ -103,7 +103,13 @@ export class AccountBroker {
     pending.server.close(); this.pending = undefined
     try { const token = await this.request(pending.origin, '/api/v1/desktop-auth/token', { transactionId: pending.transactionId, pollToken: pending.pollToken, codeVerifier: pending.verifier }); if (!this.isCurrent(pending.origin, pending.generation)) return; await this.accept(token, pending.origin, pending.generation) } catch (error) { if (this.isCurrent(pending.origin, pending.generation)) this.fail(error, 'Company sign-in could not be completed.') }
   }
-  private async refresh(): Promise<string> { const session = this.session; const generation = this.authGeneration; if (!session) throw new Error('P7 personal sign-in is required.'); try { const token = await this.request(session.origin, '/api/v1/desktop-auth/token/refresh', { refreshToken: session.refreshToken }); if (!this.isCurrent(session.origin, generation) || this.session !== session) throw new Error('P7 personal session changed.'); await this.accept(token, session.origin, generation); return this.session!.accessToken } catch (error) { if (this.isCurrent(session.origin, generation) && this.session === session) await this.handleRefreshFailure(session.origin, error); throw error } }
+  private async refresh(): Promise<string> { const session = this.session; const generation = this.authGeneration; if (!session) throw new Error('P7 personal sign-in is required.'); try { const token = await this.request(session.origin, '/api/v1/desktop-auth/token/refresh', { refreshToken: session.refreshToken, ...this.versionReport() }); if (!this.isCurrent(session.origin, generation) || this.session !== session) throw new Error('P7 personal session changed.'); await this.accept(token, session.origin, generation); return this.session!.accessToken } catch (error) { if (this.isCurrent(session.origin, generation) && this.session === session) await this.handleRefreshFailure(session.origin, error); throw error } }
+  /** Sealed binary metadata travels with existing auth requests, never a popup or separate poll. */
+  private versionReport(): { clientVersion: string; platform: string; buildNumber?: string } {
+    const buildNumber = this.options.clientBuildNumber ?? this.options.store?.clientBuildNumber
+    return { clientVersion: this.options.clientVersion ?? this.options.store?.clientVersion ?? '2.0.18-beta.15', platform: process.platform,
+      ...(buildNumber && /^\d{10}$/.test(buildNumber) ? { buildNumber } : {}) }
+  }
   private async accept(value: unknown, origin: string, generation: number): Promise<void> {
     const body = object(value), accessToken = text(body.accessToken), refreshToken = text(body.refreshToken)
     const expiresAt = timestamp(body.expiresAt), profile = profileOf(body.profile)
@@ -160,7 +166,7 @@ export class AccountBroker {
       return
     }
     if (!refreshToken || generation !== this.authGeneration || !this.personalMode || this.options.origin() !== origin) return
-    try { const token = await this.request(normalized, '/api/v1/desktop-auth/token/refresh', { refreshToken }); if (generation !== this.authGeneration || !this.personalMode || this.options.origin() !== origin) return; await this.accept(token, normalized, generation) }
+    try { const token = await this.request(normalized, '/api/v1/desktop-auth/token/refresh', { refreshToken, ...this.versionReport() }); if (generation !== this.authGeneration || !this.personalMode || this.options.origin() !== origin) return; await this.accept(token, normalized, generation) }
     catch (error) { if (generation === this.authGeneration && this.personalMode) await this.handleRestoreFailure(normalized, error) }
   }
   private async httpError(response: Response): Promise<AccountHttpError> {

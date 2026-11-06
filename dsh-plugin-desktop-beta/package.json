@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-desktop-beta",
-  "version": "2.0.40-beta.16",
-  "dshCompanyCompatibilityBuild": "2026110505",
+  "version": "2.0.41-beta.16",
+  "dshCompanyCompatibilityBuild": "2026110601",
   "dshDesktopFlavor": "companytest",
   "dshDesktopUpdatesEnabled": true,
   "private": true,
@@ -54,7 +54,7 @@
     "verify:company-host": "node scripts/verify-company-host.mjs"
   },
   "dependencies": {
-    "@agents-anywhere/dsh-bridge-next": "file:../vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.1.0-desktop.c296f70ed4036.r5dbd817f.tgz",
+    "@agents-anywhere/dsh-bridge-next": "file:../vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.2.0-desktop.c8a0782cd814d.r5dbd817f.tgz",
     "@deepseek-ai/cordis": "~4.1.0",
     "@deepseek-ai/cordis-plugin-group": "~1.1.0",
     "@deepseek-ai/cordis-plugin-include": "~1.1.0",
@@ -243,7 +243,7 @@
     "dsh-plugin-p7-mcp": "workspace:*",
     "dsh-plugin-p7-web-search": "workspace:*",
     "dsh-streamfold": "0.7.9",
-    "dshmarket": "1.73.11",
+    "dshmarket": "1.73.12",
     "electron-updater": "6.8.9",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-gfm": "^3.1.0",

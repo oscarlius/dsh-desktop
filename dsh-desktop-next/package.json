@@ -49,7 +49,7 @@
     "check:linux-package": "yarn workspace dsh-community-market build && yarn build && yarn verify:frontend"
   },
   "dependencies": {
-    "@agents-anywhere/dsh-bridge-next": "file:../vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.1.0-desktop.c296f70ed4036.r5dbd817f.tgz",
+    "@agents-anywhere/dsh-bridge-next": "file:../vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.2.0-desktop.c8a0782cd814d.r5dbd817f.tgz",
     "@deepseek-ai/cordis": "~4.1.0",
     "@deepseek-ai/cordis-plugin-group": "~1.1.0",
     "@deepseek-ai/cordis-plugin-include": "~1.1.0",
@@ -234,7 +234,7 @@
     "dsh-better-sidebar": "0.28.2",
     "dsh-community-market": "0.1.0-dev.0",
     "dsh-mnemon": "0.5.37",
-    "dshmarket": "1.73.11",
+    "dshmarket": "1.73.12",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-gfm": "^3.1.0",
     "mdast-util-to-string": "^4.0.0",

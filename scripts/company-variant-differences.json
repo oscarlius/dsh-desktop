@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "package.json",
-      "betaSha256": "9b62486759f3c84a27358d7bf5cfaa21d41f80b89cf468fdbbb0447b124ff456",
-      "nextSha256": "51972f15832bd5ed1e589bf211f74ba097ce099ef6943a211bd7a257a211f9fa",
+      "betaSha256": "f6157bddc015a7f74b482f81f434d8f9ba39f6fe43f961369773d4d4aeff7ff5",
+      "nextSha256": "822a2639649243e9c124217e73f73f62b14780fb6147a2af8bf12b2999fa7be9",
       "reason": "Company transport/build metadata, P7 workspaces and release commands; ordinary Next keeps upstream identity."
     },
     {
@@ -190,7 +190,7 @@
     },
     {
       "path": "src/extensions.ts",
-      "betaSha256": "9529597979ae3dfec97efec26d74ddf19696d7ecb54cd87f1a34f394eebe3030",
+      "betaSha256": "1326531b3b9abf7ecdcc8b7a8abac3c6beffd98488f091c63bee5c30a66919f7",
       "nextSha256": "653e39bb476e6545976e242dfac5ed21e0b469adaf3795cd85dc146754f6f8d5",
       "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
     },
@@ -304,7 +304,7 @@
     },
     {
       "path": "tests/company-release-package.spec.mjs",
-      "betaSha256": "285b3e0f98dec260a25f18dcf1ee56ccd175aee95f5b4731620010cc885b5936",
+      "betaSha256": "f53e0a4848fd6b180875a435bd06469e958705bbd8c20f44b50b491694c5cc16",
       "nextSha256": null,
       "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
     },

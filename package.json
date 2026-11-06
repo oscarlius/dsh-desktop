@@ -18,7 +18,7 @@
     "dsh-community-market"
   ],
   "resolutions": {
-    "@agents-anywhere/dsh-bridge-next": "file:vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.1.0-desktop.c296f70ed4036.r5dbd817f.tgz",
+    "@agents-anywhere/dsh-bridge-next": "file:vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.2.0-desktop.c8a0782cd814d.r5dbd817f.tgz",
     "@electron/osx-sign@npm:1.3.3": "patch:@electron/osx-sign@npm%3A1.3.3#./patches/@electron__osx-sign@1.3.3.patch",
     "app-builder-lib@npm:26.15.7": "patch:app-builder-lib@npm%3A26.15.7#./patches/app-builder-lib@26.15.7.patch",
     "open@npm:11.0.1": "patch:open@npm%3A11.0.1#./patches/open@11.0.1.patch",
@@ -1103,7 +1103,7 @@
     "@deepseek-ai/dsh-plugin-package-inventory-deepseek@npm:^0.2.2-rc.1": "patch:@deepseek-ai/dsh-plugin-package-inventory-deepseek@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-plugin-package-inventory-deepseek-0.2.2-rc.1.tgz#./patches/dsh-plugin-package-inventory-deepseek@0.2.2-rc.1.patch",
     "@deepseek-ai/dsh-storage-json@npm:0.2.2-rc.1": "patch:@deepseek-ai/dsh-storage-json@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-storage-json-0.2.2-rc.1.tgz#./patches/dsh-storage-json@0.2.2-rc.1.patch",
     "@deepseek-ai/dsh-storage-json@npm:^0.2.2-rc.1": "patch:@deepseek-ai/dsh-storage-json@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-storage-json-0.2.2-rc.1.tgz#./patches/dsh-storage-json@0.2.2-rc.1.patch",
-    "dshmarket@npm:1.73.11": "patch:dshmarket@npm%3A1.73.11#./.yarn/patches/dshmarket-desktop.patch"
+    "dshmarket@npm:1.73.12": "patch:dshmarket@npm%3A1.73.12#./.yarn/patches/dshmarket-desktop.patch"
   },
   "dependenciesMeta": {
     "@deepseek-ai/dsh-subprocess-local": {

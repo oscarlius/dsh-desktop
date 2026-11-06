@@ -16,12 +16,13 @@ describe('AccountBroker', () => {
   })
   it('accepts the actual P7 ISO timestamp response shape for login and tokens', async () => {
     let start: Record<string, unknown> | undefined
-    const broker = new AccountBroker({ origin: () => 'https://p7.example', profileId: 'iso-profile', openBrowser: () => {}, fetch: async (input, init) => {
+    const broker = new AccountBroker({ origin: () => 'https://p7.example', profileId: 'iso-profile', clientVersion: '2.0.41-beta.16', clientBuildNumber: '2026110601', openBrowser: () => {}, fetch: async (input, init) => {
       if (String(input).endsWith('/login-transactions')) { start = JSON.parse(String(init?.body)); return Response.json({ transactionId: 'tx', pollToken: 'poll', authorizationUrl: 'https://identity.example/authorize', expiresAt: new Date(Date.now() + 60000).toISOString() }) }
       return Response.json({ ...token('p7d_iso-test'), expiresAt: new Date(Date.now() + 120000).toISOString() })
     } })
     try {
       await broker.login()
+      expect(start).toMatchObject({ clientVersion: '2.0.41-beta.16', buildNumber: '2026110601', platform: process.platform })
       await globalThis.fetch(`${String(start?.redirectUri)}?transactionId=tx&state=${String(start?.state)}`)
       await vi.waitFor(() => expect(broker.status().phase).toBe('signed-in'))
       await expect(broker.getValidAccessToken()).resolves.toBe('p7d_iso-test')
@@ -132,7 +133,7 @@ describe('AccountBroker', () => {
     const broker = new AccountBroker({ origin: () => 'https://p7.example', profileId: 'restored-profile', store, fetch: async (input, init) => {
       if (String(input).includes('/policy')) return Response.json({ upgradeRequired: false })
       expect(String(input)).toContain('/token/refresh')
-      expect(JSON.parse(String(init?.body))).toEqual({ refreshToken: 'refresh-old' })
+      expect(JSON.parse(String(init?.body))).toEqual({ refreshToken: 'refresh-old', clientVersion: '2.0.18-beta.15', platform: process.platform })
       return Response.json(token('p7d_fresh-access', 'refresh-rotated'))
     } })
     broker.setPersonalMode(true)
@@ -141,6 +142,38 @@ describe('AccountBroker', () => {
     expect(saves).toEqual(['refresh-rotated'])
     expect(JSON.stringify(saves)).not.toContain('p7d_fresh-access')
     await broker.dispose()
+  })
+
+  it.each([
+    ['2.0.40-beta.16', '2026110505'],
+    ['2.0.41-beta.16', '2026110601'],
+  ])('reports the running binary %s and build %s on startup and token renewal without opening login', async (clientVersion, clientBuildNumber) => {
+    const reports: Record<string, unknown>[] = []
+    const openBrowser = vi.fn()
+    let now = Date.now()
+    let refresh = 'persisted-refresh'
+    const broker = new AccountBroker({
+      origin: () => 'https://p7.example', profileId: `version-${clientVersion}`, requirePersonalLogin: true,
+      clientVersion, clientBuildNumber, now: () => now, openBrowser,
+      store: { load: async () => refresh, save: async (_origin, value) => { refresh = value }, clear: async () => {} },
+      fetch: async (input, init) => {
+        if (String(input).includes('/policy')) return Response.json({ upgradeRequired: false })
+        expect(String(input)).toContain('/token/refresh')
+        reports.push(JSON.parse(String(init?.body)))
+        return Response.json({ ...token('access-version', `rotated-${reports.length}`), expiresAt: now + 120_000 })
+      },
+    })
+    try {
+      await broker.restore()
+      expect(broker.status().phase).toBe('signed-in')
+      now += 120_000
+      await expect(broker.getValidAccessToken()).resolves.toBe('access-version')
+      expect(reports).toEqual([
+        { refreshToken: 'persisted-refresh', clientVersion, buildNumber: clientBuildNumber, platform: process.platform },
+        { refreshToken: 'rotated-1', clientVersion, buildNumber: clientBuildNumber, platform: process.platform },
+      ])
+      expect(openBrowser).not.toHaveBeenCalled()
+    } finally { await broker.dispose() }
   })
 
   it('does not resurrect or save a delayed restore after logout', async () => {
