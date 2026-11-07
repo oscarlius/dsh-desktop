@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import test from 'node:test'
 import { syncNpmVendoredRuntime } from './sync-npm-vendored-runtime.mjs'
 
@@ -12,7 +12,12 @@ const integrity = value => `sha512-${createHash('sha512').update(value).digest('
 
 test('write preserves an existing same-tarball custom patch resolution', async t => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-vendor-sync-'))
-  t.after(() => rmSync(root, { recursive: true, force: true }))
+  t.after(() => {
+    const target = resolve(root)
+    assert.equal(dirname(target), resolve(tmpdir()))
+    assert.ok(basename(target).startsWith('dsh-vendor-sync-'))
+    rmSync(target, { recursive: true, force: true })
+  })
   const write = (path, value) => {
     mkdirSync(join(root, path, '..'), { recursive: true })
     writeFileSync(join(root, path), `${JSON.stringify(value, null, 2)}\n`)
