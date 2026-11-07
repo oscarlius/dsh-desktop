@@ -1,6 +1,9 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
+import { render } from '@testing-library/react'
+import { createElement } from 'react'
 import { en, zh, type CompanySettingsLocaleKey } from '../src/client/locales.js'
-import { installCompanyToolUpdateDisplay, withCompanyToolNames } from '../src/client/tool-update-display.js'
+import { createCompanyToolTitleStore, installCompanyToolUpdateDisplay, withCompanyToolNames } from '../src/client/tool-update-display.js'
 
 const names = ['gildata__FinQuery', 'search__web_search', 'weknora__ask', 'weknora__grep_chunks', 'weknora__list_documents'].map(name => `mcp__p7__${name}`)
 const labels = ['聚源金融数据查询', '互联网搜索', '公司知识问答', '知识片段文本检索', '知识文档目录']
@@ -38,11 +41,32 @@ describe('company tool update labels', () => {
     expect(translate.mock.calls.at(-1)?.[1]).toBe(counts)
   })
 
+  it('uses the current public P7 title for an otherwise unknown company tool in trajectory labels', () => {
+    const unknown = 'mcp__p7__demo__fixture_echo'
+    const titles = new Map([[unknown, '测试知识问答']])
+    const translate = (key: string, params?: Record<string, unknown>) => `${key}: ${String(params?.name ?? params?.names)}`
+    const t = withCompanyToolNames(translate, companyT, titles)
+    expect(t('tool.displayName', { name: unknown })).toBe('测试知识问答')
+    expect(t('message.toolAdded', { name: unknown })).toBe('message.toolAdded: 测试知识问答')
+    titles.clear()
+    expect(t('tool.displayName', { name: unknown })).toBe('公司工具')
+  })
+
+  it('notifies mounted displays only when public tool titles change or clear', () => {
+    const store = createCompanyToolTitleStore(); const listener = vi.fn(); store.subscribe(listener)
+    store.replace([{ name: 'mcp__p7__demo__fixture_echo', title: '测试知识问答' }])
+    store.replace([{ name: 'mcp__p7__demo__fixture_echo', title: '测试知识问答' }])
+    store.replace([])
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(store.titles.size).toBe(0)
+  })
+
   it('decorates both shipped surfaces, preserves source data and slot ownership, and restores replacements on unload', () => {
     const children = { child: { kind: 'single', scope: 'session' } }
     const inject = () => ({ hooks: {} })
-    const chat = { component: () => null, options: { key: 'context' }, children, inject, locale: 'chat' }
-    const trajectory = { component: () => null, options: { id: 'trajectory' } }
+    const surface = ({ t }: { t: (key: string, params?: Record<string, unknown>) => string }) => createElement('span', null, t('tool.displayName', { name: names[0] }))
+    const chat = { component: surface, options: { key: 'context' }, children, inject, locale: 'chat' }
+    const trajectory = { component: surface, options: { id: 'trajectory' } }
     const unrelated = { component: () => null, options: { key: 'assistant-step' } }
     const originalChat = chat.component, originalTrajectory = trajectory.component, originalUnrelated = unrelated.component
     const entries = new Map<string, any[]>([['conversation.chat.node', [unrelated, chat]], ['conversation.view', [trajectory]]])
@@ -56,10 +80,9 @@ describe('company tool update labels', () => {
     const node = Object.freeze({ data: Object.freeze({ content: Object.freeze(names.map(toolName => Object.freeze({ type: 'tool-addition', toolName }))) }) })
     const t = (_key: string, params?: Record<string, unknown>) => String(params?.names)
     for (const entry of [chat, trajectory]) {
-      const rendered = (entry.component as any)({ node, t, hooks: inject().hooks })
-      expect(rendered.props.node).toBe(node)
-      expect(rendered.props.t('message.toolsAdded', { names: names.join(', ') })).toBe(labels.join(', '))
-      expect((entry.component as any)({ node, t }).props.t).toBe(rendered.props.t)
+      const rendered = render(createElement(entry.component as any, { node, t, hooks: inject().hooks }))
+      expect(rendered.container.textContent).toBe(labels[0])
+      rendered.unmount()
     }
     expect(chat.children).toBe(children)
     expect(chat.inject).toBe(inject)
