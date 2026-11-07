@@ -4408,9 +4408,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-compaction-basic@npm:0.2.2-rc.1":
+"@deepseek-ai/dsh-compaction-basic@file:vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz::locator=deepseek-harness-desktop%40workspace%3A.":
   version: 0.2.2-rc.1
-  resolution: "@deepseek-ai/dsh-compaction-basic@npm:0.2.2-rc.1"
+  resolution: "@deepseek-ai/dsh-compaction-basic@file:vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz#vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz::hash=4a1216&locator=deepseek-harness-desktop%40workspace%3A."
   dependencies:
     "@deepseek-ai/dsh-util-values": "npm:0.2.2-rc.1"
     "@deepseek-ai/schemastery": "npm:~3.19.0"
@@ -4430,9 +4430,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@deepseek-ai/dsh-compaction-basic@patch:@deepseek-ai/dsh-compaction-basic@npm%3A0.2.2-rc.1#./patches/dsh-compaction-basic@0.2.2-rc.1.patch::locator=deepseek-harness-desktop%40workspace%3A.":
+"@deepseek-ai/dsh-compaction-basic@patch:@deepseek-ai/dsh-compaction-basic@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz#./patches/dsh-compaction-basic@0.2.2-rc.1.patch::locator=deepseek-harness-desktop%40workspace%3A.":
   version: 0.2.2-rc.1
-  resolution: "@deepseek-ai/dsh-compaction-basic@patch:@deepseek-ai/dsh-compaction-basic@npm%3A0.2.2-rc.1#./patches/dsh-compaction-basic@0.2.2-rc.1.patch::version=0.2.2-rc.1&hash=9f3665&locator=deepseek-harness-desktop%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-compaction-basic@patch:@deepseek-ai/dsh-compaction-basic@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz%23vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz%3A%3Ahash=4a1216&locator=deepseek-harness-desktop%2540workspace%253A.#./patches/dsh-compaction-basic@0.2.2-rc.1.patch::version=0.2.2-rc.1&hash=9f3665&locator=deepseek-harness-desktop%40workspace%3A."
   dependencies:
     "@deepseek-ai/dsh-util-values": "npm:0.2.2-rc.1"
     "@deepseek-ai/schemastery": "npm:~3.19.0"

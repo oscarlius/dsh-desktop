@@ -744,7 +744,7 @@
     "@deepseek-ai/dsh-api-remote-access@npm:^0.2.2-rc.1": "file:vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-api-remote-access-0.2.2-rc.1.tgz",
     "@deepseek-ai/dsh-api-remotes@npm:0.2.2-rc.1": "file:vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-api-remotes-0.2.2-rc.1.tgz",
     "@deepseek-ai/dsh-api-remotes@npm:^0.2.2-rc.1": "file:vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-api-remotes-0.2.2-rc.1.tgz",
-    "@deepseek-ai/dsh-compaction-basic@npm:0.2.2-rc.1": "patch:@deepseek-ai/dsh-compaction-basic@npm%3A0.2.2-rc.1#./patches/dsh-compaction-basic@0.2.2-rc.1.patch",
+    "@deepseek-ai/dsh-compaction-basic@npm:0.2.2-rc.1": "patch:@deepseek-ai/dsh-compaction-basic@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz#./patches/dsh-compaction-basic@0.2.2-rc.1.patch",
     "@deepseek-ai/dsh-api-session-controller@npm:0.2.2-rc.1": "patch:@deepseek-ai/dsh-api-session-controller@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-api-session-controller-0.2.2-rc.1.tgz#./.yarn/patches/@deepseek-ai-dsh-api-session-controller-npm-0.2.2-rc.1-qwen-stale-model.patch",
     "@deepseek-ai/dsh-api-session-controller@npm:^0.2.2-rc.1": "patch:@deepseek-ai/dsh-api-session-controller@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-api-session-controller-0.2.2-rc.1.tgz#./.yarn/patches/@deepseek-ai-dsh-api-session-controller-npm-0.2.2-rc.1-qwen-stale-model.patch",
     "@deepseek-ai/dsh-api-settings-controller@npm:0.2.2-rc.1": "file:vendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-api-settings-controller-0.2.2-rc.1.tgz",
@@ -1103,7 +1103,8 @@
     "@deepseek-ai/dsh-plugin-package-inventory-deepseek@npm:^0.2.2-rc.1": "patch:@deepseek-ai/dsh-plugin-package-inventory-deepseek@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-plugin-package-inventory-deepseek-0.2.2-rc.1.tgz#./patches/dsh-plugin-package-inventory-deepseek@0.2.2-rc.1.patch",
     "@deepseek-ai/dsh-storage-json@npm:0.2.2-rc.1": "patch:@deepseek-ai/dsh-storage-json@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-storage-json-0.2.2-rc.1.tgz#./patches/dsh-storage-json@0.2.2-rc.1.patch",
     "@deepseek-ai/dsh-storage-json@npm:^0.2.2-rc.1": "patch:@deepseek-ai/dsh-storage-json@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-storage-json-0.2.2-rc.1.tgz#./patches/dsh-storage-json@0.2.2-rc.1.patch",
-    "dshmarket@npm:1.73.12": "patch:dshmarket@npm%3A1.73.12#./.yarn/patches/dshmarket-desktop.patch"
+    "dshmarket@npm:1.73.12": "patch:dshmarket@npm%3A1.73.12#./.yarn/patches/dshmarket-desktop.patch",
+    "@deepseek-ai/dsh-compaction-basic@npm:^0.2.2-rc.1": "patch:@deepseek-ai/dsh-compaction-basic@file%3Avendor/dsh-runtime/0.2.2-rc.1/deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz#./patches/dsh-compaction-basic@0.2.2-rc.1.patch"
   },
   "dependenciesMeta": {
     "@deepseek-ai/dsh-subprocess-local": {

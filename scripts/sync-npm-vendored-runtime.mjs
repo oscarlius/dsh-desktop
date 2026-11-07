@@ -17,22 +17,22 @@ const paths = [
 const filename = (name, version) => `${name.slice(1).replace('/', '-')}-${version}.tgz`
 const selector = (name, range = '0.2.2-rc.1') => `${name}@npm:${range}`
 
-export async function syncNpmVendoredRuntime({ mode, channel, upstreamDocument, upstream }) {
+export async function syncNpmVendoredRuntime({ mode, channel, upstreamDocument, upstream, rootDir = root }) {
   if (mode !== '--write' && mode !== '--check') throw new Error('invalid mode')
   const source = upstream.releaseSource
   if (!source || source.kind !== 'npm') throw new Error('npm source metadata is required')
   const version = upstream.sourceVersion
   if (source.registry !== 'https://registry.npmjs.org' || source.version !== version) throw new Error('unsafe npm source metadata')
-  const directory = join(root, 'vendor', 'dsh-runtime', version)
+  const directory = join(rootDir, 'vendor', 'dsh-runtime', version)
   const manifestPath = join(directory, 'manifest.json')
   const names = new Set()
   for (const path of paths) {
-    const pkg = readJson(join(root, path))
+    const pkg = readJson(join(rootDir, path))
     for (const field of fields) for (const name of Object.keys(pkg[field] ?? {})) if (isDsh(name)) names.add(name)
   }
   // Several compatibility fixes target transitive runtime modules. They must
   // receive the same official-byte provenance and active patch resolutions.
-  for (const patch of readdirSync(join(root, 'patches'))) {
+  for (const patch of readdirSync(join(rootDir, 'patches'))) {
     if (patch.startsWith('dsh') && patch.endsWith(`@${version}.patch`)) names.add(`@deepseek-ai/${patch.slice(0, -`@${version}.patch`.length)}`)
   }
   if (mode === '--write') {
@@ -57,17 +57,24 @@ export async function syncNpmVendoredRuntime({ mode, channel, upstreamDocument, 
     while (pending.length) packages.push(...await Promise.all(pending.splice(0, 16).map(fetchPackage)))
     for (const entry of readdirSync(directory, { withFileTypes: true })) if (entry.name !== 'manifest.json' && !packages.some(pkg => pkg.filename === entry.name)) rmSync(join(directory, entry.name), { force: true })
     writeJson(manifestPath, { formatVersion: 2, source, repository: upstreamDocument.repository, commit: upstream.commit, version, buildProfile: 'npm-registry', packages })
-    const workspacePath = join(root, 'package.json')
+    const workspacePath = join(rootDir, 'package.json')
     const workspace = readJson(workspacePath)
     workspace.resolutions ??= {}
     for (const entry of packages) {
       const fileTarget = `file:vendor/dsh-runtime/${version}/${entry.filename}`
       const patch = `patches/${entry.name.slice('@deepseek-ai/'.length)}@${version}.patch`
-      const target = existsSync(join(root, patch))
+      const defaultTarget = existsSync(join(rootDir, patch))
         ? `patch:${entry.name}@${fileTarget.replace(':', '%3A')}#./${patch}`
         : fileTarget
-      workspace.resolutions[selector(entry.name, version)] = target
-      workspace.resolutions[selector(entry.name, `^${version}`)] = target
+      for (const range of [version, `^${version}`]) {
+        const key = selector(entry.name, range)
+        const existing = workspace.resolutions[key]
+        const target = typeof existing === 'string'
+          && existing.startsWith(`patch:${entry.name}@${fileTarget.replace(':', '%3A')}#`)
+          ? existing
+          : defaultTarget
+        workspace.resolutions[key] = target
+      }
     }
     writeJson(workspacePath, workspace)
   }

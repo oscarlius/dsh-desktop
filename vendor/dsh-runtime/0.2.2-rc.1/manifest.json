@@ -563,6 +563,15 @@
       "tarball": "https://registry.npmjs.org/@deepseek-ai/dsh-compaction/-/dsh-compaction-0.2.2-rc.1.tgz"
     },
     {
+      "name": "@deepseek-ai/dsh-compaction-basic",
+      "version": "0.2.2-rc.1",
+      "filename": "deepseek-ai-dsh-compaction-basic-0.2.2-rc.1.tgz",
+      "size": 39550,
+      "sha256": "5f2556d6b1bf8e8344d75cb51a458591b088dc5c234f424683e1e99c27f5b8ae",
+      "integrity": "sha512-ShIWhiSXhUgIWe+mn9bAXqyPXyFWFIDLl46Z/ZW/TVVjbNd6ClvpDcLnmIJk91aCi3/7HjFDSOff5m9isqvzkg==",
+      "tarball": "https://registry.npmjs.org/@deepseek-ai/dsh-compaction-basic/-/dsh-compaction-basic-0.2.2-rc.1.tgz"
+    },
+    {
       "name": "@deepseek-ai/dsh-compaction-image-offload",
       "version": "0.2.2-rc.1",
       "filename": "deepseek-ai-dsh-compaction-image-offload-0.2.2-rc.1.tgz",
