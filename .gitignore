@@ -25,3 +25,4 @@ dsh-plugin-desktop/.desktop-build/
 dsh-plugin-desktop-beta/.desktop-next/
 dsh-plugin-desktop-beta/.desktop-build/
 dsh-plugin-desktop-beta/dist-company/
+.task-artifacts/
