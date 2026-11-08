@@ -13,35 +13,57 @@ const SUMMARY_PROVIDER = 'p7-company-chat'
 const SUMMARY_MODEL = 'gemini-3.8-flash-tiered'
 
 function recordState(phase) {
-  // The installed profile copy exposes a small local receipt without logging
-  // prompts or requiring a model call. Repository tests create no receipt.
   if (!new URL(import.meta.url).pathname.includes('/p7-compat/')) return
   try {
     writeFileSync(new URL('./p7-compaction-summary-ready.json', import.meta.url), JSON.stringify({
-      module: import.meta.url, phase, at: new Date().toISOString(), primaryContextWindow: 262144,
+      module: import.meta.url, phase, at: new Date().toISOString(),
+      summaryPolicy: 'advertised-gemini-or-original-local-route',
     }))
   } catch { /* A diagnostic write never changes a model call's outcome. */ }
 }
 
-/** Existing Agents retain preset generations, so install at the Host LLM seam. */
 export function apply(ctx) {
   ctx.on('llm/stream', async function* (options, next) {
-    if (options.purpose !== 'compaction'
-      || !LOCAL_PROVIDERS.has(options.provider)
-      || !LOCAL_MODELS.has(options.model)) {
+    const isLocalP7 = LOCAL_PROVIDERS.has(options.provider) && LOCAL_MODELS.has(options.model)
+    if (options.purpose === 'compaction' && isLocalP7) {
+      if (options.signal?.aborted) {
+        yield* next()
+        return
+      }
+      // Model discovery is the public runtime authority: do not manufacture a
+      // route when this installed profile has no Gemini summary model.
+      const models = await this.listModels(SUMMARY_PROVIDER)
+      if (models.some((model) => model.id === SUMMARY_MODEL)) {
+        ctx.logger.info('P7 compaction summary: using available Gemini backup; primary local route unchanged')
+        recordState('summary-routed')
+        yield* this.stream({ ...options, provider: SUMMARY_PROVIDER, model: SUMMARY_MODEL })
+        return
+      }
+      recordState('summary-fallback-local')
+    } else if (!isLocalP7) {
       yield* next()
       return
     }
-    // Re-enter once with a non-local model. The guard above delegates the
-    // nested call directly, resulting in exactly one provider HTTP request.
-    // Keep the same cancellation signal, payload, tools and token budget.
-    ctx.logger.info('P7 compaction summary: using existing Gemini backup; primary local route unchanged')
-    recordState('summary-routed')
-    // The public waterfall binds `this` to the actual LlmRuntime. This also
-    // works for retained preset generations without depending on the profile
-    // plugin's service lookup scope.
-    yield* this.stream({ ...options, provider: SUMMARY_PROVIDER, model: SUMMARY_MODEL })
+
+    let sawVisibleText = false
+    let outputTokens = 0
+    const syntheticOverflow = `pi-ai detected context overflow for model "${options.model}"`
+    for await (const chunk of next()) {
+      if (chunk.type === 'text-delta' && chunk.text.trim().length > 0) sawVisibleText = true
+      if (chunk.type === 'usage') outputTokens = Math.max(outputTokens, chunk.usage.outputTokens)
+      if (chunk.type === 'finish'
+        && chunk.reason.kind === 'error'
+        && chunk.reason.failure.code === 'CONTEXT_WINDOW_EXCEEDED'
+        && chunk.reason.failure.message === syntheticOverflow
+        && sawVisibleText
+        && outputTokens > 0
+        && !options.signal?.aborted) {
+        yield { ...chunk, reason: { kind: 'stop' } }
+      } else {
+        yield chunk
+      }
+    }
   })
   recordState('ready')
-  ctx.logger.warn('P7 compaction recovery activated: summaries may use Gemini; primary local capacity remains 262144')
+  ctx.logger.warn('P7 compaction recovery activated: summaries use Gemini only when the installed catalog advertises it')
 }

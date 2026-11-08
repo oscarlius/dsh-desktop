@@ -1,8 +1,7 @@
 diff --git a/lib/index.js b/lib/index.js
-index f0836c28c7..a17f083385 100644
 --- a/lib/index.js
 +++ b/lib/index.js
-@@ -1072,6 +1072,7 @@ const profile = z.object({
+@@ -1072,6 +1072,7 @@
  		"websocket-cached",
  		"auto"
  	]),
@@ -10,7 +9,7 @@ index f0836c28c7..a17f083385 100644
  	timeoutMs: z.natural(),
  	websocketConnectTimeoutMs: z.natural(),
  	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
-@@ -1127,6 +1128,16 @@ function resolveProfiles(providers, validation = "strict") {
+@@ -1127,6 +1128,16 @@
  		if (source.baseURL !== void 0 && source.baseURL.length === 0) throw new Error(`llm-pi-ai: provider "${provider}" has an empty baseURL`);
  		if (source.displayName !== void 0 && source.displayName.length === 0) throw new Error(`llm-pi-ai: provider "${provider}" has an empty displayName`);
  		assertValidHeaders(provider, source.headers);
@@ -27,7 +26,18 @@ index f0836c28c7..a17f083385 100644
  		const streamIdleTimeoutMs = source.streamIdleTimeoutMs ?? 3e5;
  		if (!Number.isFinite(streamIdleTimeoutMs) || streamIdleTimeoutMs <= 0 || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) throw new Error(`llm-pi-ai: provider "${provider}" streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`);
  		const maxRequestImageBytes = source.maxRequestImageBytes ?? 20971520;
-@@ -1776,6 +1787,18 @@ const ANTHROPIC_TOOL_UPDATE_PLACEHOLDER = {
+@@ -1485,7 +1496,9 @@
+ *   to non-retryable `PI_AI_ERROR` failures.
+ */
+ function mapStopReason(message, contextWindow) {
+-	const piAiOverflow = isContextOverflow(message, contextWindow);
++	// Proxy aliases may complete on a backend with a larger context window.
++	const completedAnswer = message.stopReason === "stop" && message.errorMessage === void 0 && message.usage.output > 0 && message.content.some((block) => block.type === "text" && block.text.trim().length > 0);
++	const piAiOverflow = !completedAnswer && isContextOverflow(message, contextWindow);
+ 	const harnessOverflow = message.stopReason === "error" && message.errorMessage !== void 0 && isContextWindowExceededError(message.errorMessage);
+ 	if (piAiOverflow || harnessOverflow) return {
+ 		kind: "error",
+@@ -1776,6 +1789,18 @@
  	}
  };
  /** Copy profile stream knobs into pi-ai's common option vocabulary. */
@@ -46,7 +56,7 @@ index f0836c28c7..a17f083385 100644
  function profileOptions(profile, reasoning, apiKey) {
  	const enabledReasoning = reasoning === "off" ? void 0 : reasoning;
  	return {
-@@ -1785,6 +1808,7 @@ function profileOptions(profile, reasoning, apiKey) {
+@@ -1785,6 +1810,7 @@
  		...profile.cacheRetention === void 0 ? {} : { cacheRetention: profile.cacheRetention },
  		...profile.transport === void 0 ? {} : { transport: profile.transport },
  		...profile.timeoutMs === void 0 ? {} : { timeoutMs: profile.timeoutMs },
@@ -55,10 +65,9 @@ index f0836c28c7..a17f083385 100644
  		maxRetries: 0
  	};
 diff --git a/lib/types/config.d.ts b/lib/types/config.d.ts
-index 479f0b53df..d9f4c19b8e 100644
 --- a/lib/types/config.d.ts
 +++ b/lib/types/config.d.ts
-@@ -133,6 +133,8 @@ export interface PiAiProviderProfile {
+@@ -133,6 +133,8 @@
      cacheRetention?: CacheRetention;
      /** Streaming transport preference. */
      transport?: Transport;
