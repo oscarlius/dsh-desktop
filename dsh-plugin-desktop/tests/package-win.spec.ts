@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   packageWindowsArtifact,
+  packageCompanyTestWindowsInstaller,
   packageWindowsInstaller,
   type WindowsPackageOptions,
 } from '../scripts/package-win.ts'
@@ -150,6 +151,55 @@ describe('Windows x64 installer packaging', () => {
       'Building an unsigned Windows x64 installer; Authenticode is a separate release step.',
       'Skipping the Windows package preflight; the package gate already passed.',
     ])
+  })
+
+  it('forces Market and AA provenance gates for the isolated company test installer', () => {
+    const calls: CommandCall[] = []
+    const value = {
+      ...options(calls),
+      env: { ...options(calls).env, DSH_PACKAGE_CHECK_ALREADY_RAN: '1' },
+      verifier: 'C:\\repo\\dsh-plugin-desktop\\scripts\\company-test-windows-verify.mjs',
+    }
+
+    packageCompanyTestWindowsInstaller(value)
+
+    expect(calls).toHaveLength(3)
+    expect(calls[0]?.args.at(-1)).toBe(
+      'corepack yarn market:check && corepack yarn aa:prepare-release --verify-release && corepack yarn workspace dsh-plugin-desktop check:win-package',
+    )
+    expect(calls[1]?.args).toContain('--config.appId=ai.deepseek.dsh.desktop.companytest')
+    expect(calls[1]?.args).toContain('--config.productName=P7 DSH Company Test')
+    expect(calls[1]?.args).toContain('--config.extraMetadata.dshDesktopFlavor=companytest')
+    expect(calls[1]?.args).toContain('--config.nsis.artifactName=P7-DSH-Company-Test-${version}-${arch}-Setup.${ext}')
+    expect(calls[2]?.args).toEqual(['C:\\repo\\dsh-plugin-desktop\\scripts\\company-test-windows-verify.mjs'])
+  })
+
+  it('uses isolated output, source provenance, and Full artifact naming for a protected initial package', () => {
+    const calls: CommandCall[] = []
+    const value = {
+      ...options(calls),
+      env: {
+        ...options(calls).env,
+        DSH_COMPANY_INITIAL_DISTRIBUTION: '1',
+        DSH_COMPANY_PACKAGE_OUTPUT: 'C:\\release\\full',
+        DSH_COMPANY_RELEASE_SOURCE_COMMIT: 'a'.repeat(40),
+      },
+    }
+    packageCompanyTestWindowsInstaller(value)
+    expect(calls[1]?.args.filter(argument => argument.startsWith('--config.nsis.artifactName='))).toEqual([
+      '--config.nsis.artifactName=P7-DSH-Company-Full-${version}-${arch}-Setup.${ext}',
+    ])
+    expect(calls[1]?.args).toContain('--config.directories.output=C:\\release\\full')
+    expect(calls[1]?.args).toContain(`--config.extraMetadata.dshCompanyReleaseSourceCommit=${'a'.repeat(40)}`)
+  })
+
+  it('rejects contradictory initial and update distribution modes before any command', () => {
+    const calls: CommandCall[] = []
+    expect(() => packageCompanyTestWindowsInstaller({
+      ...options(calls),
+      env: { ...options(calls).env, DSH_COMPANY_INITIAL_DISTRIBUTION: '1', DSH_COMPANY_UPDATE_DISTRIBUTION: '1' },
+    })).toThrow('Company initial and update distribution modes are mutually exclusive')
+    expect(calls).toEqual([])
   })
 
   it('overrides electron-builder compression only when requested', () => {

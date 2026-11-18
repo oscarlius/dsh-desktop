@@ -1,9 +1,40 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
+import { createHash } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 
 const root = resolve(import.meta.dirname, '..')
 const nextRoot = join(root, 'dsh-desktop-next')
 const betaRoot = join(root, 'dsh-plugin-desktop-beta')
+const companyDifferencesFile = join(root, 'scripts/company-variant-differences.json')
+
+/** Reviewed exact-file differences: never a directory-wide exclusion. */
+export function readCompanyDifferences(path = companyDifferencesFile) {
+  if (!existsSync(path)) return new Map()
+  const manifest = JSON.parse(readFileSync(path, 'utf8'))
+  if (manifest.schemaVersion !== 1 || !/^[a-f0-9]{40}$/.test(manifest.upstreamCommit) || !Array.isArray(manifest.files)) {
+    throw new Error('Invalid company variant difference manifest')
+  }
+  const entries = new Map()
+  for (const entry of manifest.files) {
+    if (typeof entry.path !== 'string' || entry.path.startsWith('/') || entry.path.includes('\\')
+      || /[*?\[\]{}]/.test(entry.path)
+      || entry.path.split('/').some(part => !part || part === '.' || part === '..')
+      || entries.has(entry.path) || typeof entry.reason !== 'string' || !entry.reason.trim()
+      || (entry.betaSha256 === null && entry.nextSha256 === null)
+      || ![entry.betaSha256, entry.nextSha256].every(hash => hash === null || /^[a-f0-9]{64}$/.test(hash))) {
+      throw new Error('Invalid exact company variant difference')
+    }
+    entries.set(entry.path, entry)
+  }
+  return entries
+}
+
+export function variantContentHash(path) {
+  if (!existsSync(path)) return null
+  const bytes = isBinaryPath(path) ? readFileSync(path) : readFileSync(path, 'utf8').replaceAll('\r\n', '\n')
+  return createHash('sha256').update(bytes).digest('hex')
+}
 
 const SYNCED_FILES = [
   'package.json',
@@ -32,7 +63,7 @@ const OBSOLETE_BETA_FILES = [
   'tsconfig.tests.json',
 ]
 
-const BINARY_EXTENSIONS = new Set(['.png', '.webp', '.ico', '.icns'])
+const BINARY_EXTENSIONS = new Set(['.png', '.webp', '.ico', '.icns', '.gz'])
 
 function isBinaryPath(relativePath) {
   return BINARY_EXTENSIONS.has(extname(relativePath).toLowerCase())
@@ -155,6 +186,7 @@ function collectSyncedPaths() {
 }
 
 export function syncVariants(direction = 'beta-to-next') {
+  const companyDifferences = readCompanyDifferences()
   for (const obsolete of OBSOLETE_BETA_FILES) {
     rmSync(join(betaRoot, obsolete), { force: true })
     rmSync(join(nextRoot, obsolete), { force: true })
@@ -172,12 +204,13 @@ export function syncVariants(direction = 'beta-to-next') {
   }
   for (const dir of SYNCED_DIRECTORIES) {
     for (const targetFile of listDirectoryFiles(targetRoot, dir)) {
-      if (!sourcePaths.has(targetFile)) {
+      if (!sourcePaths.has(targetFile) && !companyDifferences.has(targetFile)) {
         rmSync(join(targetRoot, ...targetFile.split('/')), { force: true })
       }
     }
   }
   for (const relPath of [...sourcePaths].sort()) {
+    if (companyDifferences.has(relPath)) continue
     const sourceFile = join(sourceRoot, ...relPath.split('/'))
     const targetFile = join(targetRoot, ...relPath.split('/'))
     mkdirSync(dirname(targetFile), { recursive: true })
@@ -194,11 +227,19 @@ export function syncVariants(direction = 'beta-to-next') {
 
 export function verifyVariants() {
   const differences = []
+  const companyDifferences = readCompanyDifferences()
+  for (const [relPath, entry] of companyDifferences) {
+    if (variantContentHash(join(betaRoot, relPath)) !== entry.betaSha256
+      || variantContentHash(join(nextRoot, relPath)) !== entry.nextSha256) {
+      differences.push(`${relPath} (reviewed company difference changed)`)
+    }
+  }
   for (const obsolete of OBSOLETE_BETA_FILES) {
     if (existsSync(join(betaRoot, obsolete))) differences.push(`${obsolete} (obsolete file must be removed)`)
   }
   const allPaths = collectSyncedPaths()
   for (const relPath of allPaths) {
+    if (companyDifferences.has(relPath)) continue
     const nextFile = join(nextRoot, ...relPath.split('/'))
     const betaFile = join(betaRoot, ...relPath.split('/'))
     if (!existsSync(nextFile) || !existsSync(betaFile)) {
@@ -233,11 +274,13 @@ export function verifyVariants() {
   process.stdout.write(`verify-desktop-variants: ${String(allPaths.length)} files are aligned between Next and Beta\n`)
 }
 
-const args = new Set(process.argv.slice(2))
-if (args.has('--from=next') || args.has('--sync=beta') || args.has('--next-to-beta')) {
-  syncVariants('next-to-beta')
-} else if (args.has('--sync') || args.has('--from=beta') || args.has('--sync=next') || args.has('--beta-to-next')) {
-  syncVariants('beta-to-next')
-} else {
-  verifyVariants()
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const args = new Set(process.argv.slice(2))
+  if (args.has('--from=next') || args.has('--sync=beta') || args.has('--next-to-beta')) {
+    syncVariants('next-to-beta')
+  } else if (args.has('--sync') || args.has('--from=beta') || args.has('--sync=next') || args.has('--beta-to-next')) {
+    syncVariants('beta-to-next')
+  } else {
+    verifyVariants()
+  }
 }

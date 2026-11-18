@@ -1,0 +1,137 @@
+diff --git a/lib/client.js b/lib/client.js
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -251,6 +251,7 @@
+ 			"details.source": "来源",
+ 			"details.hierarchy": "层级",
+ 			"details.toolCall": "工具调用",
++			"tool.displayName": "{name}",
+ 			"timeline.aria": "轨迹时间线",
+ 			"timeline.overviewAria": "时间线概览；水平拖动可聚焦事件",
+ 			"timeline.noTimingData": "无计时数据",
+@@ -453,6 +454,7 @@
+ 			"details.source": "Source",
+ 			"details.hierarchy": "Hierarchy",
+ 			"details.toolCall": "Tool Call",
++			"tool.displayName": "{name}",
+ 			"timeline.aria": "Trajectory timeline",
+ 			"timeline.overviewAria": "Timeline overview; drag horizontally to focus events",
+ 			"timeline.noTimingData": "No timing data",
+@@ -655,6 +657,7 @@
+ 			"details.source": "ソース",
+ 			"details.hierarchy": "階層",
+ 			"details.toolCall": "ツール呼び出し",
++			"tool.displayName": "{name}",
+ 			"timeline.aria": "軌跡タイムライン",
+ 			"timeline.overviewAria": "タイムラインの概要。横方向にドラッグしてイベントにフォーカス",
+ 			"timeline.noTimingData": "タイミングデータなし",
+@@ -857,6 +860,7 @@
+ 			"details.source": "Fuente",
+ 			"details.hierarchy": "Jerarquía",
+ 			"details.toolCall": "Llamada de herramienta",
++			"tool.displayName": "{name}",
+ 			"timeline.aria": "Cronología de la trayectoria",
+ 			"timeline.overviewAria": "Descripción general de la línea de tiempo; arrastre horizontalmente para enfocar eventos",
+ 			"timeline.noTimingData": "Sin datos de tiempo",
+@@ -1059,6 +1063,7 @@
+ 			"details.source": "Source",
+ 			"details.hierarchy": "Hiérarchie",
+ 			"details.toolCall": "Appel d'outil",
++			"tool.displayName": "{name}",
+ 			"timeline.aria": "Chronologie de la trajectoire",
+ 			"timeline.overviewAria": "Aperçu de la chronologie\xA0; faites glisser horizontalement pour concentrer les événements",
+ 			"timeline.noTimingData": "Aucune donnée de synchronisation",
+@@ -1261,6 +1266,7 @@
+ 			"details.source": "Quelle",
+ 			"details.hierarchy": "Hierarchie",
+ 			"details.toolCall": "Werkzeugaufruf",
++			"tool.displayName": "{name}",
+ 			"timeline.aria": "Zeitleiste der Ausführungsverlauf",
+ 			"timeline.overviewAria": "Zeitleistenübersicht; Ziehen Sie horizontal, um Ereignisse zu fokussieren",
+ 			"timeline.noTimingData": "Keine Zeitdaten",
+@@ -1463,6 +1469,7 @@
+ 			"details.source": "Источник",
+ 			"details.hierarchy": "Иерархия",
+ 			"details.toolCall": "Вызов инструмента",
++			"tool.displayName": "{name}",
+ 			"timeline.aria": "Хронология траектории",
+ 			"timeline.overviewAria": "Обзор временной шкалы; перетащите горизонтально, чтобы сфокусировать события",
+ 			"timeline.noTimingData": "Нет данных о времени",
+@@ -1665,6 +1672,7 @@
+ 			"details.source": "Fonte",
+ 			"details.hierarchy": "Hierarquia",
+ 			"details.toolCall": "Chamada de ferramenta",
++			"tool.displayName": "{name}",
+ 			"timeline.aria": "Linha do tempo da trajetória",
+ 			"timeline.overviewAria": "Visão geral da linha do tempo; arraste horizontalmente para focar eventos",
+ 			"timeline.noTimingData": "Sem dados de tempo",
+@@ -5576,7 +5584,7 @@
+ 						className: TrajectoryTable_module_css_default.assistantToolCallText,
+ 						children: [(0, react_jsx_runtime.jsx)("span", {
+ 							className: TrajectoryTable_module_css_default.assistantToolCallName,
+-							children: call.toolName ?? t("details.toolCall")
++							children: call.toolName === void 0 ? t("details.toolCall") : t("tool.displayName", { name: call.toolName })
+ 						}), call.content !== "" && (0, react_jsx_runtime.jsx)("span", {
+ 							className: TrajectoryTable_module_css_default.assistantToolCallArgs,
+ 							children: call.content
+@@ -8456,7 +8464,7 @@
+ 								index: ++index,
+ 								kind: "tool",
+ 								sourceSeq: node.seq,
+-								...node.call !== null ? summarizeCall(node.call.name, node.call.argsRaw) : resultAsText(resultPreview),
++								...node.call !== null ? summarizeCall(node.call.name, node.call.argsRaw, t) : resultAsText(resultPreview),
+ 								...node.call !== null ? { inputDetail: node.call.argsRaw } : {},
+ 								outputDetail: detailResult(node, t),
+ 								resultSeq: node.seq,
+@@ -8505,7 +8513,7 @@
+ 					cell: {
+ 						index: ++index,
+ 						kind: "tool",
+-						...summarizeCall(call.name, call.argsRaw),
++						...summarizeCall(call.name, call.argsRaw, t),
+ 						inputDetail: call.argsRaw,
+ 						callId: call.callId,
+ 						timeSeconds: null,
+@@ -8629,7 +8637,10 @@
+ 				if (l.toolName === void 0 || l.cell.kind !== "tool") continue;
+ 				tools.set(l.toolName, (tools.get(l.toolName) ?? 0) + 1);
+ 			}
+-			for (const [name, count] of tools) parts.push(count > 1 ? `${name}×${count}` : name);
++			for (const [name, count] of tools) {
++				const displayName = t("tool.displayName", { name });
++				parts.push(count > 1 ? `${displayName}×${count}` : displayName);
++			}
+ 			return parts.length === 0 ? void 0 : parts.join(" ");
+ 		}
+ 		function formatGroupDuration(seconds, t) {
+@@ -8699,7 +8710,7 @@
+ 					cell: {
+ 						index: ++index,
+ 						kind: "tool",
+-						...summarizeCall(block.name, block.argsRaw),
++						...summarizeCall(block.name, block.argsRaw, t),
+ 						inputDetail: block.argsRaw,
+ 						callId: block.callId,
+ 						...result !== void 0 ? {
+@@ -8888,7 +8899,7 @@
+ 						index: ++index,
+ 						kind: "subtool",
+ 						callId: sub.callId,
+-						...settled ? sub.call !== null ? summarizeCall(sub.call.name, sub.call.argsRaw) : resultAsText(resultPreview) : summarizeCall(sub.name, sub.argsRaw),
++						...settled ? sub.call !== null ? summarizeCall(sub.call.name, sub.call.argsRaw, t) : resultAsText(resultPreview) : summarizeCall(sub.name, sub.argsRaw, t),
+ 						...settled ? sub.call !== null ? { inputDetail: sub.call.argsRaw } : {} : { inputDetail: sub.argsRaw },
+ 						...settled ? {
+ 							outputDetail: detailResult(sub, t),
+@@ -8909,10 +8920,10 @@
+ 			}
+ 			return out;
+ 		}
+-		function summarizeCall(name, argsRaw) {
++		function summarizeCall(name, argsRaw, t) {
+ 			return {
+ 				toolName: name,
+-				text: name,
++				text: t("tool.displayName", { name }),
+ 				...argsRaw === "" ? {} : { previewMarkdown: argsRaw }
+ 			};
+ 		}

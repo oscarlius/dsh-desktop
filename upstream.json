@@ -1,6 +1,7 @@
 {
   "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
   "activeChannel": "beta",
+  "sourceCheckoutChannel": "stable",
   "channels": {
     "stable": {
       "commit": "1f81c047fc48fa190a683e469daa699857e9afe8",
@@ -10,10 +11,18 @@
       "package": "dsh-plugin-desktop"
     },
     "beta": {
-      "commit": "1f81c047fc48fa190a683e469daa699857e9afe8",
-      "sourceVersion": "0.2.1-rc.3",
-      "runtimePackageVersion": "0.2.1-rc.3",
-      "runtimeSource": "vendor/dsh-runtime/0.2.1-rc.3/manifest.json",
+      "commit": "npm:@deepseek-ai/dsh@0.2.2-rc.1",
+      "sourceVersion": "0.2.2-rc.1",
+      "runtimePackageVersion": "0.2.2-rc.1",
+      "runtimeSource": "vendor/dsh-runtime/0.2.2-rc.1/manifest.json",
+      "releaseSource": {
+        "kind": "npm",
+        "registry": "https://registry.npmjs.org",
+        "package": "@deepseek-ai/dsh",
+        "version": "0.2.2-rc.1",
+        "integrity": "sha512-ijR9UEVYkG15Q/Q79JzvzLBzQOQfc63VLr9n6flpwHPhr5IKn2UxthnSoto/P9l7qGd7pPvI1Ra6TW7LH3oKpg==",
+        "publishedAt": "2026-11-04T09:20:32.310Z"
+      },
       "package": "dsh-plugin-desktop-beta"
     }
   }

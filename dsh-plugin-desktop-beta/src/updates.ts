@@ -1,17 +1,23 @@
 /** Main-process update ownership survives a stopped or broken Profile Host. */
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
-import { join } from 'node:path'
-import { checkForDesktopUpdate, type UpdateCheckResult, type UpdateRequest } from '../../dsh-plugin-desktop/src/update-checker.ts'
+import { constants } from 'node:fs'
+import { copyFile, lstat, mkdtemp, readdir, rm } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
+import { checkForDesktopUpdate, type UpdateRequest } from '../../dsh-plugin-desktop/src/update-checker.ts'
 import { desktopUpdateFilename, downloadDesktopUpdate, type UpdateArtifactRequest } from '../../dsh-plugin-desktop/src/update-download.ts'
 import { getOrCreateDesktopInstallationId } from '../../dsh-plugin-desktop/src/desktop-installation-id.ts'
 import { atomicJson, privateDirectory, readPrivateFile } from './private-files.ts'
 import type { NextUpdateState } from './update-state.ts'
+import type { CompanyUpdateAdapter } from './company-updates.ts'
+import type { PublishedCompanyRelease } from './company-update-check.ts'
+import { clearPendingCompanyUpdate, markPendingCompanyUpdate, readPendingCompanyUpdate, writePendingCompanyUpdate } from './pending-update.ts'
 
 export interface NextUpdateOptions {
   version: string
   platform: string
   packaged: boolean
   userData: string
+  /** Original application executable; never infer an install location from a downloaded package. */
+  executable?: string
   /** Fetch adapter for the version check. */
   request: UpdateRequest
   /** Installer transport; it owns redirect following and its per-hop HTTPS check. */
@@ -21,11 +27,21 @@ export interface NextUpdateOptions {
   log(error: unknown): void
   prepare(path: string, version: string, directory: string, signal: AbortSignal): Promise<void>
   install(): Promise<void>
+  /** Native staging and detached launch used only by the next-normal-launch transaction. */
+  stage?(): Promise<void>
+  launchAutomatic?(): Promise<void>
+  /** Windows automatic update is allowed only after a current-user install preflight. */
+  canAutomaticApply?(): Promise<boolean>
+  /** A verified Windows sidecar owns replacement; do not boot the old Host beside it. */
+  automaticInProgress?(directory: string): Promise<boolean>
+  /** Company feed/download ownership; omitted for ordinary upstream Beta builds. */
+  company?: CompanyUpdateAdapter
 }
+type AvailableUpdate = { readonly status: 'update-available' | 'up-to-date', readonly latestVersion: string, readonly companyRelease?: PublishedCompanyRelease }
 
 export class NextUpdates {
   private state: NextUpdateState
-  private result?: UpdateCheckResult
+  private result?: AvailableUpdate
   private operation?: Promise<void>
   private controller?: AbortController
   private timer?: ReturnType<typeof setTimeout>
@@ -34,22 +50,28 @@ export class NextUpdates {
   private cacheReady?: Promise<void>
   private disposed = false
   constructor(private readonly options: NextUpdateOptions) {
-    this.state = { phase: 'idle', installable: options.packaged && ['darwin', 'win32'].includes(options.platform) }
+    this.state = this.companyPlatformUnsupported
+      ? { phase: 'error', error: 'unsupported', installable: false }
+      : { phase: 'idle', installable: options.packaged && ['darwin', 'win32'].includes(options.platform) }
   }
+  private get companyPlatformUnsupported(): boolean { return this.options.company !== undefined && !['win32', 'darwin'].includes(this.options.platform) }
+  private installPath(): string { return this.options.platform === 'win32' ? dirname(this.options.executable ?? process.execPath) : dirname(dirname(dirname(this.options.executable ?? process.execPath))) }
   snapshot(): NextUpdateState { return { ...this.state } }
   private initializeCache(): Promise<void> {
     return this.cacheReady ??= (async () => {
-      const cache = join(this.options.userData, 'next-updates')
+      const cache = join(this.options.userData, this.options.company?.identity.cacheName ?? 'next-updates')
       privateDirectory(cache)
       try {
         const text = readPrivateFile(join(cache, 'state.json'), 4096)
         const parsed = text ? JSON.parse(text) as { notifiedVersion?: unknown } : undefined
         if (typeof parsed?.notifiedVersion === 'string') this.notifiedVersion = parsed.notifiedVersion
       } catch (error) { this.options.log(error) }
-      // One primary process owns this userData tree. Clean our previous process's
-      // completed installers/partial files; never delete arbitrary files in userData.
+      const pending = readPendingCompanyUpdate(cache)
+      // One primary process owns this userData tree. A pending transaction owns
+      // its cache directory across crashes, quits and the next normal launch.
       for (const entry of await readdir(cache, { withFileTypes: true })) {
-        if (entry.isDirectory() && /^download-[A-Za-z0-9]+$/.test(entry.name)) {
+        if (entry.isDirectory() && /^download-[A-Za-z0-9]+$/.test(entry.name)
+          && join(cache, entry.name) !== pending?.installerDirectory) {
           await rm(join(cache, entry.name), { recursive: true, force: true }).catch(this.options.log)
         }
       }
@@ -57,7 +79,7 @@ export class NextUpdates {
   }
   private recordNotifiedVersion(version: string): void {
     this.notifiedVersion = version
-    try { atomicJson(join(this.options.userData, 'next-updates', 'state.json'), { notifiedVersion: version }) }
+    try { atomicJson(join(this.options.userData, this.options.company?.identity.cacheName ?? 'next-updates', 'state.json'), { notifiedVersion: version }) }
     catch (error) { this.options.log(error) }
   }
   private set(patch: Partial<NextUpdateState>): void {
@@ -66,7 +88,7 @@ export class NextUpdates {
     this.options.changed()
   }
   start(): void {
-    if (!this.options.packaged || !['darwin', 'win32'].includes(this.options.platform) || this.timer || this.disposed) return
+    if (this.companyPlatformUnsupported || !this.options.packaged || !['darwin', 'win32'].includes(this.options.platform) || this.timer || this.disposed) return
     void this.initializeCache().catch(this.options.log)
     const poll = (): void => {
       if (this.disposed) return
@@ -86,24 +108,31 @@ export class NextUpdates {
     })().finally(() => { this.operation = undefined; this.controller = undefined })
     return this.operation
   }
-  private async query(signal: AbortSignal): Promise<UpdateCheckResult | null> {
+  private async query(signal: AbortSignal): Promise<AvailableUpdate | null> {
+    if (this.options.company !== undefined) {
+      const release = await this.options.company.check(this.options.version, signal)
+      if (release.status === 'not-published') return { status: 'up-to-date', latestVersion: this.options.version }
+      return { status: release.status, latestVersion: release.version, companyRelease: release }
+    }
     let installationId
     if (this.options.packaged) {
       try { installationId = await getOrCreateDesktopInstallationId(this.options.userData) } catch (error) { this.options.log(error) }
     }
-    return checkForDesktopUpdate({ currentVersion: this.options.version, channel: 'beta', installationId,
+    const result = await checkForDesktopUpdate({ currentVersion: this.options.version, channel: 'beta', installationId,
       request: this.options.request, signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) })
+    return result === null ? null : { status: result.status, latestVersion: result.latestVersion }
   }
-  check(background = false): Promise<void> {
+  async check(background = false): Promise<void> {
+    if (this.companyPlatformUnsupported) return Promise.resolve()
     if (this.state.phase === 'ready' || this.state.phase === 'installing') return Promise.resolve()
-    return this.run(async signal => {
+    await this.run(async signal => {
       this.set({ phase: 'checking' })
       try {
         this.result = await this.query(signal) ?? undefined
         if (!this.result) { this.set({ phase: 'error', error: 'service', version: undefined }); return }
         this.set({ phase: this.result.status === 'update-available' ? 'available' : 'current', version: this.result.latestVersion })
         if (this.result.status === 'update-available') {
-          if (background && this.state.installable && this.result.latestVersion !== this.notifiedVersion) {
+          if (background && this.options.company === undefined && this.state.installable && this.result.latestVersion !== this.notifiedVersion) {
             this.recordNotifiedVersion(this.result.latestVersion)
             if (!this.disposed) this.options.available?.(this.result.latestVersion)
           } else if (!background && this.result.latestVersion !== this.notifiedVersion) {
@@ -112,6 +141,10 @@ export class NextUpdates {
         }
       } catch (error) { this.options.log(error); this.set({ phase: 'error', error: 'service' }) }
     })
+    // Company releases default to background download. This runs only after the
+    // check operation releases its single-operation guard, so it cannot disturb
+    // a currently running Host task or install/quit this process.
+    if (background && this.options.company && this.result?.status === 'update-available' && this.state.installable) await this.download()
   }
   download(): Promise<void> {
     if (!this.state.installable) {
@@ -129,22 +162,50 @@ export class NextUpdates {
         if (result.status !== 'update-available') { this.set({ phase: 'current', version: result.latestVersion }); return }
         if (result.latestVersion !== this.notifiedVersion) this.recordNotifiedVersion(result.latestVersion)
         const platform = this.options.platform as 'darwin' | 'win32'
-        const cache = join(this.options.userData, 'next-updates'); privateDirectory(cache)
+        const cache = join(this.options.userData, this.options.company?.identity.cacheName ?? 'next-updates'); privateDirectory(cache)
         if (this.directory) await rm(this.directory, { recursive: true, force: true })
         const directory = this.directory = await mkdtemp(join(cache, 'download-'))
         this.set({ phase: 'downloading', version: result.latestVersion, received: 0, total: undefined })
         let lastProgress = 0
-        const path = await downloadDesktopUpdate({ platform, version: result.latestVersion, channel: 'beta',
-          destinationPath: join(directory, desktopUpdateFilename(platform, result.latestVersion, 'beta')),
-          request: this.options.artifactRequest, expectedSha256: result.installerSha256?.[platform],
-          signal: AbortSignal.any([signal, AbortSignal.timeout(60 * 60_000)]), onProgress: (received, total) => {
+        const updateSignal = AbortSignal.any([signal, AbortSignal.timeout(60 * 60_000)])
+        const progress = (received: number, total: number | undefined): void => {
             if (Date.now() - lastProgress < 250 && received !== total) return
             lastProgress = Date.now(); this.set({ received, total })
-          } })
+          }
+        let path = result.companyRelease === undefined
+          ? await downloadDesktopUpdate({ platform, version: result.latestVersion, channel: 'beta', destinationPath: join(directory, desktopUpdateFilename(platform, result.latestVersion, 'beta')), request: this.options.artifactRequest, signal: updateSignal, onProgress: progress })
+          : await this.options.company!.download(result.companyRelease, directory, updateSignal, progress)
+        if (result.companyRelease !== undefined) {
+          // electron-updater returns its shared delta cache, not this durable
+          // transaction directory. Retain that cache for the next delta base,
+          // and verify an exclusive copy owned by this pending transaction.
+          if (resolve(dirname(path)) !== resolve(directory)) {
+            const info = await lstat(path)
+            if (!info.isFile() || info.isSymbolicLink() || info.size > 1024 ** 3) throw new Error('Invalid company update cache file')
+            const owned = join(directory, platform === 'darwin' ? `P7-DSH-Company-Test-${result.latestVersion}-universal.dmg` : `P7-DSH-Company-Test-${result.latestVersion}-x64-Setup.exe`)
+            await copyFile(path, owned, constants.COPYFILE_EXCL)
+            path = owned
+          }
+          await this.options.company!.verify(path, result.companyRelease, updateSignal)
+        }
         signal.throwIfAborted()
         preparing = true; this.set({ phase: 'preparing' })
         await this.options.prepare(path, result.latestVersion, directory, signal)
         signal.throwIfAborted()
+        if (result.companyRelease !== undefined) {
+          writePendingCompanyUpdate(cache, {
+            version: result.companyRelease.version,
+            sha256: result.companyRelease.sha256,
+            ...(result.companyRelease.sha512 === undefined ? {} : { sha512: result.companyRelease.sha512 }),
+            ...(result.companyRelease.size === undefined ? {} : { size: result.companyRelease.size }),
+            platform,
+            ...(result.companyRelease.architecture === undefined ? {} : { architecture: result.companyRelease.architecture }),
+            installerPath: path,
+            installerDirectory: directory,
+            installPath: this.installPath(),
+            ...(platform === 'darwin' ? { backupPath: `${this.installPath()}.p7-pending-backup` } : {}),
+          })
+        }
         this.set({ phase: 'ready' })
       } catch (error) {
         this.options.log(error)
@@ -158,11 +219,65 @@ export class NextUpdates {
     try { await this.options.install() }
     catch (error) { this.options.log(error); this.set({ phase: 'error', error: 'install' }) }
   }
+  /**
+   * Attempt one previously verified company update before the Host is started.
+   * A stale/withdrawn/offline release deliberately leaves the old app running.
+   */
+  async applyPendingOnNextLaunch(): Promise<boolean> {
+    if (!this.options.company || !this.options.stage || !this.options.launchAutomatic || !this.options.packaged || this.companyPlatformUnsupported) return false
+    const cache = join(this.options.userData, this.options.company.identity.cacheName)
+    let pending
+    try { pending = readPendingCompanyUpdate(cache) } catch (error) { this.options.log(error); return false }
+    if (!pending || pending.platform !== this.options.platform || pending.installPath !== this.installPath()) return false
+    if (pending.status === 'applying' && pending.platform === 'win32' && pending.version !== this.options.version) {
+      try {
+        if (await this.options.automaticInProgress?.(pending.installerDirectory)) return true
+        markPendingCompanyUpdate(cache, pending, 'failed')
+      } catch (error) { this.options.log(error) }
+      return false
+    }
+    if (pending.status !== 'pending' || pending.attempts !== 0) return false
+    let attempted = false
+    let applied = pending
+    try {
+      const signal = AbortSignal.timeout(20_000)
+      const release = await this.options.company.check(this.options.version, signal)
+      // The active P7 record must still name exactly this package. A removed,
+      // changed, or offline record is never an authority to execute cached code.
+      if (release.status !== 'update-available' || release.version !== pending.version || release.sha256 !== pending.sha256
+        || release.sha512 !== pending.sha512 || release.size !== pending.size || (release.platform ?? 'win32') !== pending.platform
+        || release.architecture !== pending.architecture) return false
+      await this.options.company.verify(pending.installerPath, release, signal)
+      if (pending.platform === 'win32' && !(await (this.options.canAutomaticApply?.() ?? false))) return false
+      const marked = markPendingCompanyUpdate(cache, pending, 'applying'); attempted = true; applied = marked
+      await this.options.prepare(marked.installerPath, marked.version, marked.installerDirectory, signal)
+      await this.options.stage()
+      await this.options.launchAutomatic()
+      return true
+    } catch (error) {
+      this.options.log(error)
+      // Network/tamper checks occur before an installation attempt; retain the
+      // transaction for manual diagnosis or a later fresh P7 confirmation.
+      if (attempted) try { markPendingCompanyUpdate(cache, applied, 'failed') } catch (markError) { this.options.log(markError) }
+      return false
+    }
+  }
+  /** Commit only after the relaunched version, sealed runtime and Host are healthy. */
+  confirmPendingAfterHealthyHost(actualVersion: string, runtimeHealthy: boolean): void {
+    if (!this.options.company) return
+    const cache = join(this.options.userData, this.options.company.identity.cacheName)
+    try {
+      const pending = readPendingCompanyUpdate(cache)
+      if (runtimeHealthy && pending?.status === 'applying' && pending.version === this.options.version && pending.version === actualVersion) clearPendingCompanyUpdate(cache, pending, this.installPath())
+    } catch (error) { this.options.log(error) }
+  }
   async dispose(keepInstaller = false): Promise<void> {
     this.disposed = true
     clearTimeout(this.timer)
     this.controller?.abort()
     await this.operation
-    if (this.directory && !keepInstaller) await rm(this.directory, { recursive: true, force: true }).catch(this.options.log)
+    // A company pending transaction owns its installer. It must survive normal
+    // process termination and only explicit withdrawal/commit may clear it.
+    if (this.directory && !keepInstaller && this.options.company === undefined) await rm(this.directory, { recursive: true, force: true }).catch(this.options.log)
   }
 }

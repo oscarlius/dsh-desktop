@@ -15,6 +15,7 @@ import { runNextPackagingCommand } from './packaging-command.ts'
 import { expectedNextVersion, nextRuntimeBuildPaths, nextRuntimeTargets, prepareNextRuntime, primaryRuntimeDirectory, reusableNextRuntimeTree, smokeNextRuntime, verifyNextRuntimeTree } from './prepare-runtime.ts'
 import { signMacRuntime, withMacSigningIdentity } from './sign-runtime.ts'
 import { packagingStep, packagingStepSync } from './packaging-step.ts'
+import { companyWindowsBuilderArguments } from './company-package-options.ts'
 
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url))
 const workspaceRoot = resolve(desktopRoot, '..')
@@ -51,9 +52,13 @@ const run = (command: string, args: readonly string[], cwd: string, env: NodeJS.
   if (TEST_BUILD_VERSION !== undefined && isBuilder) console.log(`Packaging with test build version ${TEST_BUILD_VERSION}; source manifests are unchanged.`)
   const isPreflight = (args.includes('run') && args.includes('check')) || args.some(arg => arg.includes('check:win-package') || arg.includes('check:linux-package'))
   const stage = isBuilder ? 'builder:total' : isPreflight ? 'build:package-preflight' : 'package:command'
+  // The company personal-login test channel needs an integrity-verifiable ad-hoc
+  // signature for native app replacement; ordinary unsigned smoke builds stay unchanged.
+  const companyMacArgs = isBuilder && args.includes('--mac') && env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION === '1'
+    ? [...forwarded, '--config.mac.identity=-'] : forwarded
   const measuredArgs = isBuilder && env.DSH_DESKTOP_PACKAGING_RUN_DIR !== undefined
-    ? ['--import', new URL('./packaging-builder.mjs', import.meta.url).href, ...forwarded]
-    : forwarded
+    ? ['--import', new URL('./packaging-builder.mjs', import.meta.url).href, ...companyMacArgs]
+    : companyMacArgs
   const builderEnv = isBuilder ? { ...env, DSH_NEXT_WINDOWS_FAST_COMPRESSION: '1' } : env
   packagingStepSync(stage, () => runNextPackagingCommand(command, measuredArgs, cwd, builderEnv, workspaceRoot))
 }
@@ -140,6 +145,22 @@ if (mode === 'dir') {
   await prepareInterpreters()
   packageWindowsInstaller({ ...createWindowsPackageOptions(), desktopRoot, workspaceRoot, run, prepareRuntime,
     verifier: join(desktopRoot, 'scripts/verify-win-installer.ts') })
+} else if (mode === 'company-win') {
+  const update = process.env.DSH_COMPANY_UPDATE_DISTRIBUTION === '1'
+  const initial = process.env.DSH_COMPANY_INITIAL_DISTRIBUTION === '1'
+  const personal = process.env.DSH_COMPANY_PERSONAL_LOGIN_DISTRIBUTION === '1'
+  if ([initial, update, personal].filter(Boolean).length !== 1) throw new Error('Select exactly one company package distribution')
+  await prepareInterpreters()
+  packageWindowsInstaller({ ...createWindowsPackageOptions(), desktopRoot, workspaceRoot, run, prepareRuntime,
+    verifier: join(desktopRoot, 'scripts/company-test-windows-verify.mjs'),
+    builderArguments: companyWindowsBuilderArguments({
+      distribution: initial || personal ? 'full' : 'update',
+      output: process.env.DSH_COMPANY_PACKAGE_OUTPUT ?? join(desktopRoot, 'dist'),
+      bootstrapFile: process.env.DSH_P7_BOOTSTRAP_FILE,
+      keylessFull: personal,
+      sourceCommit: process.env.DSH_COMPANY_RELEASE_SOURCE_COMMIT,
+    }),
+  })
 } else if (mode === 'win-portable') {
   await prepareInterpreters()
   const winOptions = createWindowsPackageOptions()
@@ -150,4 +171,4 @@ if (mode === 'dir') {
   const linuxOptions = createLinuxPackageOptions()
   packageLinuxArtifacts({ ...linuxOptions, env: { ...linuxOptions.env, DSH_PACKAGE_VERIFY_MODE: 'linux' }, desktopRoot, workspaceRoot, run, prepareRuntime,
     verifier: join(desktopRoot, 'scripts/verify-win-installer.ts') })
-} else throw new Error('Expected dir, mac, mac-smoke, win, win-portable or linux')
+} else throw new Error('Expected dir, mac, mac-smoke, win, company-win, win-portable or linux')

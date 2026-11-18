@@ -16,8 +16,10 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({ Button: 'button', Toas
 afterEach(() => { vi.unstubAllGlobals() })
 
 function fixture(signedIn: boolean, required = false, failDismiss = false, overrides = {}) {
-  const snapshot = { profile: 'work', required, accountPending: !required, edition: 'desktop', restartPending: false, input: { platform: 'darwin' }, ...overrides }
-  hooks.values = [snapshot, '', 0, false]; hooks.setters = []; hooks.effects = []
+  // Ordinary Desktop retains the public DeepSeek continuation explicitly;
+  // company Profiles opt out through their sealed Host policy.
+  const snapshot = { profile: 'work', required, accountPending: !required, accountOnboardingEnabled: true, edition: 'desktop', restartPending: false, input: { platform: 'darwin' }, ...overrides }
+  hooks.values = [snapshot, '', 0, false, snapshot.accountOnboardingEnabled]; hooks.setters = []; hooks.effects = []
   const bridge = {
     read: vi.fn(async (): Promise<typeof snapshot | null> => snapshot), finish: vi.fn(async () => {}),
     dismissAccount: vi.fn(async () => { if (failDismiss) throw new Error('save failed') }),
@@ -35,8 +37,8 @@ function fixture(signedIn: boolean, required = false, failDismiss = false, overr
   const props = { bridge, content, zh: true, accountStatus: signedIn ? 'credential-stored' : 'signed-out',
     openLogin, renderNext, renderLoading, renderNavigation: vi.fn(), renderSurface: (value: unknown) => value }
   const result = Component(props)
-  const renderWithSnapshot = (value: unknown) => {
-    hooks.values = [value, '', 0, false]
+  const renderWithSnapshot = (value: any, accountOnboardingEnabled = value?.accountOnboardingEnabled !== false) => {
+    hooks.values = [value, '', 0, false, accountOnboardingEnabled]
     return Component(props)
   }
   return { bridge, content, openLogin, result, snapshot, renderNext, renderWithSnapshot }
@@ -49,6 +51,16 @@ it('hands a Profile with no Desktop setup pending to the official decision', asy
   await vi.waitFor(() => expect(hooks.setters[0]).toHaveBeenCalledWith(null))
   expect(view.renderWithSnapshot(null)).toBeUndefined()
   expect(view.renderNext).toHaveBeenCalledOnce()
+})
+
+it('keeps company Profiles out of the DeepSeek continuation after their sealed policy loads', async () => {
+  const view = fixture(false, false, false, { accountOnboardingEnabled: false })
+  hooks.effects[0]!()
+  await vi.waitFor(() => expect(hooks.setters[4]).toHaveBeenCalledWith(false))
+  expect(hooks.setters[0]).toHaveBeenCalledWith(null)
+  expect(view.renderWithSnapshot(null, false)).toBeNull()
+  expect(view.renderNext).not.toHaveBeenCalled()
+  expect(view.openLogin).not.toHaveBeenCalled()
 })
 
 it('hands an explicitly skipped Desktop setup to the official decision', async () => {

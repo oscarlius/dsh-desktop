@@ -38,6 +38,9 @@ it('omits development artifacts while preserving executable modules, assets and 
     '@mixmark-io/domino/.yarn/versions/release.yml',
     '@deepseek-ai/libreoffice-kit-wasm/assets/soffice.data',
     '@deepseek-ai/libreoffice-kit-darwin-arm64/bin/libreoffice-kit',
+    '@img/sharp-wasm32/lib/sharp-wasm32-0.35.5.node.wasm',
+    '@img/sharp-linux-x64/lib/sharp-linux-x64.node',
+    '@img/sharp-darwin-arm64/lib/sharp-darwin-arm64.node',
     '.modules.yaml', '.pnpm-workspace-state-v1.json', '.yarn-state.yml', '.bin/tool', '.pnpm/cache',
   ]
   const retained = [
@@ -110,6 +113,14 @@ it('retains native prebuilds and Office engines for every architecture of a univ
   expect(nextRuntimeFileExclusion('@deepseek-ai/libreoffice-kit-wasm/assets/soffice.data', linuxX64)).toBeUndefined()
   expect(nextRuntimeFileExclusion('@deepseek-ai/libreoffice-kit-darwin-arm64/program/soffice', linuxX64)).toBe('LibreOffice other platform')
   expect(nextRuntimeFileExclusion('@deepseek-ai/libreoffice-kit-win32-x64/bin/libreoffice-kit.exe', linuxX64)).toBe('LibreOffice other platform')
+  expect(nextRuntimeFileExclusion('@img/sharp-darwin-arm64/lib/sharp-darwin-arm64.node', universal)).toBeUndefined()
+  expect(nextRuntimeFileExclusion('@img/sharp-darwin-x64/lib/sharp-darwin-x64.node', universal)).toBeUndefined()
+  expect(nextRuntimeFileExclusion('@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.8.18.2.dylib', universal)).toBeUndefined()
+  expect(nextRuntimeFileExclusion('@img/sharp-wasm32/lib/sharp-wasm32-0.35.5.node.wasm', universal)).toBe('sharp other platform')
+  expect(nextRuntimeFileExclusion('@img/sharp-linux-x64/lib/sharp-linux-x64.node', universal)).toBe('sharp other platform')
+  expect(nextRuntimeFileExclusion('@img/sharp-wasm32/lib/sharp-wasm32-0.35.5.node.wasm', linuxX64)).toBeUndefined()
+  expect(nextRuntimeFileExclusion('@img/sharp-linux-x64/lib/sharp-linux-x64.node', linuxX64)).toBe('sharp other platform')
+  expect(nextRuntimeFileExclusion('@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.8.18.2', linuxX64)).toBe('sharp other platform')
   expect(nextRuntimeFileExclusion('node-pty/prebuilds/linux-x64/pty.node', linuxX64)).toBeUndefined()
   expect(nextRuntimeFileExclusion('node-pty/prebuilds/linux-arm64/pty.node', linuxX64)).toBe('node-pty other platform')
   expect(nextRuntimeFileExclusion('@deepseek-ai/libreoffice-kit/lib/cli.js', universal)).toBeUndefined()
@@ -136,6 +147,12 @@ it('selects native packages by published OS and CPU constraints, including unive
   }
   expect(nextRuntimePackageExclusion({ os: ['linux'], cpu: ['arm64'] }, linuxX64)).toBeDefined()
   expect(nextRuntimePackageExclusion({ os: ['linux'], cpu: ['arm64'] }, { platform: 'linux', archs: ['arm64'] })).toBeUndefined()
+  expect(nextRuntimePackageExclusion({ name: '@img/sharp-wasm32' }, windows)).toBe('sharp other platform')
+  expect(nextRuntimePackageExclusion({ name: '@img/sharp-wasm32' }, universal)).toBe('sharp other platform')
+  expect(nextRuntimePackageExclusion({ name: '@img/sharp-wasm32' }, linuxX64)).toBeUndefined()
+  expect(nextRuntimePackageExclusion({ name: '@img/sharp-linux-x64', os: ['linux'], cpu: ['x64'] }, linuxX64)).toBe('sharp other platform')
+  expect(nextRuntimePackageExclusion({ name: '@img/sharp-libvips-linux-x64', os: ['linux'], cpu: ['x64'] }, linuxX64)).toBe('sharp other platform')
+  expect(nextRuntimePackageExclusion({ name: '@img/sharp-linuxmusl-x64', os: ['linux'], cpu: ['x64'] }, linuxX64)).toBe('sharp other platform')
   expect(nextRuntimePackageExclusion({}, windows)).toBeUndefined()
   expect(nextRuntimePackageExclusion({ os: [], cpu: ['any'] }, windows)).toBeUndefined()
   expect(nextRuntimePackageExclusion({ os: ['!darwin'], cpu: ['!arm64'] }, windows)).toBeUndefined()

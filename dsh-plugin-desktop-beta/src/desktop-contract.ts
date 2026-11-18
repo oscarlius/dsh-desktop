@@ -68,7 +68,12 @@ export interface DesktopState {
   onboardingComputerUse?: boolean
   home: string
   platform: string
+  /** Update transport SemVer. Never use this value as a Company product label. */
   version: string
+  /** Optional sealed product label for UI-only Company compatibility builds. */
+  displayVersion?: string
+  /** Optional sealed Company compatibility build number for UI-only presentation. */
+  build?: string
   updates?: import('./update-state.ts').NextUpdateState
   trayAvailable: boolean
   notificationsAvailable: boolean
@@ -85,6 +90,12 @@ export interface DesktopState {
   }
   checkpoint: { created: string } | null
   logs: string
+}
+
+/** Keep every native Desktop surface on the same product-facing version label. */
+export function desktopVersionLabel(state: Pick<DesktopState, 'version' | 'displayVersion' | 'build'>): string {
+  const visible = state.displayVersion ?? state.version
+  return state.build === undefined ? visible : `${visible} · build ${state.build}`
 }
 
 /** Login links fetched explicitly by the native settings page, outside general state/diagnostics. */

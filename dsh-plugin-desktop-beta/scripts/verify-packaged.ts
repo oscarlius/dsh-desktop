@@ -1,5 +1,5 @@
 /** Cross-check the assembled `app.asar` payload against the prepared tree before signing, without a GUI. */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { archivedPayload, auditNextPayload, nextPackagingTarget, PAYLOAD_DIR, verifyArchiveAgainstPrepared, verifyNextPayload, verifyUpdaterManifestShim } from './packaged-payload.ts'
 import { expectedNextVersion, verifyNextRuntimeTree } from './prepare-runtime.ts'
@@ -13,7 +13,17 @@ export const verifiedPackagedResources = new Set<string>()
 interface PackContext {
   appOutDir: string
   electronPlatformName: string
-  packager: { projectDir: string; appInfo: { version: string } }
+  packager: { projectDir: string; appInfo: { version: string; productName?: string } }
+}
+
+/** Read the name electron-builder uses for the application bundle from this packaging context. */
+export function packagedProductName(projectDir: string, builderProductName?: string): string {
+  if (typeof builderProductName === 'string' && builderProductName.length > 0) return builderProductName
+  const product = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
+  if (typeof product?.build?.productName !== 'string' || product.build.productName.length === 0) {
+    throw new Error('Package build.productName is required for packaged artifact verification')
+  }
+  return product.build.productName
 }
 
 /**
@@ -29,7 +39,10 @@ interface PackContext {
  * @param context - Electron Builder's afterPack context.
  */
 export default async function afterPack(context: PackContext): Promise<void> {
-  const resources = context.electronPlatformName === 'darwin' ? join(context.appOutDir, 'DSH Desktop Beta.app/Contents/Resources') : join(context.appOutDir, 'resources')
+  const productName = packagedProductName(context.packager.projectDir, context.packager.appInfo.productName)
+  const resources = context.electronPlatformName === 'darwin'
+    ? join(context.appOutDir, `${productName}.app`, 'Contents', 'Resources')
+    : join(context.appOutDir, 'resources')
   if (!existsSync(join(resources, 'app.asar'))) throw new Error('Next must package its application into app.asar like upstream Desktop')
   if (context.electronPlatformName === 'darwin' && /-(?:x64|arm64)-temp$/u.test(context.appOutDir)) {
     // electron-builder's universal packager immediately merges the two temporary per-CPU bundles
@@ -39,6 +52,11 @@ export default async function afterPack(context: PackContext): Promise<void> {
   const platform = context.electronPlatformName as NodeJS.Platform
   const source = packagingStepSync('archive:open', () => archivedPayload(resources))
   try {
+    const manifestEntry = source.entry('package.json')
+    const company = manifestEntry && JSON.parse(manifestEntry.read().toString('utf8')).dshDesktopFlavor === 'companytest'
+    if (company && source.entry('lib/product-identity.js') === undefined) {
+      throw new Error('Company payload is missing its stable product identity entry')
+    }
     packagingStepSync('archive:verify-updater-shim', () => verifyUpdaterManifestShim(resources, source, platform, context.packager.appInfo.version))
     packagingStepSync('archive:verify-dependencies', () => verifyNextPayload(source))
     const target = nextPackagingTarget(platform)
@@ -50,7 +68,7 @@ export default async function afterPack(context: PackContext): Promise<void> {
     const unpacked = source.list().filter(entry => entry.unpacked).length
     const { release } = descriptor
     console.log(`Verified the archive against the prepared Next payload: ${String(descriptor.files.length)} files (${String(unpacked)} unpacked) for ${descriptor.platform} ${descriptor.archs.join('/')}; `
-      + `DSH Desktop Beta ${release.version}, dsh ${release.dshVersion}, Electron ${release.electronVersion}, pnpm ${release.pnpmVersion}`
+      + `${productName} ${release.version}, dsh ${release.dshVersion}, Electron ${release.electronVersion}, pnpm ${release.pnpmVersion}`
       + (rewrittenPlists.length === 0 ? '' : `; the universal merge rewrote ${rewrittenPlists.join(', ')}`))
   } finally { source.close() }
   const runtimes = packagingStepSync('runtime:verify-packaged', () => verifyNextRuntimeTree(join(resources, 'runtime'), platform, expectedNextVersion(context.packager.projectDir)))

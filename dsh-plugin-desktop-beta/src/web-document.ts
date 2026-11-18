@@ -21,21 +21,94 @@ const MIME: Readonly<Record<string, string>> = {
  * The carrier reports no byte progress; uploads go to the loopback Host, so the card only skips
  * its intermediate progress.
  */
+const ZXRC_EMBLEM_B64 = 'iVBORw0KGgoAAAANSUhEUgAAACwAAAApCAYAAABOScuyAAADMUlEQVR4nOWZS4gcVRSGvzNGM6hRg6Lia0B8gEZR8RHUjdEEFQQFV0KQPBBRQZSgGAUXoigiaDaudCTZhKwCgu/Hwlc2cRHD6EKNoIgQnIjE+Iyf3Jnqoex0V9/bVjIt+aC7quuee87PrVu3zj0NLaC+r/7c8LmXlljQkp8JYFFD+8ktxWGsJT97BrT/MmqCDxkLSozV04DLqlv8RkR8XxpQXQ6cAXwOfBoRf7QqWD0OuAu4GbgWOLJq+gy4uFDsNcBbtUs/qO8BmyPi1RJf/QKsV3fbm59qdttt5qHKbk2DzYfqDUPNYfVs9RPgSeCkPn3nBBewt6Etjf7b6nNFgtUrgR3AUuaHB9XXsgSrFwAfA8cwv9ykvtkoWE0PYHoAjmA0WKE+2zTCLwOnMFqsU5ceIFi9BFjJaLKp1wg/M4SjhYeozznqis6PMfXUNF/+Y/BjB9guqo7TDMfD9RG+ZUgn6zPX18S3M9/wTtebLpdl6uKZM3WLZXxdvWLnUCfUD/rYP9IdXX3McmZngTpV0GmT2nceqhtqtnuqRKef7dXqlwWx13U6TmcYp3xidc69U+9Ji36V2TWS1n51Ut2foWFDp9O+DOM7OIio2zI0vNR56P7K8Hmfeu5BEnsncH6G6WzerO4yjz/VtRkCnlB3qFcMsBtXN5rP452Oab6VkFaV43sICHVzl+3dfcQuV78pjHt7p/OjlpN2CstqAi5Ud/axnVTndtQpoXE4JjoOlgzp4LuaiKmcJUm9bshYaf83w1hE7AS+oJyjCmyPro6zo1TO893Jz+yELmNf7fzXAba/Zdr14ndg8l+CI2ILkEZ6FHmgXgqoJ/C3Mnp8FBEv1i/MCY6Ir4C0iI8Ku4EbGzehEbERuJ/550fgqojYO3CbHxEpyVgF/M38sB24NCJ2ZRdSIuIV4KJU2GhwPD6EmPGGNoGnI+LyiOgk/PnVy4iYioiUNN8GpLrX/hYET/e4ll5ALwDnRcQByX5xMTAitgJb1TOB69PtAk5MBbwhBL8OPAWcBaSHfFvaNkVETsbYHrnFwMOyoD3GYSr49AHtJ4zav0jvAkuqpambAKZaivP/4x9fOQ6cN0eN7gAAAABJRU5ErkJggg=='
+
 export const APP_BOOT_SCRIPT = '<script>globalThis.__DSH_BOOT_READY__ = Promise.withResolvers();'
-  + 'globalThis.__DSH_FILE_UPLOAD__ = { fetch: (input, init) => fetch(input, init) }</script>'
+  + 'globalThis.__DSH_FILE_UPLOAD__ = { fetch: (input, init) => fetch(input, init) };'
+  + '(function(){'
+  + 'if(typeof document==="undefined")return;'
+  + 'function initSplash(){'
+  + 'if(document.getElementById("dhti-splash"))return;'
+  + 'var s=document.createElement("div");s.id="dhti-splash";'
+  + 's.innerHTML=\'<div style="height:24px"></div>\'+'
+  + '\'<div style="display:flex;flex-direction:column;align-items:center;text-align:center;max-width:540px;width:100%">\'+'
+  + '\'<div class="dhti-logo-box"><div class="dhti-logo-inner"><img class="dhti-logo-img" src="data:image/png;base64,' + ZXRC_EMBLEM_B64 + '" alt="中新融创"></div></div>\'+'
+  + '\'<h1 class="dhti-slogan">洞察机会 · 明智投资</h1>\'+'
+  + '\'<p class="dhti-subtitle">INSIGHT INTO OPPORTUNITIES · PRUDENT INVESTMENT</p>\'+'
+  + '\'<div class="dhti-progress-box">\'+'
+  + '\'<div class="dhti-track"><div class="dhti-indicator"></div></div>\'+'
+  + '\'<p id="dhti-status-msg" class="dhti-status-txt">正在分配系统资源…</p>\'+'
+  + '\'</div></div>\'+'
+  + '\'<div class="dhti-footer-brand"><span class="dhti-brand-en">CHINA INNOVATIVE CAPITAL</span><span class="dhti-brand-cn">中新融创资本管理有限公司</span></div>\';'
+  + 'if(document.body)document.body.prepend(s);else document.documentElement.appendChild(s);'
+  + 'var msgs=["正在分配系统资源…","正在构建专属安全沙箱…","正在同步智能投研模型…","资源分配就绪，正在进入系统…"];'
+  + 'var idx=0;var msgEl=document.getElementById("dhti-status-msg");'
+  + 'var timer=setInterval(function(){if(idx<msgs.length-1){idx++;if(msgEl){msgEl.style.opacity="0";setTimeout(function(){msgEl.innerText=msgs[idx];msgEl.style.opacity="1";},220);}}},3500);'
+  + 'var root=document.getElementById("root");'
+  + 'if(root){'
+  + 'var dismissed=false;'
+  + 'function dismiss(){if(dismissed)return;dismissed=true;clearInterval(timer);if(msgEl){msgEl.innerText="资源就绪，正在进入工作台…";msgEl.style.color="#34d399";}'
+  + 'setTimeout(function(){s.classList.add("dhti-fade-out");setTimeout(function(){s.remove();},900);},300);}'
+  + 'var obs=new MutationObserver(function(){if(root.children.length>0&&!root.querySelector("[data-dsh-boot]")){obs.disconnect();dismiss();}});'
+  + 'obs.observe(root,{childList:true,subtree:true});'
+  + '}'
+  + '}'
+  + 'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",initSplash,{once:true});else initSplash();'
+  + '})();</script>'
+
 // Cover both the empty document and the official boot page; normal UI keeps its own palette.
 const LOADING_STYLE = `<style id="dsh-next-loading-style">
-html:has(#root:empty), html:has([data-dsh-boot]) { color-scheme: dark; background: #000 !important; }
-body:has(#root:empty), body:has([data-dsh-boot]) { background: #000 !important; }
-[data-dsh-boot] {
-  background: #000 !important;
-  --dsw-alias-bg-base: #000;
-  --dsw-alias-label-primary: #f9fafb;
-  --dsw-alias-label-secondary: #cfd3d6;
-  --dsw-alias-label-tertiary: #adb2b8;
-  --dsw-alias-border-l2: rgb(255 255 255 / 12%);
-  --dsw-alias-brand-primary: #f9fafb;
+html:has(#root:empty), html:has([data-dsh-boot]) { color-scheme: dark; background: #050608 !important; }
+body:has(#root:empty), body:has([data-dsh-boot]) { background: #050608 !important; }
+[data-dsh-boot] { display: none !important; }
+#dhti-splash {
+  position: fixed; inset: 0; width: 100%; height: 100%; background: #050608; z-index: 999999;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  padding: 48px 24px; box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  user-select: none; -webkit-user-select: none; color: #fff;
+  transition: all 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
+#dhti-splash.dhti-fade-out {
+  opacity: 0 !important; transform: scale(1.04) !important; filter: blur(10px) !important; pointer-events: none !important;
+}
+@keyframes dhtiLogoAwaken {
+  0% { opacity: 0; filter: blur(12px) brightness(0.15) drop-shadow(0 0 0px rgba(255,255,255,0)); transform: scale(0.90); }
+  55% { opacity: 0.7; filter: blur(3px) brightness(0.85) drop-shadow(0 0 14px rgba(255,255,255,0.25)); transform: scale(0.98); }
+  100% { opacity: 1; filter: blur(0px) brightness(1.1) drop-shadow(0 0 24px rgba(255,255,255,0.45)); transform: scale(1); }
+}
+@keyframes dhtiSubtlePulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); filter: drop-shadow(0 0 16px rgba(255,255,255,0.25)); }
+  50% { opacity: 1; transform: scale(1.02); filter: drop-shadow(0 0 32px rgba(255,255,255,0.55)); }
+}
+@keyframes dhtiHairlineShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+@keyframes dhtiTextGleam {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.dhti-logo-box { margin-bottom: 32px; animation: dhtiLogoAwaken 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.dhti-logo-inner { display: flex; align-items: center; justify-content: center; min-height: 48px; animation: dhtiSubtlePulse 4.2s ease-in-out infinite; }
+.dhti-logo-img { width: 48px; height: 44px; object-fit: contain; filter: drop-shadow(0 0 20px rgba(255,255,255,0.45)); }
+.dhti-slogan {
+  font-size: 28px; font-weight: 300; letter-spacing: 0.25em; padding-left: 0.25em; margin: 0 0 8px 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.7) 100%);
+  background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  animation: dhtiTextGleam 6s ease-in-out infinite;
+}
+.dhti-subtitle {
+  font-size: 10px; letter-spacing: 0.35em; color: #737373; text-transform: uppercase; margin: 0 0 40px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.dhti-progress-box { width: 210px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.dhti-track { width: 100%; height: 2px; background: rgba(255,255,255,0.08); border-radius: 9999px; overflow: hidden; position: relative; }
+.dhti-indicator { position: absolute; inset: 0; width: 35%; background: linear-gradient(90deg, transparent, #fff, transparent); animation: dhtiHairlineShimmer 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.dhti-status-txt { font-size: 11px; color: #a3a3a3; letter-spacing: 0.05em; margin: 0; transition: opacity 0.3s; }
+.dhti-footer-brand { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.dhti-brand-en { font-size: 11px; font-weight: 500; letter-spacing: 0.28em; color: #a3a3a3; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.dhti-brand-cn { font-size: 9px; letter-spacing: 0.2em; color: #525252; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 </style>`
 
 /** Mark live same-origin frames in the owned window; strip the marker from other targets and redirects. */

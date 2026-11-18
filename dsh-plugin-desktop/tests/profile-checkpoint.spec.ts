@@ -1,3 +1,4 @@
+import { simulateSymbolicFile } from './helpers/symbolic-link-lstat.ts'
 import {
   existsSync,
   lstatSync,
@@ -372,7 +373,12 @@ describe('Desktop profile health checkpoints', () => {
     const symlink = fixture()
     unlinkSync(join(symlink.profile, 'cordis.patch.yml'))
     writeFileSync(join(symlink.root, 'outside.yml'), 'outside\n')
-    symlinkSync(join(symlink.root, 'outside.yml'), join(symlink.profile, 'cordis.patch.yml'))
+    if (process.platform === 'win32') {
+      writeFileSync(join(symlink.profile, 'cordis.patch.yml'), 'linked\n')
+      simulateSymbolicFile(join(symlink.profile, 'cordis.patch.yml'))
+    } else {
+      symlinkSync(join(symlink.root, 'outside.yml'), join(symlink.profile, 'cordis.patch.yml'))
+    }
     expect(() => symlink.checkpoint.captureHealthy()).toThrow('regular file')
 
     const oversized = fixture({ maxFileBytes: { 'package.json': 4 } })
@@ -381,7 +387,12 @@ describe('Desktop profile health checkpoints', () => {
     const globalSymlink = fixture()
     unlinkSync(join(globalSymlink.home, 'settings.yaml'))
     writeFileSync(join(globalSymlink.root, 'outside-settings.yml'), 'outside\n')
-    symlinkSync(join(globalSymlink.root, 'outside-settings.yml'), join(globalSymlink.home, 'settings.yaml'))
+    if (process.platform === 'win32') {
+      writeFileSync(join(globalSymlink.home, 'settings.yaml'), 'linked\n')
+      simulateSymbolicFile(join(globalSymlink.home, 'settings.yaml'))
+    } else {
+      symlinkSync(join(globalSymlink.root, 'outside-settings.yml'), join(globalSymlink.home, 'settings.yaml'))
+    }
     expect(() => globalSymlink.checkpoint.captureHealthy()).toThrow('regular file')
 
     const oversizedSettings = fixture({ maxFileBytes: { 'home/settings.yaml': 4 } })

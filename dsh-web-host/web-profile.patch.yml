@@ -1,0 +1,52 @@
+# Applied after the official `web` profile. The image must install these
+# workspace packages into the profile resolver before starting `dsh`.
+- insert:
+    - id: p7-web-trusted-session
+      name: dsh-web-host/trusted-session
+      config:
+        publicOrigin: https://replace-at-build.invalid
+    - id: p7-web-host
+      name: dsh-web-host
+      inject: [p7WebTrustedSession, webServer, agents, connection, workspaceRegistry]
+      config:
+        publicOrigin: https://replace-at-build.invalid
+        companyOrigin: https://replace-company-at-build.invalid
+    - id: p7-company-models
+      name: dsh-plugin-p7-company-models
+      # The static inject list plus the web-only route admission; without the
+      # admission service every proxied plugin route fails closed with 403.
+      inject: [loader, webServer, settings, credentials, profileContext, llm, agentDefaultModel, p7CompanyRouteAdmission]
+      config:
+        requirePersonalLogin: true
+    - id: p7-managed-mcp
+      name: dsh-plugin-p7-mcp
+      config:
+        mode: on-demand
+    - id: p7-web-search
+      name: dsh-plugin-p7-web-search
+      config:
+        origin: https://replace-company-at-build.invalid
+    - id: dsh-streamfold
+      name: dsh-streamfold
+    - id: better-sidebar
+      name: dsh-better-sidebar
+      config:
+        autoOpenSubagent: false
+        autoOpenJobs: false
+        agentOpenTools: false
+        htmlViewerNoSandbox: false
+        htmlViewerDefaultUnsafe: false
+    - id: claude-artifacts-data
+      name: dsh-claude-artifacts
+    - id: claude-data
+      name: dsh-claude-data
+- id: ui-settings-account
+  disabled: true
+- id: message-feedback
+  disabled: true
+- id: ui-message-feedback
+  disabled: true
+- id: web
+  config:
+    searchProvider: p7
+    fetchProvider: http

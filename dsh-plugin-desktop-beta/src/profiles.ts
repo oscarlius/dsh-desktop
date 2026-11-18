@@ -3,7 +3,8 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSy
 import { createRequire } from 'node:module'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { initProfile, loadOverlayPatches, loadProfileDirectory, PROFILE_TEMPLATES, readProfilePatches, type Profile, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import { initProfile, loadOverlayPatches, loadProfileDirectory, readProfilePatches, type Profile, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { atomicJson, atomicText, readPrivateFile } from './private-files.ts'
 import { NextRecovery } from './recovery.ts'
@@ -13,10 +14,87 @@ import { pluginMarketPatch } from './profile-plugin-market.ts'
 import { RETIRED_SCHEDULE_BUNDLE, retiredSchedulePatch } from './profile-schedule.ts'
 import { removeLinkProjectionsSafely } from '../../dsh-plugin-desktop/src/link-projections.ts'
 import { insideArchive, unpackedPath } from './asar-archive-policy.ts'
+import { DESKTOP_COMPANY_SERVICE_ENABLED } from './product-identity.ts'
+import { COMPANY_DEFAULT_PLUGIN_BUNDLES, companyMnemonCliPath, companyPluginDefaultPatches, hasExplicitCompanyPluginDisable } from './company-plugin-defaults.ts'
 
 export const NEXT_PACKAGE = fileURLToPath(new URL('../package.json', import.meta.url))
 export const WEB_BUNDLES = [...PROFILE_TEMPLATES.web!.bundles]
 const NEXT_BUNDLE_PATCH = fileURLToPath(new URL('../cordis.patch.yml', import.meta.url))
+function desktopPlatformPatches() {
+  return loadOverlayPatches('dsh-plugin-desktop-beta', NEXT_BUNDLE_PATCH)
+}
+
+function addDesktopCapabilityLayers(profile: Profile, home: string, installAnchor: string, packageDir: string): void {
+  profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir,
+    patchPaths: [NEXT_BUNDLE_PATCH], patches: desktopCapabilityPatches(home, installAnchor) })
+}
+
+function desktopCapabilityPatches(home: string, installAnchor: string) {
+  return [
+    ...desktopPlatformPatches(),
+    ...(DESKTOP_COMPANY_SERVICE_ENABLED ? companyPluginDefaultPatches(join(home, 'mnemon'), companyMnemonCliPath(installAnchor), installAnchor) : []),
+    ...(DESKTOP_COMPANY_SERVICE_ENABLED && !process.env.DSH_WEB_SEARCH_PROVIDER?.trim()
+      ? [{ id: 'web', config: { searchProvider: 'p7' } }] : []),
+  ]
+}
+
+function configuredWebProvider(
+  patches: readonly { id?: unknown; config?: unknown }[],
+  field: 'searchProvider' | 'fetchProvider',
+): unknown {
+  for (const patch of [...patches].reverse()) {
+    if (patch.id === 'web' && patch.config !== null && typeof patch.config === 'object' && !Array.isArray(patch.config)
+      && Object.hasOwn(patch.config, field)) return (patch.config as Record<string, unknown>)[field]
+  }
+  return undefined
+}
+
+function hasConfiguredWebFetchProviderEnvironment(): boolean {
+  const provider = process.env.DSH_WEB_FETCH_PROVIDER
+  return provider !== undefined && provider.trim().length > 0
+}
+
+/** The last explicit row enablement is a user-owned choice, not a default. */
+function hasExplicitDeepSeekFetchApiEnablement(patches: readonly { id?: unknown; disabled?: unknown }[]): boolean {
+  return [...patches].reverse().some(patch => patch.id === 'web-deepseek-api' && typeof patch.disabled === 'boolean')
+}
+
+/**
+ * Company does not configure a P7 fetch endpoint. Keep the bundled public HTTP
+ * provider as its default and do not mount the unused DeepSeek Fetch API.
+ * Explicit Profile or environment choices retain upstream composition verbatim.
+ */
+function companyWebFetchPolicyPatches(patches: readonly { id?: unknown; config?: unknown }[]) {
+  if (!DESKTOP_COMPANY_SERVICE_ENABLED) return []
+  const configuredSearch = configuredWebProvider(patches, 'searchProvider')
+  const configuredFetch = configuredWebProvider(patches, 'fetchProvider')
+  const searchFromEnvironment = process.env.DSH_WEB_SEARCH_PROVIDER?.trim().length
+  const fetchFromEnvironment = hasConfiguredWebFetchProviderEnvironment()
+  const usesDeepSeekApi = configuredSearch === 'deepseek-search-api'
+    || configuredFetch === 'deepseek-fetch-api'
+    || process.env.DSH_WEB_SEARCH_PROVIDER?.trim() === 'deepseek-search-api'
+    || process.env.DSH_WEB_FETCH_PROVIDER?.trim() === 'deepseek-fetch-api'
+  const config = {
+    ...(configuredSearch === undefined && !searchFromEnvironment ? { searchProvider: 'p7' } : configuredSearch === undefined ? {} : { searchProvider: configuredSearch }),
+    ...(configuredFetch === undefined && !fetchFromEnvironment ? { fetchProvider: 'http' } : configuredFetch === undefined ? {} : { fetchProvider: configuredFetch }),
+  }
+  return [
+    ...(Object.keys(config).length === 0 ? [] : [{ id: 'web', config }]),
+    ...(!usesDeepSeekApi && !hasExplicitDeepSeekFetchApiEnablement(patches) ? [{ id: 'web-deepseek-api', disabled: true }] : []),
+  ]
+}
+
+/** Company sessions use the P7 account surface exclusively. These rows must be
+ * last so a persisted Profile patch cannot re-enable DeepSeek login or feedback. */
+function companyAccountUiPolicyPatches() {
+  return DESKTOP_COMPANY_SERVICE_ENABLED
+    ? [
+        { id: 'ui-settings-account', disabled: true },
+        { id: 'message-feedback', disabled: true },
+        { id: 'ui-message-feedback', disabled: true },
+      ]
+    : []
+}
 export const AA_PACKAGE = '@agents-anywhere/dsh-bridge-next'
 export const COMMUNITY_MARKET_PACKAGE = 'dsh-community-market'
 export const DSH_MARKET_PACKAGE = 'dshmarket'
@@ -25,6 +103,11 @@ export const OFFICIAL_MARKET_PACKAGE = '@deepseek-ai/dsh-experimental-plugin-mar
 export interface Features { remoteControl: boolean; market: boolean; dshMarket?: boolean; officialMarket?: boolean }
 export interface OnboardingChoices { features: Features; computerUse: boolean }
 export const DEFAULT_FEATURES: Readonly<Features> = { remoteControl: false, market: false }
+function initialProfileFeatures(): Readonly<Features> {
+  // Preserve the Company product's first-run market choice without changing
+  // upstream Next defaults or any existing Profile manifest.
+  return DESKTOP_COMPANY_SERVICE_ENABLED ? { remoteControl: false, market: true } : DEFAULT_FEATURES
+}
 
 interface ProfileManifest {
   dsh: {
@@ -34,6 +117,8 @@ interface ProfileManifest {
      * rc.2 optional bundle, 2 retired that bundle once upstream removed it.
      */
     desktopNextScheduleBundle?: number
+    /** Company bundle selection is a one-time default, never a standing policy. */
+    desktopNextCompanyPluginDefaults?: number
     desktopNextOnboarding?: { version: number; outcome: 'completed' | 'skipped'; accountPending?: boolean }
     profile: { bundles: string[] }
   }
@@ -88,7 +173,15 @@ export class NextProfiles {
   get active(): string {
     const file = join(this.home, 'desktop-next.json')
     const text = readPrivateFile(file)
-    if (text === undefined) return DEFAULT_PROFILE
+    if (text === undefined) {
+      // Keep the actual Company home and its selected legacy Profile.  We do
+      // not copy a Profile (which would invalidate its vault binding); the
+      // Next selection is only written once the user explicitly changes it.
+      const legacy = DESKTOP_COMPANY_SERVICE_ENABLED
+        ? readPrivateFile(join(this.home, 'profile-selection', 'state.json')) : undefined
+      if (legacy !== undefined) return profileName((JSON.parse(legacy) as { active?: unknown }).active)
+      return DEFAULT_PROFILE
+    }
     return profileName((JSON.parse(text) as { active?: unknown }).active)
   }
   select(name: string): void {
@@ -128,8 +221,9 @@ export class NextProfiles {
         migrated.dsh.profile.bundles = migrated.dsh.profile.bundles.filter(bundle => bundle !== 'dsh-plugin-desktop-beta')
         atomicJson(join(dir, 'package.json'), migrated)
       }
-    } else this.setFeatures(name, DEFAULT_FEATURES)
+    } else this.setFeatures(name, initialProfileFeatures())
     this.migrateSchedule(name)
+    this.migrateCompanyPluginDefaults(name)
     return dir
   }
   create(name: string): string {
@@ -137,8 +231,9 @@ export class NextProfiles {
     mkdirSync(dirname(dir), { recursive: true, mode: 0o700 })
     mkdirSync(dir, { mode: 0o700 })
     initProfile(dir, WEB_BUNDLES)
-    this.setFeatures(name, DEFAULT_FEATURES)
+    this.setFeatures(name, initialProfileFeatures())
     this.migrateSchedule(name)
+    this.migrateCompanyPluginDefaults(name)
     return dir
   }
   features(name: string): Features {
@@ -242,6 +337,26 @@ export class NextProfiles {
     manifest.dsh.desktopNextScheduleBundle = 2
     atomicJson(join(this.directory(name), 'package.json'), manifest)
   }
+  /**
+   * Select Company plugins once per Profile. Their published bundle patches
+   * supply the complete component graph; this only records the two roots.
+   * A user-owned disabled row is respected, and after this marker is written
+   * removing a bundle remains a durable opt-out.
+   */
+  private migrateCompanyPluginDefaults(name: string): void {
+    if (!DESKTOP_COMPANY_SERVICE_ENABLED) return
+    const manifest = this.manifest(name)
+    if (manifest.dsh.desktopNextCompanyPluginDefaults === 1) return
+    const patchPath = join(this.directory(name), 'cordis.patch.yml')
+    const patches = existsSync(patchPath) ? loadOverlayPatches('dsh-plugin-desktop-beta', patchPath) : []
+    for (const bundle of COMPANY_DEFAULT_PLUGIN_BUNDLES) {
+      if (!manifest.dsh.profile.bundles.includes(bundle) && !hasExplicitCompanyPluginDisable(patches, bundle)) {
+        manifest.dsh.profile.bundles.push(bundle)
+      }
+    }
+    manifest.dsh.desktopNextCompanyPluginDefaults = 1
+    atomicJson(join(this.directory(name), 'package.json'), manifest)
+  }
   private manifest(name: string): ProfileManifest {
     const value = JSON.parse(readPrivateFile(join(this.directory(name), 'package.json')) ?? 'null')
     if (!value || !Array.isArray(value.dsh?.profile?.bundles) || value.dsh.profile.bundles.some((item: unknown) => typeof item !== 'string')) throw new Error('Invalid Next Profile manifest')
@@ -309,13 +424,22 @@ export function loadNextProfile(projectDir: string, home: string, installAnchor 
   if (existingLink && (linkTarget === undefined || resolve(modules, readlinkSync(link)) !== linkTarget)) unlinkSync(link)
   if (linkTarget !== undefined && !lstatSync(link, { throwIfNoEntry: false })) symlinkSync(linkTarget, link, 'junction')
   const profile = loadProfileDirectory('dsh-plugin-desktop-beta', projectDir, installAnchor)
-  profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir: target,
-    patchPaths: [NEXT_BUNDLE_PATCH], patches: loadOverlayPatches('dsh-plugin-desktop-beta', NEXT_BUNDLE_PATCH) })
+  addDesktopCapabilityLayers(profile, home, installAnchor, target)
+  profile.patches.push(...companyAccountUiPolicyPatches())
+  profile.patches.push(...companyWebFetchPolicyPatches(profile.patches))
   const overlay = [
-    { id: 'agents-anywhere-bridge-next', config: {
+    // AA owns an optional Profile bundle.  Patching it while disabled becomes
+    // an rc1 Loader error because its row has not been inserted.
+    ...(profile.layers.some(layer => layer.packageName === AA_PACKAGE) ? [{ id: 'agents-anywhere-bridge-next', config: {
       dshHome: home,
       ...archivedAgentsAnywhereConfig(installAnchor),
-    } },
+    } }] : []),
+    ...(DESKTOP_COMPANY_SERVICE_ENABLED ? [{ insert: [
+      { id: 'p7-company-models', name: 'dsh-plugin-p7-company-models', inject: ['p7AccountStore', 'p7AccountBrowser'], config: { requirePersonalLogin: true } },
+      { id: 'p7-web-search', name: 'dsh-plugin-p7-web-search' },
+      { id: 'p7-managed-mcp', name: 'dsh-plugin-p7-mcp', config: { mode: 'on-demand' } },
+      { id: 'dsh-streamfold', name: 'dsh-streamfold' },
+    ] }] : []),
   ]
   // Leave AA stateRoot unset to share its default credentials and device binding with Stable/Beta.
   // Rewriting the generated overlay also removes the former per-Profile stateRoot on upgrade.
@@ -346,8 +470,7 @@ function archivedAgentsAnywhereConfig(installAnchor: string): { connectorSourceD
 /** Recompose Next's own layer before user/global patches on every manager or HMR read. */
 export function readNextProfilePatches(projectDir: string, home: string, overlays: readonly string[], profilePatches?: readonly Profile['patches'][number][]) {
   const profile = loadProfileDirectory('dsh-plugin-desktop-beta', projectDir, NEXT_PACKAGE, { userLayer: false })
-  profile.layers.push({ packageName: 'dsh-plugin-desktop-beta', packageDir: dirname(NEXT_PACKAGE),
-    patchPaths: [NEXT_BUNDLE_PATCH], patches: loadOverlayPatches('dsh-plugin-desktop-beta', NEXT_BUNDLE_PATCH) })
+  addDesktopCapabilityLayers(profile, home, NEXT_PACKAGE, dirname(NEXT_PACKAGE))
   profile.patches = profilePatches === undefined
     ? existsSync(profile.patchPath) ? loadOverlayPatches('dsh-plugin-desktop-beta', profile.patchPath) : []
     : [...profilePatches]
@@ -355,5 +478,10 @@ export function readNextProfilePatches(projectDir: string, home: string, overlay
     installAnchor: NEXT_PACKAGE, cwd: process.cwd(), home, startedBundles: profile.layers.map(layer => layer.packageName),
     overlays: overlays.flatMap(path => loadOverlayPatches('dsh-plugin-desktop-beta', path)),
     telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED }
-  return readProfilePatches('dsh-plugin-desktop-beta', context, profile)
+  const patches = readProfilePatches('dsh-plugin-desktop-beta', context, profile)
+  // Profile HMR/reload must not turn Company personal-login back into a shared
+  // credential path.  This final product patch is deliberately after user rows.
+  return DESKTOP_COMPANY_SERVICE_ENABLED
+    ? [...patches, ...companyWebFetchPolicyPatches(patches), ...companyAccountUiPolicyPatches(), { id: 'p7-company-models', config: { requirePersonalLogin: true } }]
+    : patches
 }

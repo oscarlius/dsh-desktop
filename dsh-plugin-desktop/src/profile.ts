@@ -48,6 +48,7 @@ import {
 } from './desktop-network.ts'
 import type { DesktopShellMode } from './runtime.ts'
 import {
+  DESKTOP_COMPANY_SERVICE_ENABLED,
   DESKTOP_PACKAGE_NAME,
   DESKTOP_PACKAGE_NAMES,
 } from './product-identity.ts'
@@ -113,6 +114,10 @@ const DESKTOP_WEB_SERVER_PACKAGE = `${DESKTOP_PACKAGE_NAME}/webserver`
 // moved persisted form values into the active profile's own patch layer. The row that
 // carries the settings service is now the profile-owned `@deepseek-ai/dsh-settings`.
 const SETTINGS_PACKAGE = '@deepseek-ai/dsh-settings'
+const ACCOUNT_SETTINGS_ROW_ID = 'ui-settings-account'
+const ACCOUNT_SETTINGS_PACKAGE = '@deepseek-ai/dsh-client-ui-settings-account'
+const COMPANY_CONTACT_SOURCE = 'p7-company-hidden'
+const P7_COMPANY_MODELS_ROW_ID = 'p7-company-models'
 /** Legacy harness-home document the upstream one-shot import still reads. */
 const SETTINGS_DOCUMENT_FILENAME = 'settings.yaml'
 const SETTINGS_DOCUMENT_FORMATS: Readonly<Record<string, 'yaml' | 'json'>> = Object.freeze({
@@ -1195,11 +1200,46 @@ export function shippedSkillRoot(moduleUrl: string = import.meta.url): string {
 }
 
 /** Read a row's object config without trusting arbitrary YAML values. */
-function rowConfig(row: EntryOptions | undefined): Record<string, unknown> {
+function rowConfig(row: { readonly config?: unknown } | undefined): Record<string, unknown> {
   const config = row?.config
   return config !== null && typeof config === 'object' && !Array.isArray(config)
     ? config as Record<string, unknown>
     : {}
+}
+
+/** A later profile or machine patch owns an explicit provider choice. */
+function hasExplicitWebSearchProvider(patches: readonly PatchOptions[]): boolean {
+  return patches.some(patch => patch.id === 'web'
+    && Object.hasOwn(rowConfig(patch), 'searchProvider'))
+}
+
+/** Operational provider selection takes precedence over the sealed Company default. */
+function hasConfiguredWebSearchProviderEnvironment(): boolean {
+  const provider = process.env.DSH_WEB_SEARCH_PROVIDER
+  return provider !== undefined && provider.trim().length > 0
+}
+
+/** Return the last explicit provider value saved by a Profile or home patch. */
+function configuredWebProvider(
+  patches: readonly PatchOptions[],
+  field: 'searchProvider' | 'fetchProvider',
+): unknown {
+  for (const patch of [...patches].reverse()) {
+    const config = rowConfig(patch)
+    if (patch.id === 'web' && Object.hasOwn(config, field)) return config[field]
+  }
+  return undefined
+}
+
+/** Operational fetch selection takes precedence over the sealed Company default. */
+function hasConfiguredWebFetchProviderEnvironment(): boolean {
+  const provider = process.env.DSH_WEB_FETCH_PROVIDER
+  return provider !== undefined && provider.trim().length > 0
+}
+
+/** A Profile or home patch owns an explicit DeepSeek API row enablement. */
+function hasExplicitDeepSeekFetchApiEnablement(patches: readonly PatchOptions[]): boolean {
+  return [...patches].reverse().some(patch => patch.id === 'web-deepseek-api' && typeof patch.disabled === 'boolean')
 }
 
 /** Snapshot, validate, and deduplicate the LAN allowlist supplied by the launcher. */
@@ -1737,6 +1777,28 @@ export function prepareDesktopProfile(
   if (settings?.name !== SETTINGS_PACKAGE) {
     throw new Error(`${BIN_NAME}: desktop profile must use ${SETTINGS_PACKAGE} in the settings row`)
   }
+  if (DESKTOP_COMPANY_SERVICE_ENABLED) {
+    const accountSettings = rows.get(ACCOUNT_SETTINGS_ROW_ID)
+    if (accountSettings?.name !== ACCOUNT_SETTINGS_PACKAGE) {
+      throw new Error(`${BIN_NAME}: company Desktop profile must use ${ACCOUNT_SETTINGS_PACKAGE} in the ${ACCOUNT_SETTINGS_ROW_ID} row`)
+    }
+    const companyModels = rows.get(P7_COMPANY_MODELS_ROW_ID)
+    if (companyModels?.name !== 'dsh-plugin-p7-company-models') {
+      throw new Error(`${BIN_NAME}: company Desktop profile is missing ${P7_COMPANY_MODELS_ROW_ID}`)
+    }
+    const p7WebSearch = rows.get('p7-web-search')
+    if (p7WebSearch?.name !== 'dsh-plugin-p7-web-search') {
+      throw new Error(`${BIN_NAME}: company Desktop profile is missing p7-web-search`)
+    }
+    patches.push(
+      { id: ACCOUNT_SETTINGS_ROW_ID, config: { ...rowConfig(accountSettings), contactSource: COMPANY_CONTACT_SOURCE } },
+      { id: P7_COMPANY_MODELS_ROW_ID, config: {
+        ...rowConfig(companyModels),
+        requirePersonalLogin: true,
+        bootstrapFile: process.env.DSH_P7_BOOTSTRAP_FILE ?? join(dirname(INSTALL_ANCHOR), '..', 'p7-company-connection.json'),
+      } },
+    )
+  }
   // 0.1.7's settings row is the profile-owned service and takes no document config,
   // so Desktop resolves the harness-home document itself. The Host, the setup wizard,
   // and the recovery window all still address the document by path.
@@ -1802,6 +1864,44 @@ export function prepareDesktopProfile(
       trustedHosts: desktopTrustedHosts,
     },
   })
+  // `web-runtime` is the browser carrier. The actual ctx.web seam is the base
+  // bundle's `web` row, whose upstream default pins DeepSeek search. Company
+  // builds replace that upstream default with P7, while a profile/machine patch
+  // or the documented operational environment selection remains authoritative.
+  const web = rows.get('web')
+  if (DESKTOP_COMPANY_SERVICE_ENABLED
+    && !hasConfiguredWebSearchProviderEnvironment()
+    && !hasExplicitWebSearchProvider([...filteredProfile.patches, ...filteredHome.patches])) {
+    if (web?.name !== '@deepseek-ai/dsh-web') {
+      throw new Error(`${BIN_NAME}: company Desktop profile must use @deepseek-ai/dsh-web in the web row`)
+    }
+    patches.push({ id: 'web', config: { ...rowConfig(web), searchProvider: 'p7' } })
+  }
+  // P7 has no configured fetch endpoint. Company therefore uses the bundled
+  // public HTTP(S) provider and does not activate DeepSeek's API fetch route,
+  // unless the environment or saved Profile deliberately selects that provider.
+  if (DESKTOP_COMPANY_SERVICE_ENABLED) {
+    if (web?.name !== '@deepseek-ai/dsh-web') {
+      throw new Error(`${BIN_NAME}: company Desktop profile must use @deepseek-ai/dsh-web in the web row`)
+    }
+    const configuredPatches = [...filteredProfile.patches, ...filteredHome.patches]
+    const configuredSearch = configuredWebProvider(configuredPatches, 'searchProvider')
+    const configuredFetch = configuredWebProvider(configuredPatches, 'fetchProvider')
+    const usesDeepSeekApi = configuredSearch === 'deepseek-search-api'
+      || configuredFetch === 'deepseek-fetch-api'
+      || process.env.DSH_WEB_SEARCH_PROVIDER?.trim() === 'deepseek-search-api'
+      || process.env.DSH_WEB_FETCH_PROVIDER?.trim() === 'deepseek-fetch-api'
+    const config = {
+      ...(configuredSearch === undefined && !hasConfiguredWebSearchProviderEnvironment()
+        ? { searchProvider: 'p7' } : configuredSearch === undefined ? {} : { searchProvider: configuredSearch }),
+      ...(configuredFetch === undefined && !hasConfiguredWebFetchProviderEnvironment()
+        ? { fetchProvider: 'http' } : configuredFetch === undefined ? {} : { fetchProvider: configuredFetch }),
+    }
+    if (Object.keys(config).length > 0) patches.push({ id: 'web', config: { ...rowConfig(web), ...config } })
+    if (!usesDeepSeekApi && !hasExplicitDeepSeekFetchApiEnablement(configuredPatches)) {
+      patches.push({ id: 'web-deepseek-api', disabled: true })
+    }
+  }
   // A Web bundle that still injects webRuntime into its own Connection row
   // also provides that service; only a core that retired it needs re-targeting.
   const webBundleProvidesWebRuntime = webAppPatches.some(patch => (patch.insert ?? []).some(row =>

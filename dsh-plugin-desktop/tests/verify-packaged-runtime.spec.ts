@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -37,6 +38,7 @@ import {
   resolvePackagedUnpackedRoot,
   resolveRuntimePackageRoot,
   smokePackagedElectronRuntime,
+  stageCompanyConnection,
   summarizeUnpackedRuntime,
   verifyPackagedRuntime,
   verifyPackagedAgentsAnywhere,
@@ -282,6 +284,53 @@ describe('packaged desktop runtime verification', () => {
     )
 
     expect(calls).toEqual(['static', 'aa', 'runtime', 'report'])
+  })
+
+  it('stages the protected P7 connection only for the sealed Company Test package', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-company-connection-'))
+    const projectDir = join(root, 'project')
+    const source = join(projectDir, '.desktop-build', 'company', 'p7-company-connection.json')
+    const secret = 'p7k_test-only-secret'
+    const destination = join(root, 'resources', 'p7-company-connection.json')
+    const runtimeContext: PackagedRuntimeContext = {
+      ...context(root, 'win32'),
+      packager: { appInfo: { productFilename: 'DSH Desktop' }, projectDir },
+    }
+    try {
+      mkdirSync(join(root, 'resources', 'app'), { recursive: true })
+      mkdirSync(join(source, '..'), { recursive: true })
+      writeFileSync(source, JSON.stringify({ origin: 'https://maas.zxrc.com.cn:8090', key: secret }))
+
+      writeFileSync(join(root, 'resources', 'app', 'package.json'), '{"dshDesktopFlavor":"companytest"}')
+      stageCompanyConnection(runtimeContext)
+      expect(readFileSync(destination, 'utf8')).toContain(secret)
+
+      rmSync(destination)
+      writeFileSync(join(root, 'resources', 'app', 'package.json'), '{}')
+      stageCompanyConnection(runtimeContext)
+      expect(existsSync(destination)).toBe(false)
+
+      writeFileSync(join(root, 'resources', 'app', 'package.json'), '{"dshDesktopFlavor":"companytest"}')
+      writeFileSync(source, JSON.stringify({ origin: 'https://maas.zxrc.com.cn:8090', key: 'not-a-p7-key' }))
+      expect(() => stageCompanyConnection(runtimeContext)).toThrow('protected P7 connection resource')
+      try { stageCompanyConnection(runtimeContext) } catch (error) {
+        expect(String(error)).not.toContain('not-a-p7-key')
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps shared P7 credentials out of update distributions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-update-credential-'))
+    try {
+      mkdirSync(join(root, 'resources', 'app'), { recursive: true })
+      writeFileSync(join(root, 'resources', 'app', 'package.json'), JSON.stringify({ dshDesktopFlavor: 'companytest', dshDesktopUpdateDistribution: true }))
+      const runtimeContext = context(root, 'win32')
+      expect(() => stageCompanyConnection(runtimeContext)).not.toThrow()
+      writeFileSync(join(root, 'resources', 'p7-company-connection.json'), '{}')
+      expect(() => stageCompanyConnection(runtimeContext)).toThrow('must not contain')
+    } finally { rmSync(root, { recursive: true, force: true }) }
   })
 
   it.skipIf(process.platform === 'win32')('rejects a 0644 packaged uv before signing', () => {

@@ -11,6 +11,7 @@ import { HostPermissions } from './host-permissions.ts'
 import { NEXT_PACKAGE, profileName } from './profiles.ts'
 import { PNPM_IGNORE_MINIMUM_RELEASE_AGE } from './pnpm-policy.ts'
 import { unpackedPath } from './asar-archive-policy.ts'
+import { COMPANY_COMPATIBILITY_BUILD, COMPANY_TRANSPORT_VERSION } from './product-identity.ts'
 
 export const name = 'desktop-next-capabilities'
 export const inject = ['profileContext']
@@ -25,6 +26,7 @@ export function apply(ctx: Context): void {
   if (process.send) installNotifications(ctx, notification => {
     if (process.connected) process.send?.({ type: 'notification', notification }, () => {})
   })
+  if (process.env.DSH_COMPANY_MODE === '1') installCompanyIdentityBridge(ctx)
   const profile = ctx.profileContext
   const invocation = profile.packageManager
   if (!invocation) throw new Error('Next requires its bundled pnpm invocation')
@@ -46,6 +48,64 @@ export function apply(ctx: Context): void {
     }),
   })
   ctx.effect(() => () => runner.dispose(), 'Next package process disposal')
+}
+
+/**
+ * Host-only bridge for the Company P7 plugin.  Refresh credentials are never
+ * serialized into the renderer, environment, profile patch, or diagnostics:
+ * the Host can only ask the Electron parent to load/save/clear an opaque token.
+ */
+function installCompanyIdentityBridge(ctx: Context): void {
+  if (!process.send || !process.connected) throw new Error('Company identity requires the native Desktop Host')
+  let nextId = 1
+  const pending = new Map<number, { resolve(value: { refreshToken?: string }): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>()
+  const request = (value: { action: 'load' | 'save' | 'clear'; origin: string; refreshToken?: string }): Promise<{ refreshToken?: string }> => {
+    const id = nextId++
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (pending.delete(id)) reject(new Error('P7 encrypted storage request timed out'))
+      }, 10_000)
+      timer.unref()
+      pending.set(id, { resolve, reject, timer })
+      process.send?.({ type: 'p7-session-vault', requestId: id, request: value }, error => {
+        if (error) { const current = pending.get(id); if (current) clearTimeout(current.timer); pending.delete(id); reject(error) }
+      })
+    })
+  }
+  const onMessage = (value: unknown): void => {
+    if (!value || typeof value !== 'object' || !('type' in value) || value.type !== 'p7-session-vault-result') return
+    const result = value as { requestId?: unknown; error?: unknown; result?: unknown }
+    const requestId = result.requestId
+    if (typeof requestId !== 'number' || !Number.isSafeInteger(requestId)) return
+    const current = pending.get(requestId)
+    if (!current) return
+    pending.delete(requestId)
+    clearTimeout(current.timer)
+    if (typeof result.error === 'string') { current.reject(new Error(result.error)); return }
+    const payload = result.result
+    if (!payload || typeof payload !== 'object' || (Reflect.get(payload, 'refreshToken') !== undefined && typeof Reflect.get(payload, 'refreshToken') !== 'string')) {
+      current.reject(new Error('Invalid native P7 vault response')); return
+    }
+    current.resolve(payload as { refreshToken?: string })
+  }
+  process.on('message', onMessage)
+  ctx.provide('p7AccountStore', {
+    clientVersion: COMPANY_TRANSPORT_VERSION || process.env.DSH_COMPANY_TRANSPORT_VERSION,
+    ...(COMPANY_COMPATIBILITY_BUILD ? { clientBuildNumber: COMPANY_COMPATIBILITY_BUILD } : {}),
+    load: async (origin: string) => (await request({ action: 'load', origin })).refreshToken,
+    save: async (origin: string, refreshToken: string) => { await request({ action: 'save', origin, refreshToken }) },
+    clear: async (origin: string) => { await request({ action: 'clear', origin }) },
+  })
+  ctx.provide('p7AccountBrowser', { open: (url: string) => {
+    const target = new URL(url)
+    if (target.protocol !== 'https:' || target.username || target.password) throw new Error('Invalid P7 authorization URL')
+    process.send?.({ type: 'p7-account-browser', url: target.href }, () => {})
+  } })
+  ctx.effect(() => () => {
+    process.off('message', onMessage)
+    for (const value of pending.values()) { clearTimeout(value.timer); value.reject(new Error('Company identity Host is stopping')) }
+    pending.clear()
+  }, 'Company native identity bridge')
 }
 
 /** Own each process handle so a stale cancellation cannot kill its successor. */

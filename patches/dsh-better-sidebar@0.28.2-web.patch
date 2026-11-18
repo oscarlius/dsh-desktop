@@ -1,0 +1,451 @@
+diff --git a/lib/client.js b/lib/client.js
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -24692,18 +24692,6 @@
+ 							teammates,
+ 							onOpenTask
+ 						}, task.id))]
+-					}),
+-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+-						className: tasks_graph_module_css_default.teamActions,
+-						children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-							variant: "outline",
+-							size: "sm",
+-							icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPlusOutlineRegular, { size: 13 }),
+-							onClick: (event) => {
+-								onOpenTask(void 0, event.currentTarget);
+-							},
+-							children: t("teamTaskCreate")
+-						})
+ 					})
+ 				] })]
+ 			});
+@@ -24830,18 +24818,6 @@
+ 							unwrapLabel: t("codeBlockUnwrap")
+ 						}) })
+ 					})
+-				}),
+-				/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+-					className: tasks_graph_module_css_default.taskField,
+-					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-						className: tasks_graph_module_css_default.taskLabel,
+-						children: t("teamTaskOwner")
+-					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(OwnerPicker, {
+-						members: props.teammates,
+-						owner: task.ownerName,
+-						disabled: props.busy,
+-						onPick: props.onReassign
+-					})]
+ 				})
+ 			] });
+ 		}
+@@ -24988,96 +24964,6 @@
+ 				},
+ 				anchor: props.anchor,
+ 				bodyLayout: "fill",
+-				footer: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+-					className: tasks_graph_module_css_default.jobPopActions,
+-					children: editing ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-						variant: "primary",
+-						size: "sm",
+-						icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutlineRegular, { size: 12 }),
+-						disabled: busy || subject.trim() === "",
+-						onClick: save,
+-						children: creating ? t("teamTaskCreate") : t("teamTaskSave")
+-					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-						variant: "outline",
+-						size: "sm",
+-						disabled: busy,
+-						onClick: () => {
+-							if (creating) onClose();
+-							else if (task !== void 0) {
+-								setSubject(task.subject);
+-								setDescription(task.description);
+-								setSubjectTouched(false);
+-								setEditing(false);
+-							}
+-						},
+-						children: t("teamTaskCancel")
+-					})] }) : task === void 0 ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-							variant: "outline",
+-							size: "sm",
+-							icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEditOutlineRegular, { size: 12 }),
+-							onClick: () => {
+-								setEditing(true);
+-							},
+-							children: t("teamTaskEdit")
+-						}),
+-						task.status === "completed" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-							variant: "primary",
+-							size: "sm",
+-							icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutlineRegular, { size: 12 }),
+-							disabled: busy,
+-							onClick: () => void mutate(() => api.teamsTaskUpdate(rootId, {
+-								taskId: task.id,
+-								expectedRevision: task.revision,
+-								action: "reopen"
+-							})),
+-							children: t("teamTaskReopen")
+-						}) : task.status === "pending" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-							variant: "primary",
+-							size: "sm",
+-							icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutlineRegular, { size: 12 }),
+-							disabled: busy || taskBlocked(task),
+-							title: taskBlocked(task) ? t("teamTaskBlocked") : void 0,
+-							onClick: () => void mutate(() => api.teamsTaskUpdate(rootId, {
+-								taskId: task.id,
+-								expectedRevision: task.revision,
+-								action: "claim"
+-							})),
+-							children: t("teamTaskClaim")
+-						}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-							variant: "primary",
+-							size: "sm",
+-							icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutlineRegular, { size: 12 }),
+-							disabled: busy,
+-							onClick: () => void mutate(() => api.teamsTaskUpdate(rootId, {
+-								taskId: task.id,
+-								expectedRevision: task.revision,
+-								action: "complete"
+-							})),
+-							children: t("teamTaskComplete")
+-						}),
+-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-							variant: "outline",
+-							size: "sm",
+-							className: clsx(tasks_graph_module_css_default.taskDanger, armedDelete && tasks_graph_module_css_default.taskDangerArmed),
+-							icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutlineRegular, { size: 12 }),
+-							disabled: busy,
+-							onClick: () => {
+-								if (!armedDelete) {
+-									setArmedDelete(true);
+-									return;
+-								}
+-								setArmedDelete(false);
+-								mutate(() => api.teamsTaskUpdate(rootId, {
+-									taskId: task.id,
+-									expectedRevision: task.revision,
+-									action: "delete"
+-								}), { close: true });
+-							},
+-							children: armedDelete ? t("teamTaskDeleteConfirm") : t("teamTaskDelete")
+-						})
+-					] })
+-				}),
+ 				children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+ 					className: tasks_graph_module_css_default.taskBody,
+ 					children: [
+@@ -27772,8 +27658,9 @@
+ 		*/
+ 		function registerBuiltins(ctx, service) {
+ 			const disposers = [];
+-			for (const tab of builtinTabs(ctx)) disposers.push(service.registerTab(tab));
+-			for (const viewer of builtinViewers()) disposers.push(service.registerFileViewer(viewer));
++			for (const tab of builtinTabs(ctx)) {
++				if (tab.id === "subagent") disposers.push(service.registerTab(tab));
++			}
+ 			return () => {
+ 				for (const d of disposers) try {
+ 					d();
+@@ -29448,78 +29335,6 @@
+ 		function useHostFeeds(feeds) {
+ 			const { ctx, store, sessionList, sessionId } = feeds;
+ 			/**
+-			* Agent opens push: subscribe to the host's `sidebar_open` requests for
+-			* this session (the model actively opens a file / folder / HTTP(S) page).
+-			* The host pushes one JSON request per open; the sidebar routes it to the
+-			* matching built-in tab: a file opens in the editor (per-path dedupe), a
+-			* folder opens a file window whose tree is rooted at the folder
+-			* (`meta.dir`), and a URL opens in DSH's own browser tab type. A disconnected socket
+-			* retries with a short backoff (mirror of the agent-terminals loop): the
+-			* host queue keeps undelivered requests and replays them on the first
+-			* attach, so a refresh or a session switch lands the opens the model
+-			* queued while no view was connected.
+-			* While the side-card setting is off, pushes are ignored as a defensive
+-			* gate — the host already unregisters the tool and drains the queue.
+-			*/
+-			(0, react.useEffect)(() => {
+-				if (sessionId === void 0) return;
+-				let socket = null;
+-				let retry;
+-				let closed = false;
+-				let failures = 0;
+-				const connect = () => {
+-					if (closed) return;
+-					const url = hostWebSocketUrl("sidebar/ws/agent-opens");
+-					url.search = new URLSearchParams({ sessionId }).toString();
+-					socket = new WebSocket(url.toString());
+-					socket.onmessage = (event) => {
+-						if (typeof event.data !== "string") return;
+-						try {
+-							const request = JSON.parse(event.data);
+-							if (request === null || typeof request !== "object") return;
+-							if (request.kind !== "file" && request.kind !== "folder" && request.kind !== "url") return;
+-							if (typeof request.target !== "string" || request.target === "") return;
+-							if (store.getPrefs().agentOpenTools !== true) return;
+-							const scope = { sessionId };
+-							const title = typeof request.title === "string" && request.title !== "" ? request.title : void 0;
+-							if (request.kind === "url") try {
+-								ctx.get("sidebarRight")?.openTab("browser", { params: { url: request.target } });
+-							} catch {}
+-							else if (request.kind === "folder") ctx.get("betterSidebar")?.openTab({
+-								type: "editor",
+-								title,
+-								path: request.target,
+-								id: `editor:${request.target}`,
+-								meta: { dir: true }
+-							}, scope);
+-							else ctx.get("betterSidebar")?.openFile(scope, request.target, title);
+-						} catch {}
+-					};
+-					socket.onclose = () => {
+-						if (closed) return;
+-						failures += 1;
+-						if (failures >= FAILURE_LIMIT) {
+-							console.error("[dsh-better-sidebar] agent-opens connection failed; stopping reconnect loop", sessionId);
+-							return;
+-						}
+-						retry = window.setTimeout(connect, 2e3);
+-					};
+-					socket.onerror = () => {
+-						socket?.close();
+-					};
+-				};
+-				connect();
+-				return () => {
+-					closed = true;
+-					window.clearTimeout(retry);
+-					socket?.close();
+-				};
+-			}, [
+-				sessionId,
+-				ctx,
+-				store
+-			]);
+-			/**
+ 			* Subagent auto-activation: the moment the current conversation spawns its
+ 			* FIRST direct subagent (a 0 → N transition on the list feed), the "auto
+ 			* open" pref is on, and the Tasks tab type is enabled in settings, activate
+@@ -29800,23 +29615,7 @@
+ 		function useSessionRoot(ctx, sessionId, options = {}) {
+ 			const { visible = true } = options;
+ 			const summaryCwd = (0, react.useSyncExternalStore)((0, react.useMemo)(() => (listener) => ctx.sessions.list.subscribe(listener), [ctx]), () => sessionId === void 0 ? void 0 : ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd);
+-			const slot = sessionId === void 0 ? void 0 : slotOf(sessionId);
+-			const subscribe = (0, react.useCallback)((listener) => {
+-				if (slot === void 0) return () => {};
+-				slot.listeners.add(listener);
+-				return () => {
+-					slot.listeners.delete(listener);
+-				};
+-			}, [slot]);
+-			(0, react.useSyncExternalStore)(subscribe, () => slot?.version ?? 0, () => slot?.version ?? 0);
+-			(0, react.useEffect)(() => {
+-				if (slot === void 0 || !visible) return void 0;
+-				retain(slot);
+-				return () => {
+-					release(slot);
+-				};
+-			}, [slot, visible]);
+-			return slot?.cwd ?? summaryCwd;
++			return summaryCwd;
+ 		}
+ 		//#endregion
+ 		//#region src/client/Sidebar.tsx
+@@ -32321,16 +32120,13 @@
+ 			const [prefs, setPrefs] = (0, react.useState)(() => store.getPrefs());
+ 			const [error, setError] = (0, react.useState)(null);
+ 			const [settingsFor, setSettingsFor] = (0, react.useState)(null);
+-			const [addPluginsOpen, setAddPluginsOpen] = (0, react.useState)(null);
+ 			const optimisticRef = (0, react.useRef)(prefs);
+ 			(0, react.useEffect)(() => {
+ 				optimisticRef.current = prefs;
+ 			}, [prefs]);
+ 			const [tabs, setTabs] = (0, react.useState)(() => [...service.getTabs()].sort(tabOrder));
+-			const [viewers, setViewers] = (0, react.useState)(() => [...service.getFileViewers()].sort(viewerOrder));
+ 			(0, react.useEffect)(() => service.subscribe(() => {
+ 				setTabs([...service.getTabs()].sort(tabOrder));
+-				setViewers([...service.getFileViewers()].sort(viewerOrder));
+ 			}), [service]);
+ 			const revisionRef = (0, react.useRef)(void 0);
+ 			const dirtyRef = (0, react.useRef)(false);
+@@ -32388,14 +32184,6 @@
+ 			/** Flip one per-tab enable switch (merge into the tabsEnabled map). */
+ 			const onToggleTab = (id, next) => {
+ 				applyPref({ tabsEnabled: {
+-					...optimisticRef.current.tabsEnabled,
+-					[id]: next
+-				} });
+-			};
+-			/** Flip one per-viewer enable switch (merge into the viewersEnabled map). */
+-			const onToggleViewer = (id, next) => {
+-				applyPref({ viewersEnabled: {
+-					...optimisticRef.current.viewersEnabled,
+ 					[id]: next
+ 				} });
+ 			};
+@@ -32432,10 +32220,6 @@
+ 				}
+ 				applyPref({ [toggle.key]: raw });
+ 				return raw;
+-			};
+-			/** Commit the free-form custom CSS (the user-space escape hatch). */
+-			const commitCustomCss = (raw) => {
+-				applyPref({ customCss: raw });
+ 			};
+ 			/** Persist one plugin-owned setting of one descriptor (merged into the pluginSettings blob). */
+ 			const applyPluginSetting = (descriptorId, key, value) => {
+@@ -32533,43 +32317,6 @@
+ 					}),
+ 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+ 						className: SideCardSection_module_css_default.group,
+-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+-							className: SideCardSection_module_css_default.groupHeading,
+-							children: t("settingsGeneralTitle")
+-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+-							className: SideCardSection_module_css_default.row,
+-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+-								className: SideCardSection_module_css_default.rowText,
+-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-									className: SideCardSection_module_css_default.title,
+-									children: t("settingsOpenToolsTitle")
+-								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-									className: SideCardSection_module_css_default.desc,
+-									children: t("settingsOpenToolsDesc")
+-								})]
+-							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(Switch, {
+-								label: t("settingsOpenToolsTitle"),
+-								checked: prefs.agentOpenTools,
+-								onChange: (next) => {
+-									applyPref({ agentOpenTools: next });
+-								}
+-							})]
+-						})]
+-					}),
+-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+-						className: SideCardSection_module_css_default.group,
+-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+-							className: SideCardSection_module_css_default.groupHeading,
+-							children: t("settingsCustomCssTitle")
+-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(CssDraft, {
+-							value: prefs.customCss,
+-							label: t("settingsCustomCssTitle"),
+-							placeholder: t("settingsCustomCssPlaceholder"),
+-							onCommit: commitCustomCss
+-						}, prefs.customCss)]
+-					}),
+-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+-						className: SideCardSection_module_css_default.group,
+ 						children: [
+ 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+ 								className: SideCardSection_module_css_default.groupHeading,
+@@ -32627,7 +32374,7 @@
+ 							className: SideCardSection_module_css_default.grid,
+ 							children: [tabs.map((tab) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(react.Fragment, { children: renderCard({
+ 								title: textOf(tab.title),
+-								desc: tab.id,
++								desc: textOf(tab.description),
+ 								icon: iconOf(tab.icon, 16),
+ 								enabled: prefs.tabsEnabled[tab.id] !== false,
+ 								onToggle: (next) => {
+@@ -32636,69 +32383,7 @@
+ 								onOpenSettings: prefs.tabsEnabled[tab.id] !== false && hasSettings(tab) ? () => {
+ 									setSettingsFor(tab);
+ 								} : void 0
+-							}) }, tab.id)), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+-								type: "button",
+-								className: clsx(SideCardSection_module_css_default.card, SideCardSection_module_css_default.addCard),
+-								onClick: () => {
+-									setAddPluginsOpen("tab");
+-								},
+-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+-									className: SideCardSection_module_css_default.cardTop,
+-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-										className: SideCardSection_module_css_default.cardIconChip,
+-										children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPlusOutlineRegular, { size: 16 })
+-									}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-										className: SideCardSection_module_css_default.cardTitle,
+-										children: t("addPluginsTabCard")
+-									})]
+-								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-									className: SideCardSection_module_css_default.cardDesc,
+-									children: t("addPluginsTabCardDesc")
+-								})]
+-							})]
+-						})]
+-					}),
+-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+-						className: SideCardSection_module_css_default.group,
+-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+-							className: SideCardSection_module_css_default.groupHeading,
+-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("settingsViewersTitle") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-								className: SideCardSection_module_css_default.count,
+-								children: viewers.length
+-							})]
+-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+-							className: SideCardSection_module_css_default.grid,
+-							children: [viewers.map((viewer) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(react.Fragment, { children: renderCard({
+-								title: textOf(viewer.title) || viewer.id,
+-								desc: viewer.exts.length === 0 ? t("settingsViewerCatchAll") : viewer.exts.join(" · "),
+-								icon: iconOf(viewer.icon, 16),
+-								enabled: prefs.viewersEnabled[viewer.id] !== false,
+-								onToggle: (next) => {
+-									onToggleViewer(viewer.id, next);
+-								},
+-								onOpenSettings: prefs.viewersEnabled[viewer.id] !== false && hasSettings(viewer) ? () => {
+-									setSettingsFor(viewer);
+-								} : void 0
+-							}) }, viewer.id)), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+-								type: "button",
+-								className: clsx(SideCardSection_module_css_default.card, SideCardSection_module_css_default.addCard),
+-								onClick: () => {
+-									setAddPluginsOpen("viewer");
+-								},
+-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+-									className: SideCardSection_module_css_default.cardTop,
+-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-										className: SideCardSection_module_css_default.cardIconChip,
+-										children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPlusOutlineRegular, { size: 16 })
+-									}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-										className: SideCardSection_module_css_default.cardTitle,
+-										children: t("addPluginsViewerCard")
+-									})]
+-								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+-									className: SideCardSection_module_css_default.cardDesc,
+-									children: t("addPluginsViewerCardDesc")
+-								})]
+-							})]
++							}) }, tab.id))]
+ 						})]
+ 					}),
+ 					settingsFor !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
+@@ -32745,13 +32430,6 @@
+ 							service
+ 						})
+ 					}),
+-					addPluginsOpen !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(AddPluginModal, {
+-						service,
+-						onClose: () => {
+-							setAddPluginsOpen(null);
+-						},
+-						kind: addPluginsOpen
+-					}),
+ 					error !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+ 						className: SideCardSection_module_css_default.error,
+ 						role: "alert",
+@@ -32863,6 +32541,7 @@
+ 				} catch {}
+ 			};
+ 			const sidebarStore = createSidebarStore();
++			sidebarStore.setPrefs({ ...sidebarStore.getPrefs(), autoOpenSubagent: false, autoOpenJobs: false });
+ 			const service = createBetterSidebarService(sidebarStore);
+ 			ctx.provide("betterSidebar", service);
+ 			const nativeRecords = createNativeTabRecords();
+@@ -32879,7 +32558,6 @@
+ 					fail(`native ${phase}`, error);
+ 				}
+ 			}), "dsh-better-sidebar: native right-Sidebar registrations");
+-			ctx.effect(() => registerBottomToggle(ctx, sidebarStore), "dsh-better-sidebar: bottom-workbench toggle");
+ 			ctx.effect(() => () => {
+ 				nativeSurface.dispose();
+ 				service.setSurface(void 0);

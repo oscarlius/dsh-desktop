@@ -64,7 +64,14 @@ interface InjectionsEvent {
   readonly error?: string
 }
 
-type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | PlatformLoginEvent | InjectionsEvent | { type: 'permission'; requestId: number; action: DesktopPermissionAction; permission: DesktopPermission } | { type: 'logging-config'; requestId: number; error?: string } | { type: 'browser-access'; requestId: number; error?: string } | { type: 'notification'; notification: DesktopNotification } | { readonly type: 'shutdown-complete' } | { readonly type: 'desktop-action'; readonly action: 'restart' | 'terminal' } | {
+interface P7SessionVaultEvent {
+  readonly type: 'p7-session-vault'
+  readonly requestId: number
+  readonly request: { readonly action: 'load' | 'save' | 'clear'; readonly origin: string; readonly refreshToken?: string }
+}
+interface P7AccountBrowserEvent { readonly type: 'p7-account-browser'; readonly url: string }
+
+type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | PlatformLoginEvent | InjectionsEvent | P7SessionVaultEvent | P7AccountBrowserEvent | { type: 'permission'; requestId: number; action: DesktopPermissionAction; permission: DesktopPermission } | { type: 'logging-config'; requestId: number; error?: string } | { type: 'browser-access'; requestId: number; error?: string } | { type: 'notification'; notification: DesktopNotification } | { readonly type: 'shutdown-complete' } | { readonly type: 'desktop-action'; readonly action: 'restart' | 'terminal' } | {
   readonly type: 'update-tasks'
   readonly requestId: number
   readonly active: boolean
@@ -119,6 +126,16 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
     case 'injections':
       return Number.isSafeInteger(candidate.requestId) && (candidate.error === undefined || typeof candidate.error === 'string')
         && (candidate.injections === undefined || Array.isArray(candidate.injections))
+    case 'p7-session-vault': {
+      const request = candidate.request
+      return Number.isSafeInteger(candidate.requestId) && (candidate.requestId as number) > 0
+        && typeof request === 'object' && request !== null
+        && ['load', 'save', 'clear'].includes(String(Reflect.get(request, 'action')))
+        && typeof Reflect.get(request, 'origin') === 'string'
+        && (Reflect.get(request, 'refreshToken') === undefined || typeof Reflect.get(request, 'refreshToken') === 'string')
+    }
+    case 'p7-account-browser':
+      return isPlatformLoginDestination(candidate.url) && new URL(candidate.url as string).protocol === 'https:'
     default:
       return false
   }
@@ -219,6 +236,8 @@ export class DesktopHostProcess {
     private readonly onPlatformSession?: (session: PlatformSession | null) => void,
     private readonly onPlatformLogin?: (request: DesktopPlatformLoginRequest) => void,
     private readonly onDiagnostic?: (input: LogInput) => void,
+    private readonly onP7SessionVault?: (request: P7SessionVaultEvent['request']) => Promise<{ refreshToken?: string }>,
+    private readonly onP7AccountBrowser?: (url: string) => void,
   ) {}
 
   /**
@@ -261,6 +280,18 @@ export class DesktopHostProcess {
         if (!this.stopping && !this.failureReported) {
           this.onPlatformLogin?.(message.action === 'open' ? { action: 'open', url: message.url } : { action: 'close', focus: message.focus })
         }
+      }
+      else if (message.type === 'p7-session-vault') {
+        const reply = (value: object): void => {
+          if (child.connected && !this.stopping && !this.failureReported) child.send({ type: 'p7-session-vault-result', requestId: message.requestId, ...value }, () => {})
+        }
+        void Promise.resolve().then(() => {
+          if (!this.onP7SessionVault || this.stopping || this.failureReported) throw new Error('P7 encrypted storage is unavailable')
+          return this.onP7SessionVault(message.request)
+        }).then(result => reply({ result }), () => reply({ error: 'P7 encrypted storage is unavailable' }))
+      }
+      else if (message.type === 'p7-account-browser') {
+        if (!this.stopping && !this.failureReported) this.onP7AccountBrowser?.(message.url)
       }
       else if (message.type === 'shutdown-complete') {
         if (this.stopping) this.shutdownCompleted = true

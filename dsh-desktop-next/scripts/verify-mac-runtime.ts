@@ -24,7 +24,7 @@ const runCommand: RunCommand = (command, args) => {
  * and pnpm on the host's CPU; and, for a signed release, hardened-runtime signatures with the
  * upstream entitlement policy: JIT for Node, unsigned executable memory only for x64 Node, no
  * entitlements for Python.
- * @param appPath - Mounted `DSH NEXT.app`.
+ * @param appPath - Mounted application bundle.
  * @param signed - Whether the release carries Developer ID signatures.
  * @param run - Command executor.
  * @param readEntitlements - Entitlement reader for one signed file.

@@ -1,0 +1,474 @@
+{
+  "schemaVersion": 1,
+  "upstreamCommit": "e910c86de21159bf37abaf4f62342378a2c592a3",
+  "files": [
+    {
+      "path": "package.json",
+      "betaSha256": "f6157bddc015a7f74b482f81f434d8f9ba39f6fe43f961369773d4d4aeff7ff5",
+      "nextSha256": "822a2639649243e9c124217e73f73f62b14780fb6147a2af8bf12b2999fa7be9",
+      "reason": "Company transport/build metadata, P7 workspaces and release commands; ordinary Next keeps upstream identity."
+    },
+    {
+      "path": "scripts/company-differential-transfer-smoke.mjs",
+      "betaSha256": "c1090b72a4a8e8f8a54123630124e767097f8ec9cfd7d7bb6adccf0449c7e668",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/company-differential-transfer-smoke.spec.mjs",
+      "betaSha256": "bbb42c9b76ea196d705b84825debbee1bda3e21d05c1dfa0d522353769b34620",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/company-differential-upgrade-smoke.ps1",
+      "betaSha256": "bb929621afa9c2f30723e6e4004fcf481395e4fd639f3d2113251a8dd86f9be4",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/company-differential-upgrade-smoke.spec.mjs",
+      "betaSha256": "3063d11fd8ecfd0d7c7c88d12cc09b8d9960317142d6ea4eaff20191f6e12d4c",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/company-package-options.ts",
+      "betaSha256": "ad80fca20c26f155ba30f2c159676abe73bb7bf5f982fde5a92f4dd07366d7d8",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/company-prepare-pack.ts",
+      "betaSha256": "46f813777b0456f5abac832b88bca455f6dfb5c7c845e5f8a493425441c23aa3",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/company-test-windows-signature.ps1",
+      "betaSha256": "b012e3ef52965dfac3870d99f05f10b5fecb59e4a21f59532aa67d32d4807600",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/company-test-windows-verify.mjs",
+      "betaSha256": "b97d88e3a04dce3736b182102adff7e50ab3b9d8306426432686d9000f13e54f",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/company-update-before-pack.ts",
+      "betaSha256": "6db995342bda74537f261a1aaa183e680c73547db669b44f8b1ef5a3d2fda2ca",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/package-company-release.mjs",
+      "betaSha256": "92d0d30245ec3ab4909f3dbb41c06c1010a79002c6ee7a512aeb069b1423479c",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/package.ts",
+      "betaSha256": "72fe4754c2ac47119e90354532950f03c3c1af0204cb99c59a8eaf0de5a02258",
+      "nextSha256": "a8e1c1962dd025916d31631127454100dd60e44173ed28455b562713758dfb60",
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/packaged-host-smoke.mjs",
+      "betaSha256": "2018b043a66eead6eb622a4cb4b9f0409fcc39b6b87537d2b708ef2afe6d7c95",
+      "nextSha256": "07152d5bcfb278217d0fa085137f0ce531c94df8a9108601a068c94e9a8467b9",
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/prepare-payload.ts",
+      "betaSha256": "5147dfac9c8ec9a2b64f25a0c391b9b0ec14ad96d8f4c24b7ceffd65c3fe19cd",
+      "nextSha256": "fccb0ddd093577a9c324299cd74bd46d722e93f74dbcb8a6db7fc6163d58c3b2",
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/verify-company-host.mjs",
+      "betaSha256": "75a1f75bd1f367d625e270aea59238e11cd4c80e416ce73f7f35a9a58d9a3225",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/verify-fuses.ts",
+      "betaSha256": "670f2640816f9207778e9ddd4637318f2a2ee0db3f37bb27f056251e30fb9ef6",
+      "nextSha256": "1a8078b7f1cb145aea65ca687b69ba7920fc40476ecded7e159c79e4be4995c4",
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/verify-p7-search-live-profile.mjs",
+      "betaSha256": "1b42576915970b718db18990be38925cb1ebcc5cbd10324fe4dc080b305983fe",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/verify-p7-search-profile.mjs",
+      "betaSha256": "4b06804b65a12031193ef81d1b3ad0180c9a9441febbf78c1f0047e8b62d6297",
+      "nextSha256": null,
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "scripts/verify-packaged.ts",
+      "betaSha256": "247e00ef996ba5916a9cc6635ed8d4e14dbe15b799dcc1df73019ffb7e7a80a2",
+      "nextSha256": "81923511ebb8f12c66f0140987fccee84ffcb2343ef11a5f5999a5196be3ec7f",
+      "reason": "Company packaging, payload verification or isolated acceptance; ordinary Next retains its upstream release flow."
+    },
+    {
+      "path": "src/appearance-plugin-compat.ts",
+      "betaSha256": "55a1f79181fc03371693916a943a85e9017c9d3e1bba9492f40ba96bb5ac6369",
+      "nextSha256": null,
+      "reason": "Retained exact legacy appearance-plugin compatibility fixture and regression tests; not a Next Host boot entry."
+    },
+    {
+      "path": "src/client/company-transcript-defaults.ts",
+      "betaSha256": "f3f37563cb2ad2b209a6dccccc6b6b8064b83bcb5e49b73d5ecc030ed2a64073",
+      "nextSha256": null,
+      "reason": "Company first-run StreamFold preferences and client integration, preserving saved preferences."
+    },
+    {
+      "path": "src/client/index.ts",
+      "betaSha256": "c5909f937e098b26b950f06c29a6f59d8013ba29a4b62e592f7264b98dcb8a2a",
+      "nextSha256": "82b274bdefda11f01d5144a92cf54ff0b09672e9569fae2a1b488eb523b7aa25",
+      "reason": "Company first-run StreamFold preferences and client integration, preserving saved preferences."
+    },
+    {
+      "path": "src/client/settings.tsx",
+      "betaSha256": "573ca968f5b1e6b7e01285999613ee8752d68d0399e1ba6e140184111e868fc8",
+      "nextSha256": "28bbe53e0f9a43762167ea06699ec8b36d4a1500cc4868627d0025ba79af6883",
+      "reason": "Company display/build fields in the Desktop UI, retaining the transport SemVer for service requests."
+    },
+    {
+      "path": "src/client/updates.tsx",
+      "betaSha256": "a5681449a610428d9636af29145021430f4a3e47b01908a0717cbb3395d76a92",
+      "nextSha256": "280e4676b243c70a882b588dff4a07f90cd5e36fffc850689f6c2e6677e0d2ef",
+      "reason": "Company display/build fields in the Desktop UI, retaining the transport SemVer for service requests."
+    },
+    {
+      "path": "src/company-build-version.ts",
+      "betaSha256": "7f9a784fa2c929655268968c01c4449ac8948b25ae926c72c9ed06917ed22f1f",
+      "nextSha256": null,
+      "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
+    },
+    {
+      "path": "src/company-differential-update.ts",
+      "betaSha256": "f23d2faa33a80d12847932c95c5d9d200833b7d6997d6c166fe31a14fcbcfb2c",
+      "nextSha256": null,
+      "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
+    },
+    {
+      "path": "src/company-update-check.ts",
+      "betaSha256": "1ee6d3028aa0626254c2621d512a5c5a28bd3b810d5f7cc57041bc7f8af78d8e",
+      "nextSha256": null,
+      "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
+    },
+    {
+      "path": "src/company-update-installer.ts",
+      "betaSha256": "9a2605bc36baa0930651781e4650725c54e573cd3483ebd961d63060efdbff76",
+      "nextSha256": null,
+      "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
+    },
+    {
+      "path": "src/company-updates.ts",
+      "betaSha256": "fe27f25f5ce17112d19a2ec250f14e9ce000a7471c5dfecac37792af722be6e0",
+      "nextSha256": null,
+      "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
+    },
+    {
+      "path": "src/desktop-contract.ts",
+      "betaSha256": "5a5fc168fa6da52b8861689f642be20866688e11b4499a7087553a8e951285a3",
+      "nextSha256": "caad5abadaa3df8d17102bd3b5424b22d1c33bd117dbccb7ab4820cb20fdb77b",
+      "reason": "Company display/build fields in the Desktop UI, retaining the transport SemVer for service requests."
+    },
+    {
+      "path": "src/desktop-runtime.ts",
+      "betaSha256": "76d6b1e29f2318ec6caa2b556d8e488434223ee973e292fb77ced00bbced2f8b",
+      "nextSha256": "2c0975667e593f92a412b30e12ba63a59d066d4599ec8f40d34eb2aa01e32afe",
+      "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
+    },
+    {
+      "path": "src/extensions.ts",
+      "betaSha256": "1326531b3b9abf7ecdcc8b7a8abac3c6beffd98488f091c63bee5c30a66919f7",
+      "nextSha256": "653e39bb476e6545976e242dfac5ed21e0b469adaf3795cd85dc146754f6f8d5",
+      "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
+    },
+    {
+      "path": "src/host-process.ts",
+      "betaSha256": "a8a621053f9ad882813a789288dddf86597fb5da70f7d84a136a9f9787831bb7",
+      "nextSha256": "a5cb75e524f3a3c0ad48e6007d592896d49709b2e8ee0f3bb73c586964bda8e7",
+      "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
+    },
+    {
+      "path": "src/host-self-fetch.ts",
+      "betaSha256": "d93fbb1c659b92ec80690ce340a7120a0f0b8a26d3acc5eee1827b4700257bf9",
+      "nextSha256": null,
+      "reason": "Company Host authenticated loopback self-fetch capability for the public Mnemon bridge; ordinary Next has no personal-memory sync service."
+    },
+    {
+      "path": "src/host/index.ts",
+      "betaSha256": "8e0526cb38ac1072039c34be34dfd86badb19e7c8534ecdc4a68ec6a9e621fe8",
+      "nextSha256": "af518d333cc0269a5f0cabe6e70a071de3c7405f4bb460f14dca55f6518ef82e",
+      "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
+    },
+    {
+      "path": "src/main.ts",
+      "betaSha256": "d85de227843410094f4a69b486f71445a2c472e969a300b6a7fbe4eafaa77091",
+      "nextSha256": "e4a50b19ab3e30cbe0dd8032dc3a02552450ef52e0649ee185d4abe2385b5ac5",
+      "reason": "Native company credential/browser lifecycle, company Host policy and installed P7 plugin runtime closure."
+    },
+    {
+      "path": "src/p7-account-browser.ts",
+      "betaSha256": "d55c4f87aaeac095edcbb689be5e8d1b7738c241ab5c1d35da0654324a1ae8a6",
+      "nextSha256": null,
+      "reason": "Native company Feishu authorization and OS-encrypted refresh-credential bridge."
+    },
+    {
+      "path": "src/p7-session-vault.ts",
+      "betaSha256": "ddc3e457c53527161ac0c332a1cd865d5f7037ba5e1efbc682e11e07604766c6",
+      "nextSha256": null,
+      "reason": "Native company Feishu authorization and OS-encrypted refresh-credential bridge."
+    },
+    {
+      "path": "src/product-identity.ts",
+      "betaSha256": "370c061bee0ad95692d01d025b9610795f768c836fa98878c2f70ba868c434d3",
+      "nextSha256": null,
+      "reason": "Sealed company appId, data-home and transport/build identity; ordinary Next remains independent."
+    },
+    {
+      "path": "src/profiles.ts",
+      "betaSha256": "cd5753bdab89a722b3ff7904ad1af9e20c0529f4231d3c323ab65b4d978625d1",
+      "nextSha256": "4557ea1aaf820283095f24f0cbfa3b23928bbdda0674a7dd9e13f905cf15cd41",
+      "reason": "Company P7 and StreamFold composition, preserved Profile identity, first-run market and sealed login/account UI policy."
+    },
+    {
+      "path": "src/company-plugin-defaults.ts",
+      "betaSha256": "b2c41350f316d6ebc4bf90e24cd993fd53f62ba9f1f71387cf6fa9593392e436",
+      "nextSha256": "0691e69ccac54ad3219a200f521f2bd05db4baa0ab58d8a057a6389bcc4a9689",
+      "reason": "Company-only first-run plugin composition, local Mnemon data/CLI resolution and user-owned Profile override precedence; ordinary Next gate remains disabled."
+    },
+    {
+      "path": "src/update-download.ts",
+      "betaSha256": "54b24421245c0e7d1b44573a4ce382827662d467ae9bd696220158e9564965dd",
+      "nextSha256": null,
+      "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
+    },
+    {
+      "path": "src/update-installer.ts",
+      "betaSha256": "c9c507329865f72e2f2b62e3253382c91aa2a048d81fa0398e8488cc75a5d52f",
+      "nextSha256": "2c346cfed643254593af69860db12f814297313b2480b7313ddd76f1d665dbd1",
+      "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
+    },
+    {
+      "path": "src/updates.ts",
+      "betaSha256": "e995c914b853cb2c3eb0d077d09c5ef2fc60da8750926d70b35e14520ec79945",
+      "nextSha256": "917b2a48c6a7379e94f5219efb805a2bd76b673b186a14f3f19faa4dbfbb1dab",
+      "reason": "Company P7 updater adapter, pinned credential-free artifact and same-version fallback."
+    },
+    {
+      "path": "tests/account-continuation.spec.ts",
+      "betaSha256": "6e18e1177ed3ce54024bc5e341ae3333effe8b670bf0e18077da7e158b63bbe7",
+      "nextSha256": "a60cc34fd4816b8e953b9abe1a1df3a9c3b6e333765502055c7417f314178bcb",
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/appearance-plugin-compat.spec.ts",
+      "betaSha256": "86bffee9d1d8ae8cbcd8c7f09b638c550edede2b35e28d94853b886e102219e5",
+      "nextSha256": null,
+      "reason": "Retained exact legacy appearance-plugin compatibility fixture and regression tests; not a Next Host boot entry."
+    },
+    {
+      "path": "tests/company-build-version.spec.ts",
+      "betaSha256": "b094ab0a5a48cc28017d66ec4f1a3b31c06ac67aa687d44bab7f1f47761d4b18",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-differential-update.spec.ts",
+      "betaSha256": "3a4695514f0ca43d4f794a64e0812ca262dd8b100d2d21ea177354164f791a45",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-packaging.spec.ts",
+      "betaSha256": "b0a5f0fc425450550d63e30be2dd83ffd6512076fbcae98963a805cc8e23314b",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-profile-composition.spec.ts",
+      "betaSha256": "856fae9d2af0ad148db8b4432eb99d2643f72b488d62efbb03d76daf145029b6",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-release-package.spec.mjs",
+      "betaSha256": "f53e0a4848fd6b180875a435bd06469e958705bbd8c20f44b50b491694c5cc16",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-test-flavor.spec.ts",
+      "betaSha256": "cb43594ebb0628ba61a327cbcf96fd9cde74e2f0e8ab850670e462b826f60984",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-transcript-defaults.spec.ts",
+      "betaSha256": "21547f1cc29fe86789877ae58c69ac0006915031209b89035d7bfca36cce684f",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-update-check.spec.ts",
+      "betaSha256": "b0286f89b441f839a05c0ab4087594b8fdee80a271017c5f6bb4ac75eb5f3891",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-update-download.spec.ts",
+      "betaSha256": "e711a79913ced27187c5418051f81b44e1bb7d7f08a3f889431abfd0ada53830",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/company-update-installer.spec.ts",
+      "betaSha256": "6626f51f9c01d2048f859e4106b5ca1e888112873f482eb166938671683fdd51",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/fixtures/dsh-any-background-0.3.9-index.js.gz",
+      "betaSha256": "0f44ada56747a1dcd852efdf6f816af527c6e7edbd11664a8a684a638d1c8c9b",
+      "nextSha256": null,
+      "reason": "Retained exact legacy appearance-plugin compatibility fixture and regression tests; not a Next Host boot entry."
+    },
+    {
+      "path": "tests/fixtures/dsh-any-background-0.3.9.LICENSE",
+      "betaSha256": "f310eeb36cf185f0aeda8b39c2e61107ac2993847f80bc7856f58c23b4409807",
+      "nextSha256": null,
+      "reason": "Retained exact legacy appearance-plugin compatibility fixture and regression tests; not a Next Host boot entry."
+    },
+    {
+      "path": "tests/fixtures/dsh-any-background-0.3.9.provenance.md",
+      "betaSha256": "465d9c70404bc3a6e5605c79d64d4d95feff5e6efbb5a934246fad324f0baa11",
+      "nextSha256": null,
+      "reason": "Retained exact legacy appearance-plugin compatibility fixture and regression tests; not a Next Host boot entry."
+    },
+    {
+      "path": "tests/helpers/symbolic-link-lstat.ts",
+      "betaSha256": "b1ee3f251064c2417aafb84b2a7be3603bd6da32c846a455c6dc75eba526f7d1",
+      "nextSha256": null,
+      "reason": "Retained Windows-specific legacy test helper; not shipped as a runtime entry."
+    },
+    {
+      "path": "tests/host-self-fetch.spec.ts",
+      "betaSha256": "c2a7a932ad65c66a7663256ff9b6a2e2f273dfbd343a3f82ddbc8bc16c99541e",
+      "nextSha256": null,
+      "reason": "Retained company loopback capability regression helper; independent of the new Host entry."
+    },
+    {
+      "path": "tests/main-lifecycle.spec.ts",
+      "betaSha256": "fc4c4cd960461056caa8d69822bc1c318469fdd7e1d05d91f401f35ef6f46008",
+      "nextSha256": "c3cb4b923491a1d123fb62789c4c6cd3d8b30194a9fca5add0f119595b5de7fe",
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/manual/p7-vault-electron.mjs",
+      "betaSha256": "cefaf05eb7fd6ce5e51efc7211c38e1c651218bbf5486a13cffcb4f2d9864fa1",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/p7-session-vault.spec.ts",
+      "betaSha256": "20340a84984cb177454d5485380605abaf816b467f4488cc6a1faa0f94a8430e",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/package.spec.ts",
+      "betaSha256": "bb474ad555d2f6f24728af04d1abeb531eb665f944daf637711b35f54d1a285e",
+      "nextSha256": "af295b2b60a8efe5a5ca35e91fde38f6970f7cd76092225563ef19ccd383dc41",
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/product-manifest.spec.ts",
+      "betaSha256": "246910ea9fbaad3480ba5dc3ec07a990154e5e07fb36dd145e50e5228310edbe",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/profiles.spec.ts",
+      "betaSha256": "920d913d1e04e4a86f86190acf272a32e1232f24cf1e37d2a059638fec022d0e",
+      "nextSha256": "8197562b98bfe9f9d580eabf135f29041bd965003e6545eaaffe9f6ef4f61850",
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/update-download.spec.ts",
+      "betaSha256": "ce7fd56a3c5645ada654c49f4309aa0de926680b2fdb710bcbb7ee0714495012",
+      "nextSha256": null,
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/update-installer.spec.ts",
+      "betaSha256": "b9229dcffc91cba6f3dd2b1f31506ea06cee0f2aa2e615e3cafe7d470dae8eaa",
+      "nextSha256": "cf3cf06061958efec9cbae38cbee36f54e7004b3609b716dce00e08126e28d91",
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/updates.spec.ts",
+      "betaSha256": "c3d54771c243bfc4157fc8a5e3dd05ce15e710e19b272af73af41e62b05a5b41",
+      "nextSha256": "4c5c18cb9c8deb629370c3e581c733f7af3d64fa936d39b805b3e7b05c081759",
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tests/verify-fuses.spec.ts",
+      "betaSha256": "7b510e553691c881117117c8f3490a6cb8610488d7d3c0f2fde9b71ea1f45ba6",
+      "nextSha256": "b91ee93cbd92d70a6901fdfb6ed1b880d880129295c388759c498e7e7817a616",
+      "reason": "Company regression coverage for login, Profile preservation, version presentation or credential-free differential updates."
+    },
+    {
+      "path": "tsdown.config.ts",
+      "betaSha256": "fa023020225d03e05e2946f79542ce131a8f75ea9729bda2cfa9ce5a49bb5a8e",
+      "nextSha256": "2a8c36736f3054d9b44f0d359787140e612d1f45b2eabe60e4083d7f64444b4d",
+      "reason": "Stable product-identity runtime entry required by the packaged company smoke verifier."
+    },
+    {
+      "path": "scripts/verify-company-mac-upgrade.mjs",
+      "reason": "Company Mac update channel and native installation acceptance; ordinary Next keeps the upstream feed and identity.",
+      "betaSha256": "2e46a354ee0df036b788d0bb95032203ac4324b8bef2e3bf7e26521673355427",
+      "nextSha256": null
+    },
+    {
+      "path": "tests/company-mac-updates.spec.ts",
+      "reason": "Company Mac update channel and native installation acceptance; ordinary Next keeps the upstream feed and identity.",
+      "betaSha256": "e0ef2681032f91fa601ffd500dd7bcd3737e06fac773cfb07b27f91b8a91e87c",
+      "nextSha256": null
+    },
+    {
+      "path": "src/update-state.ts",
+      "betaSha256": "992a4dbfd94cdcad73a90bf362070678ab35c8d923d1f1d40704fe4509912304",
+      "nextSha256": "a4e95bd4b90660c887e9d944d791dc298f592fec3effd7fd05f666a101a874a7",
+      "reason": "Company managed downloads wait for the next normal launch; personal Next retains explicit install-and-restart."
+    },
+    {
+      "path": "src/webserver.ts",
+      "betaSha256": "0ade86e0263cf28a30cba08359ddf9e255a3cfa86498053c2f6950941ceec420",
+      "nextSha256": "078509b25a09da1e4e63aace785bd2f52ae5008c0a3b92e78c7ca544dc143312",
+      "reason": "Company Host-only loopback capability allows trusted theme and memory RPC fetches while ordinary browser access remains disabled."
+    },
+    {
+      "path": "tests/compaction-window.spec.ts",
+      "betaSha256": "ed6760f35e6e02b3d4c7186ae1ebaf7a23e5e56c3bd0e63295885c069314727d",
+      "nextSha256": null,
+      "reason": "Company RC1 regression coverage for the existing bounded compaction and installation-plugin settings compatibility patches; ordinary Next retains its upstream runtime."
+    },
+    {
+      "path": "tests/plugin-manager-installation-config.spec.ts",
+      "betaSha256": "76c8332711d9eec5d8734ba7057e71bf698c8b65cbbb954b930abbee248cd95f",
+      "nextSha256": null,
+      "reason": "Company RC1 regression coverage for the existing bounded compaction and installation-plugin settings compatibility patches; ordinary Next retains its upstream runtime."
+    }
+  ]
+}

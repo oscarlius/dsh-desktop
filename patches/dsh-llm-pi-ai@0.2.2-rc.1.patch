@@ -1,0 +1,69 @@
+diff --git a/lib/index.js b/lib/index.js
+index f0836c28c7..a17f083385 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -1072,6 +1072,7 @@ const profile = z.object({
+ 		"websocket-cached",
+ 		"auto"
+ 	]),
++	rejectRedirects: z.boolean(),
+ 	timeoutMs: z.natural(),
+ 	websocketConnectTimeoutMs: z.natural(),
+ 	streamIdleTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
+@@ -1127,6 +1128,16 @@ function resolveProfiles(providers, validation = "strict") {
+ 		if (source.baseURL !== void 0 && source.baseURL.length === 0) throw new Error(`llm-pi-ai: provider "${provider}" has an empty baseURL`);
+ 		if (source.displayName !== void 0 && source.displayName.length === 0) throw new Error(`llm-pi-ai: provider "${provider}" has an empty displayName`);
+ 		assertValidHeaders(provider, source.headers);
++		if (source.rejectRedirects === true) {
++			if (source.baseURL === void 0) throw new Error(`llm-pi-ai: provider "${provider}" must configure an HTTPS baseURL when rejectRedirects is enabled`);
++			let baseURL;
++			try {
++				baseURL = new URL(source.baseURL);
++			} catch {
++				throw new Error(`llm-pi-ai: provider "${provider}" must configure an HTTPS baseURL when rejectRedirects is enabled`);
++			}
++			if (baseURL.protocol !== "https:" || baseURL.origin === "null") throw new Error(`llm-pi-ai: provider "${provider}" must configure an HTTPS baseURL when rejectRedirects is enabled`);
++		}
+ 		const streamIdleTimeoutMs = source.streamIdleTimeoutMs ?? 3e5;
+ 		if (!Number.isFinite(streamIdleTimeoutMs) || streamIdleTimeoutMs <= 0 || streamIdleTimeoutMs > MAX_TIMER_DELAY_MS) throw new Error(`llm-pi-ai: provider "${provider}" streamIdleTimeoutMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`);
+ 		const maxRequestImageBytes = source.maxRequestImageBytes ?? 20971520;
+@@ -1776,6 +1787,18 @@ const ANTHROPIC_TOOL_UPDATE_PLACEHOLDER = {
+ 	}
+ };
+ /** Copy profile stream knobs into pi-ai's common option vocabulary. */
++function rejectRedirectsFetch(baseURL) {
++	const origin = new URL(baseURL).origin;
++	return (input, init) => {
++		const request = new Request(input, init);
++		if (new URL(request.url).origin !== origin) throw new Error(`llm-pi-ai: redirect-safe provider request escaped configured origin ${origin}`);
++		return fetch(request, { redirect: "error" });
++	};
++}
++/**
++* Opt-in request-local transport protection for routes with an explicit HTTPS
++* origin. This never changes the process-global Fetch implementation.
++*/
+ function profileOptions(profile, reasoning, apiKey) {
+ 	const enabledReasoning = reasoning === "off" ? void 0 : reasoning;
+ 	return {
+@@ -1785,6 +1808,7 @@ function profileOptions(profile, reasoning, apiKey) {
+ 		...profile.cacheRetention === void 0 ? {} : { cacheRetention: profile.cacheRetention },
+ 		...profile.transport === void 0 ? {} : { transport: profile.transport },
+ 		...profile.timeoutMs === void 0 ? {} : { timeoutMs: profile.timeoutMs },
++		...profile.rejectRedirects === true ? { fetch: rejectRedirectsFetch(profile.baseURL) } : {},
+ 		...profile.websocketConnectTimeoutMs === void 0 ? {} : { websocketConnectTimeoutMs: profile.websocketConnectTimeoutMs },
+ 		maxRetries: 0
+ 	};
+diff --git a/lib/types/config.d.ts b/lib/types/config.d.ts
+index 479f0b53df..d9f4c19b8e 100644
+--- a/lib/types/config.d.ts
++++ b/lib/types/config.d.ts
+@@ -133,6 +133,8 @@ export interface PiAiProviderProfile {
+     cacheRetention?: CacheRetention;
+     /** Streaming transport preference. */
+     transport?: Transport;
++    /** Reject HTTP redirects for this route using a request-local Fetch implementation. Requires an explicit HTTPS baseURL. */
++    rejectRedirects?: boolean;
+     /** HTTP/provider SDK timeout in milliseconds. */
+     timeoutMs?: number;
+     /** WebSocket connection timeout in milliseconds. */

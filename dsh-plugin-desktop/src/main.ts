@@ -8,6 +8,8 @@
 // runner child alone.
 
 import { formatUnexpectedHostExit, startIsolatedDesktopHost } from './host-process.ts'
+import { openP7AccountBrowser, p7AccountStore } from './p7-account-browser.ts'
+import { createP7SessionVault } from './p7-session-vault.ts'
 import * as desktopOffice from './desktop-office.ts'
 import { desktopPrimaryRuntime, resolveDesktopOfficeConfig } from './desktop-office.ts'
 import { app, crashReporter, safeStorage, session, shell } from 'electron'
@@ -232,6 +234,8 @@ import {
 } from './session-projcache-recovery.ts'
 import {
   DESKTOP_APP_ID,
+  DESKTOP_ACCOUNT_ONBOARDING_ENABLED,
+  DESKTOP_COMPANY_SERVICE_ENABLED,
   DESKTOP_PACKAGE_NAME,
   DESKTOP_PRODUCT_NAME,
   DESKTOP_RELEASE_CHANNEL,
@@ -1300,7 +1304,10 @@ async function start(): Promise<void> {
     startupStage = 'profile-composition'
     lifecycleRecorder.transitionStartupStage(startupStage)
     const lanAddresses = desktopLanAddresses()
-    const legacyMarketSelection = readDesktopMarketStateForUserData(marketUserDataDir)
+    const persistedMarketSelection = readDesktopMarketStateForUserData(marketUserDataDir)
+    const legacyMarketSelection = DESKTOP_COMPANY_SERVICE_ENABLED && persistedMarketSelection.legacyDefaulted
+      ? { requested: 'dsh-market' as const, effective: 'dsh-market' as const, legacyDefaulted: true }
+      : persistedMarketSelection
     let profilePreferences = readDesktopProfilePreferences(marketUserDataDir, activeProfileDir)
     let marketSelection = profilePreferences === undefined
       ? legacyMarketSelection
@@ -1460,7 +1467,8 @@ async function start(): Promise<void> {
     runtime.setupOnboarding = {
       read: async () => ({ required: setupPending, edition: 'desktop', profile: activeProfileName,
         restartPending: setupRestartPending,
-        accountPending: safeModePaths === undefined && !setupPending && desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir),
+        accountOnboardingEnabled: DESKTOP_ACCOUNT_ONBOARDING_ENABLED,
+        accountPending: DESKTOP_ACCOUNT_ONBOARDING_ENABLED && safeModePaths === undefined && !setupPending && desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir),
         input: setupInput }),
       dismissAccount: async profile => {
         if (setupPending || profile !== activeProfileName || safeModePaths !== undefined) throw new Error('Desktop account setup is unavailable')
@@ -1468,7 +1476,7 @@ async function start(): Promise<void> {
       },
       applyPending: async profile => {
         if (setupPending || setupSaving || profile !== activeProfileName || safeModePaths !== undefined
-          || desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir)) throw new Error('Desktop settings are not ready to apply')
+          || (DESKTOP_ACCOUNT_ONBOARDING_ENABLED && desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir))) throw new Error('Desktop settings are not ready to apply')
         if (!setupRestartPending) return
         setupRestartPending = false
         setImmediate(() => {
@@ -1588,6 +1596,7 @@ async function start(): Promise<void> {
         `${BIN_NAME}: requested Market provider ${prepared.market.requested} was disabled for this generation: ${prepared.marketFailure}`,
       )
     }
+    Object.assign(runtime, { p7SessionVault: createP7SessionVault(prepared.profile.dir, desktopLanHttpsPrivateKeyProtector()) })
     const prepareHostCertificate = async () => {
       if (prepared.lanAddresses.length === 0) return { failureCode: 'no-address' }
       const { createLanHttpsCertificate, DesktopLanHttpsCertificateError } = await import('./lan-https-certificate.ts')
@@ -1745,6 +1754,9 @@ async function start(): Promise<void> {
           hostCtx.provide('desktopBrowserAccess', browserAccess)
           hostCtx.provide('desktopLanHttps', lanHttps)
           hostCtx.provide('desktopRuntime', runtime)
+          hostCtx.provide('p7AccountBrowser', { open: (url: string) => openP7AccountBrowser(runtime, url) })
+          const accountStore = p7AccountStore(runtime)
+          if (accountStore) hostCtx.provide('p7AccountStore', accountStore)
           hostCtx.provide('desktopPnpmBootstrap', desktopPnpmBootstrap)
           await hostCtx.plugin(DesktopActionsService, {
             openTerminal: () => { runtime.openTerminal() },

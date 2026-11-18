@@ -143,7 +143,7 @@ it.each(['arm64', 'x64'] as const)('gives only the standalone Node %s entitlemen
   for (const file of [python, extension]) expect(t.sign).toHaveBeenCalledWith(file, expect.any(String), identity, undefined)
 })
 
-it('rejects a payload containing links instead of signing through them', async () => {
+it.skipIf(process.platform === 'win32')('rejects a payload containing links instead of signing through them', async () => {
   const path = root()
   writeFileSync(join(path, 'real.node'), machO)
   symlinkSync(join(path, 'real.node'), join(path, 'alias.node'))

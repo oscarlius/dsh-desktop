@@ -1,0 +1,22 @@
+{
+  "source": {
+    "repository": "https://github.com/kichik/nsis.git",
+    "tag": "v312",
+    "commit": "e3f60402bcdf7be822d159b531c6e38ddf32de12",
+    "license": "zlib/libpng",
+    "nsisMaxStrlen": 8192,
+    "sourceDateEpoch": 1776631127
+  },
+  "patch": {
+    "path": "nsis-temp-runtime.patch",
+    "sha256": "dbf292954edc26ebd01a260223bb25145b0f831dbf03af7a033796956c0f11eb"
+  },
+  "stubs": [
+    { "path": "windows/Stubs/bzip2-x86-unicode", "sha256": "a8474aab1b7789317ec5b40fd582853cb6c6421bd36db16c358553ed92c300f2" },
+    { "path": "windows/Stubs/bzip2_solid-x86-unicode", "sha256": "87e8c6261a7f1ebc2fde98c102baa3ba2f0b71be409b9c377a77703dd5aecd2a" },
+    { "path": "windows/Stubs/lzma-x86-unicode", "sha256": "ed066d58b9d1c3be35764e045ffd22f4d6d6fa7f8519949ff8a33e80a919d3df" },
+    { "path": "windows/Stubs/lzma_solid-x86-unicode", "sha256": "d005ecca68567e5ca6d87a9ef93041e02633e518921a7f6b144e69a41e4b0e45" },
+    { "path": "windows/Stubs/zlib-x86-unicode", "sha256": "7a46630c6b6495bd92def4dab434e983260c7adeda4f7c908931d638b716c4fe" },
+    { "path": "windows/Stubs/zlib_solid-x86-unicode", "sha256": "892637fd7899e1423d04e3b78aeffdb449dbb7838b23867a2e14b7992fe84b7b" }
+  ]
+}

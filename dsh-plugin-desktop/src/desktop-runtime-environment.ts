@@ -341,7 +341,9 @@ function installRuntimeGeneration(stateDir: string, plan: RuntimeGenerationPlan)
 function clearEnvironmentModule(platform: NodeJS.Platform): string {
   if (platform === 'win32') {
     return [
-      '// process.execPath is the Electron executable; its Node descendants must retain RunAsNode.',
+      `for (const name of Object.keys(process.env)) {`,
+      `  if (name.toUpperCase() === '${RUN_AS_NODE}') delete process.env[name]`,
+      '}',
       '',
     ].join('\n')
   }
@@ -420,7 +422,7 @@ function windowsNodeShim(appExecutable: string): string {
     '@echo off',
     'setlocal DisableDelayedExpansion',
     ...windowsCodePagePrologue(),
-    'set "DSH_RUNTIME_PRIVATE=%~dp0.."',
+    'for %%I in ("%~dp0..") do set "DSH_RUNTIME_PRIVATE=%%~fI"',
     `set "${RUN_AS_NODE}=1"`,
     `${quoteBatchWord(appExecutable)} --require "%DSH_RUNTIME_PRIVATE%\\clear-env.cjs" %*`,
     ...windowsCodePageEpilogue(),
@@ -434,7 +436,7 @@ function windowsPnpmShim(options: DesktopPnpmRuntimeOptions): string {
     '@echo off',
     'setlocal DisableDelayedExpansion',
     ...windowsCodePagePrologue(),
-    'set "DSH_RUNTIME_ROOT=%~dp0.."',
+    'for %%I in ("%~dp0..") do set "DSH_RUNTIME_ROOT=%%~fI"',
     'set "DSH_RUNTIME_PRIVATE=%DSH_RUNTIME_ROOT%\\private"',
     'set "DSH_RUNTIME_NODE_BIN=%DSH_RUNTIME_PRIVATE%\\node-bin"',
     'set "PATH=%DSH_RUNTIME_NODE_BIN%;%PATH%"',

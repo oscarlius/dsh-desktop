@@ -3,6 +3,8 @@ import { MACOS_UNIVERSAL_NATIVE_ENTRIES, prepareMacUniversalRuntime } from '../.
 // Next uses the official Host, which has no dependency on the old desktop lock binding.
 export const NEXT_MAC_NATIVE_ENTRIES = [
   ...MACOS_UNIVERSAL_NATIVE_ENTRIES.filter(entry => !entry.path.startsWith('node_modules/fs-ext/')),
+  { arch: 'arm64' as const, path: 'node_modules/@mnemon-dev/mnemon-darwin-arm64/bin/mnemon' },
+  { arch: 'x86_64' as const, path: 'node_modules/@mnemon-dev/mnemon-darwin-x64/bin/mnemon' },
   { arch: 'arm64' as const, path: 'node_modules/@trycua/cua-driver-darwin-arm64/cua_driver_node_runtime.node' },
   { arch: 'x86_64' as const, path: 'node_modules/@trycua/cua-driver-darwin-x64/cua_driver_node_runtime.node' },
   { arch: 'arm64' as const, path: 'node_modules/@ubjs/node-darwin-arm64/uniffi-runtime-napi.darwin-arm64.node' },

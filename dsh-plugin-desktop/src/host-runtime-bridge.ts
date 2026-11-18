@@ -1,14 +1,16 @@
 /** Native capability adapters; frontend HTTP and WebSocket connections are unchanged. */
 import type { DesktopLocale, DesktopRuntime, DesktopShellSpec, DesktopTrayItem, DesktopTrayItemRegistration, DesktopUpdateAdapter } from './runtime.ts'
+import type { DesktopUpdateLifecycle, DesktopUpdatePolicy } from './update-lifecycle.ts'
 import { HostRpc } from './host-rpc.ts'
 import { parseDesktopPlatformLoginRequest } from './platform-login.ts'
 
 export type RuntimeSnapshot = Pick<DesktopRuntime, 'platform' | 'locale'> & {
+  p7SessionVaultAvailable?: boolean
   updates: Omit<DesktopUpdateAdapter, 'request' | 'confirmDownload' | 'showManualCheckResult' | 'downloadAndOpen' | 'notify'>
 }
 export function runtimeSnapshot(runtime: DesktopRuntime): RuntimeSnapshot {
   const { isPackaged, canDownload, currentVersion, releaseChannel, statePath, installationId } = runtime.updates
-  return { platform: runtime.platform, locale: runtime.locale,
+  return { platform: runtime.platform, locale: runtime.locale, p7SessionVaultAvailable: runtime.p7SessionVault !== undefined,
     updates: { isPackaged, canDownload, currentVersion, statePath,
       ...(releaseChannel ? { releaseChannel } : {}), ...(installationId ? { installationId } : {}) } }
 }
@@ -25,7 +27,7 @@ export function createHostRuntime(rpc: HostRpc, snapshot: RuntimeSnapshot): Desk
   const shellSpecs = new Map<string, DesktopShellSpec>()
   const send = <T = void>(method: string, args: unknown[] = [], signal?: AbortSignal): Promise<T> => {
     const interactive = ['update:confirmDownload', 'update:showManualCheckResult', 'update:downloadAndOpen',
-      'native:pickDirectory', 'native:exportDiagnostics'].includes(method)
+      'native:pickDirectory', 'native:exportDiagnostics', 'native:checkCompanyUpdates'].includes(method)
     const task = rpc.call<T>(method, args, signal, interactive ? 0 : undefined)
     calls.add(task)
     // Report fire-and-forget failures without creating an unhandled rejection.
@@ -47,6 +49,7 @@ export function createHostRuntime(rpc: HostRpc, snapshot: RuntimeSnapshot): Desk
     return localeSync
   }
   const runtime: DesktopRuntime = {
+    ...(snapshot.p7SessionVaultAvailable ? { p7SessionVault: (request: import('./p7-session-vault.ts').P7SessionVaultRequest) => send<import('./p7-session-vault.ts').P7SessionVaultResult>('native:p7SessionVault', [request]) } : {}),
     platform: snapshot.platform,
     get locale() { return locale },
     updates: {
@@ -61,6 +64,14 @@ export function createHostRuntime(rpc: HostRpc, snapshot: RuntimeSnapshot): Desk
       showManualCheckResult: result => send('update:showManualCheckResult', [result]),
       downloadAndOpen: (version, signal, channel) => send('update:downloadAndOpen', [version, channel], signal),
       notify: notification => { void send('update:notify', [notification]) },
+    },
+    startCompanyUpdates(policy: DesktopUpdatePolicy): DesktopUpdateLifecycle {
+      const start = send<void>('native:startCompanyUpdates', [policy])
+      trackSetup(start)
+      return {
+        checkNow: async () => { await start; await send('native:checkCompanyUpdates') },
+        dispose: async () => { await start; await send('native:disposeCompanyUpdates') },
+      }
     },
     schedule(spec) {
       const callback = callbacks({ quit: spec.requestQuit, mode: spec.requestModeChange,
@@ -140,6 +151,7 @@ export function bindNativeRuntime(rpc: HostRpc, runtime: DesktopRuntime): () => 
   const shells = new Map<string, () => Promise<void>>()
   const preferences = new Map<string, { locale: any; theme: any }>()
   const releases: (() => void)[] = []
+  let companyUpdates: DesktopUpdateLifecycle | undefined
   const handle = (name: string, fn: (args: any[], signal: AbortSignal) => unknown) => { releases.push(rpc.handle(name, fn)) }
   const callback = (method: string, args: unknown[] = []) => rpc.call(method, args)
   const report = (promise: Promise<unknown>) => { void promise.catch(error => process.stderr.write(`${String(error)}\n`)) }
@@ -153,6 +165,24 @@ export function bindNativeRuntime(rpc: HostRpc, runtime: DesktopRuntime): () => 
     runtime.configureDeveloperLogging?.(preferences)
   })
   handle('native:platformLogin', ([request]) => { runtime.platformLogin(parseDesktopPlatformLoginRequest(request)) })
+  handle('native:p7SessionVault', ([request]) => {
+    if (runtime.p7SessionVault === undefined) throw new Error('OS encrypted P7 sign-in storage is unavailable')
+    return runtime.p7SessionVault(request)
+  })
+  handle('native:startCompanyUpdates', ([policy]) => {
+    if (companyUpdates !== undefined) throw new Error('P7 updates are already active')
+    if (runtime.startCompanyUpdates === undefined) throw new Error('P7 update lifecycle is unavailable')
+    companyUpdates = runtime.startCompanyUpdates(policy as DesktopUpdatePolicy)
+  })
+  handle('native:checkCompanyUpdates', () => {
+    if (companyUpdates === undefined) throw new Error('P7 update lifecycle is unavailable')
+    return companyUpdates.checkNow()
+  })
+  handle('native:disposeCompanyUpdates', async () => {
+    const lifecycle = companyUpdates
+    companyUpdates = undefined
+    await lifecycle?.dispose()
+  })
   handle('native:setLocalePreference', ([preference]) => {
     runtime.setLocalePreference(preference)
     return runtime.locale
@@ -203,6 +233,9 @@ export function bindNativeRuntime(rpc: HostRpc, runtime: DesktopRuntime): () => 
   handle('update:downloadAndOpen', ([version, channel], signal) => runtime.updates.downloadAndOpen(version, signal, channel))
   handle('update:notify', ([value]) => runtime.updates.notify(value))
   return async () => {
+    const lifecycle = companyUpdates
+    companyUpdates = undefined
+    await lifecycle?.dispose()
     trays.forEach(tray => tray.dispose()); trays.clear()
     await Promise.all([...shells.values()].map(dispose => dispose())); shells.clear(); preferences.clear()
     releases.forEach(release => release())

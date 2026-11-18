@@ -164,16 +164,22 @@ describe('exportDiagnosticsZip', () => {
     expect(zip.readAsText('system-info.txt')).toContain('omitted-log-files: 1')
   })
 
-  it('skips a linked lifecycle evidence file without failing the diagnostic export', async () => {
+  it('skips linked lifecycle evidence without failing the diagnostic export', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-dx-lifecycle-file-link-'))
     const logs = join(root, 'logs')
-    const target = join(root, 'target.jsonl')
+    const target = join(root, process.platform === 'win32' ? 'target' : 'target.jsonl')
     const lifecycleDir = join(root, 'lifecycle-events')
     mkdirSync(logs)
-    mkdirSync(lifecycleDir)
+    if (process.platform === 'win32') mkdirSync(target)
+    else mkdirSync(lifecycleDir)
     writeFileSync(join(logs, 'dsh-2026-08-16.log'), 'owned\n')
-    writeFileSync(target, 'bad\n')
-    symlinkSync(target, join(lifecycleDir, 'startup.jsonl'), 'file')
+    if (process.platform === 'win32') {
+      writeFileSync(join(target, 'startup.jsonl'), 'bad\n')
+      symlinkSync(target, lifecycleDir, 'junction')
+    } else {
+      writeFileSync(target, 'bad\n')
+      symlinkSync(target, join(lifecycleDir, 'startup.jsonl'), 'file')
+    }
 
     const out = await exportDiagnosticsZip(logs, root, {
       appVersion: APP_VERSION,

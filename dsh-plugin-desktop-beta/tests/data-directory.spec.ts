@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { defaultDataDirectory, readDataDirectory, validateDataDirectory } from '../src/data-directory.ts'
+import { defaultDataDirectory, readDataDirectory, resolveDesktopUserDataDirectory, validateDataDirectory } from '../src/data-directory.ts'
 import { NextProfiles } from '../src/profiles.ts'
 
 const homes: string[] = []
@@ -25,6 +25,13 @@ it('defaults to the shared user home while retaining the old Next-owned location
   expect(readDataDirectory(shared, locationRoot)).toEqual({ home: shared })
   writeFileSync(join(locationRoot, 'desktop-next-location.json'), JSON.stringify({ home: selected }))
   expect(readDataDirectory(shared, locationRoot)).toEqual({ home: selected })
+})
+
+it('keeps the legacy Chromium directory unless an absolute local override is supplied', () => {
+  const legacy = home(), isolated = home()
+  expect(resolveDesktopUserDataDirectory(legacy, undefined)).toBe(legacy)
+  expect(resolveDesktopUserDataDirectory(legacy, isolated)).toBe(isolated)
+  expect(() => resolveDesktopUserDataDirectory(legacy, 'relative-user-data')).toThrow('absolute path')
 })
 
 it('accepts empty or Next directories, rejecting unrelated and nested data directories', () => {

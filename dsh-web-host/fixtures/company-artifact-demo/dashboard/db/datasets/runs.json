@@ -1,0 +1,19 @@
+{
+  "title": "合成评测样本",
+  "description": "使用六条合成记录验证交互行为，数值不对应真实公司运行数据。",
+  "source": {
+    "kind": "file",
+    "url": "/_blob/366d3a6b5d4f061bd46c2ee633c76430",
+    "name": "benchmark.csv",
+    "format": "csv"
+  },
+  "updated": {
+    "at": "2026-11-14T06:20:11.342Z",
+    "by": "本地试验"
+  },
+  "fixed": true,
+  "edit": {
+    "via": "claude",
+    "at": "2026-11-14T06:20:11.342Z"
+  }
+}

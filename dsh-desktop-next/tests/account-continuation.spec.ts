@@ -17,7 +17,7 @@ afterEach(() => { vi.unstubAllGlobals() })
 
 function fixture(signedIn: boolean, required = false, failDismiss = false, overrides = {}) {
   const snapshot = { profile: 'work', required, accountPending: !required, edition: 'desktop', restartPending: false, input: { platform: 'darwin' }, ...overrides }
-  hooks.values = [snapshot, '', 0, false]; hooks.setters = []; hooks.effects = []
+  hooks.values = [snapshot, '', 0, false, true]; hooks.setters = []; hooks.effects = []
   const bridge = {
     read: vi.fn(async (): Promise<typeof snapshot | null> => snapshot), finish: vi.fn(async () => {}),
     dismissAccount: vi.fn(async () => { if (failDismiss) throw new Error('save failed') }),
@@ -36,7 +36,7 @@ function fixture(signedIn: boolean, required = false, failDismiss = false, overr
     openLogin, renderNext, renderLoading, renderNavigation: vi.fn(), renderSurface: (value: unknown) => value }
   const result = Component(props)
   const renderWithSnapshot = (value: unknown) => {
-    hooks.values = [value, '', 0, false]
+    hooks.values = [value, '', 0, false, true]
     return Component(props)
   }
   return { bridge, content, openLogin, result, snapshot, renderNext, renderWithSnapshot }

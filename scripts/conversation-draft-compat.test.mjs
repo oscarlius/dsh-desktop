@@ -51,14 +51,19 @@ const invalidDrafts = [undefined, null, 42, true, [], {}, { text: 7, references:
 for (const workspace of ['dsh-plugin-desktop', 'dsh-plugin-desktop-beta', 'dsh-desktop-next']) {
   test(`${workspace}: the installed conversation client tolerates non-string drafts`, { skip }, () => {
     const require = createRequire(resolve(workspace, 'package.json'))
+    const workspaceManifest = JSON.parse(readFileSync(resolve(workspace, 'package.json'), 'utf8'))
+    const expectedVersion = workspaceManifest.dependencies['@deepseek-ai/dsh-client-ui-conversation']
+    assert.equal(typeof expectedVersion, 'string', `${workspace} must declare its conversation runtime`)
     const manifest = require.resolve('@deepseek-ai/dsh-client-ui-conversation/package.json')
     const pkg = JSON.parse(readFileSync(manifest, 'utf8'))
-    assert.equal(pkg.version, '0.2.1-rc.3')
+    assert.equal(pkg.version, expectedVersion)
     // The browser loads the `./client` export; assert the patch lands in that file.
     const entry = join(dirname(manifest), pkg.exports['./client'].default)
     const file = ts.createSourceFile(entry, readFileSync(entry, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
 
     // Use the installed functions themselves, not a fixture reproducing the patch.
+    const editorSetDraft = classMethod(file, 'DraftEditorRuntime', 'setDraft')
+    const editorAcceptsStructuredDraft = editorSetDraft.includes('resolveDraftInput(')
     const draft = runInNewContext(`(() => {
       ${only(file, node => ts.isVariableStatement(node)
         && node.declarationList.declarations.some(declaration => declaration.name.getText(file) === 'REFERENCE_PLACEHOLDER_RE'),
@@ -67,7 +72,7 @@ for (const workspace of ['dsh-plugin-desktop', 'dsh-plugin-desktop-beta', 'dsh-d
       ${functionDeclaration(file, 'resolveDraftInput')}
       return {
         resolveDraftInput,
-        editor: { ${classMethod(file, 'DraftEditorRuntime', 'setDraft')} },
+        editor: { ${editorSetDraft} },
         shell: { ${classMethod(file, 'SessionInputShell', 'setDraft')} },
       }
     })()`)
@@ -96,11 +101,12 @@ for (const workspace of ['dsh-plugin-desktop', 'dsh-plugin-desktop-beta', 'dsh-d
     // An invalid value reads as the empty draft, which an empty editor already holds.
     const updates = []
     const editor = {
-      projection: { clipboardText: '', occurrences: [] },
+      projection: { clipboardText: '', occurrences: [], quotes: [] },
       editor: { update: () => { updates.push('update') } },
     }
     for (const value of invalidDrafts) {
-      assert.doesNotThrow(() => { draft.editor.setDraft.call(editor, value) }, `DraftEditorRuntime.setDraft(${JSON.stringify(value)})`)
+      const input = editorAcceptsStructuredDraft ? value : draft.resolveDraftInput(value).text
+      assert.doesNotThrow(() => { draft.editor.setDraft.call(editor, input) }, `DraftEditorRuntime.setDraft(${JSON.stringify(value)})`)
     }
     assert.deepEqual(updates, [])
   })

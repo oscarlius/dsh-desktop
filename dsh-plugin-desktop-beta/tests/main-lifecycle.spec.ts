@@ -68,7 +68,7 @@ vi.mock('../src/desktop-terminal.ts', async importOriginal => ({ ...await import
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
   const app = Object.assign(new EventEmitter(), {
-    setName() {}, setPath: (name: string, path: string) => fixture.appPaths.set(name, path), getPath: (name: string) => fixture.appPaths.get(name) ?? process.env.DSH_DESKTOP_NEXT_HOME, getLocale: () => 'en-US', getPreferredSystemLanguages: () => ['zh-Hans-CN', 'en-US'], isReady: () => true, whenReady: async () => {},
+    setName() {}, setAppUserModelId: vi.fn(), setPath: (name: string, path: string) => fixture.appPaths.set(name, path), getPath: (name: string) => fixture.appPaths.get(name) ?? process.env.DSH_DESKTOP_NEXT_HOME, getVersion: () => '2.0.32-beta.16', getLocale: () => 'en-US', getPreferredSystemLanguages: () => ['zh-Hans-CN', 'en-US'], isReady: () => true, whenReady: async () => {},
     requestSingleInstanceLock: () => { fixture.lockPaths.push(fixture.appPaths.get('userData')!); return fixture.ownsInstance }, exit: vi.fn(), relaunch: vi.fn(), quit: vi.fn(() => app.emit('before-quit', { preventDefault() {} })),
   })
   class BrowserWindow extends EventEmitter {
@@ -147,11 +147,76 @@ beforeEach(async () => {
   autoUpdater.removeAllListeners()
   app.removeAllListeners()
   vi.mocked(app.relaunch).mockClear()
+  vi.mocked(app.setAppUserModelId).mockClear()
   vi.mocked(app.quit).mockClear()
   vi.mocked(app.exit).mockClear()
 })
 
 afterEach(() => { for (const window of fixture.windows) if (!window.destroyed) window.destroy() })
+
+it('sets the sealed company AppUserModelId before creating its window', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'next-company-app-id-'))
+  vi.stubEnv('DSH_DESKTOP_NEXT_HOME', home)
+  try {
+    await import('../src/main.ts')
+    await vi.waitFor(() => expect(fixture.windows).toHaveLength(1))
+    const { app } = await import('electron')
+    expect(app.setAppUserModelId).toHaveBeenCalledExactlyOnceWith('ai.deepseek.dsh.desktop.companytest')
+    const window = fixture.windows[0]
+    const current = fixture.handlers.get('dsh-next:state')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame })
+    expect(current).toMatchObject({ version: '2.0.32-beta.16', displayVersion: '2.0.32-beta.16', build: '2026110401' })
+  } finally { vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }) }
+})
+
+it('seals a Company Full build out of pending applies, polling, manual checks, and update notifications', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'next-company-updates-disabled-'))
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' })
+  const resourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
+  Object.defineProperty(process, 'resourcesPath', { value: home, configurable: true })
+  const { app } = await import('electron')
+  const packaged = Object.getOwnPropertyDescriptor(app, 'isPackaged')
+  Object.defineProperty(app, 'isPackaged', { value: true, configurable: true })
+  const start = vi.fn(); const applyPendingOnNextLaunch = vi.fn(async () => false)
+  const check = vi.fn(async () => {}); const download = vi.fn(async () => {}); const install = vi.fn(async () => {})
+  let options: { packaged: boolean, available?: (version: string) => void } | undefined
+  vi.doMock('../src/product-identity.ts', () => ({
+    COMPANY_COMPATIBILITY_BUILD: '2026110401', COMPANY_TRANSPORT_VERSION: '2.0.32-beta.16',
+    DESKTOP_APP_ID: 'ai.deepseek.dsh.desktop.companytest', DESKTOP_COMPANY_SERVICE_ENABLED: true,
+    DESKTOP_HOME_DIRECTORY_NAME: '.p7-dsh-companytest', DESKTOP_PRODUCT_NAME: 'P7 DSH Company Test', DESKTOP_UPDATES_ENABLED: false,
+  }))
+  vi.doMock('../src/updates.ts', () => ({ NextUpdates: class {
+    constructor(value: typeof options) { options = value }
+    snapshot() { return { phase: 'idle', installable: false } }
+    start = start
+    applyPendingOnNextLaunch = applyPendingOnNextLaunch
+    confirmPendingAfterHealthyHost() {}
+    dispose = async () => {}
+    check = check
+    download = download
+    install = install
+  } }))
+  vi.stubEnv('DSH_DESKTOP_NEXT_HOME', home)
+  try {
+    await import('../src/main.ts')
+    await vi.waitFor(() => expect(fixture.windows).toHaveLength(1))
+    expect(options).toMatchObject({ packaged: false })
+    expect(options!.available).toBeUndefined()
+    expect(applyPendingOnNextLaunch).not.toHaveBeenCalled()
+    expect(start).not.toHaveBeenCalled()
+    const window = fixture.windows[0]
+    await fixture.handlers.get('dsh-next:command')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, { type: 'check-updates' })
+    await fixture.handlers.get('dsh-next:command')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, { type: 'download-update' })
+    await fixture.handlers.get('dsh-next:command')!({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, { type: 'install-update' })
+    expect(check).not.toHaveBeenCalled(); expect(download).not.toHaveBeenCalled(); expect(install).not.toHaveBeenCalled()
+  } finally {
+    Object.defineProperty(process, 'platform', platform)
+    if (resourcesPath) Object.defineProperty(process, 'resourcesPath', resourcesPath); else Reflect.deleteProperty(process, 'resourcesPath')
+    if (packaged) Object.defineProperty(app, 'isPackaged', packaged); else Reflect.deleteProperty(app, 'isPackaged')
+    vi.doUnmock('../src/product-identity.ts'); vi.doUnmock('../src/updates.ts')
+    vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true })
+  }
+})
 
 it('repairs a crashed renderer and fences old document reports while preserving its Host', async () => {
   const home = mkdtempSync(join(tmpdir(), 'next-renderer-repair-'))
@@ -234,9 +299,55 @@ it.each(['close', 'quit', 'host-failure'] as const)('cancels pending renderer re
   } finally { vi.useRealTimers(); vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }) }
 })
 
+it('keeps Company Chromium data at its legacy app-data path when only the DSH home is overridden', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'next-company-home-'))
+  const appData = mkdtempSync(join(tmpdir(), 'next-company-app-data-'))
+  const legacyState = join(appData, 'P7 DSH Company Test')
+  vi.stubEnv('DSH_DESKTOP_NEXT_HOME', home)
+  fixture.appPaths.set('appData', appData)
+  try {
+    await import('../src/main.ts')
+    await vi.waitFor(() => expect(fixture.windows).toHaveLength(1))
+    expect(fixture.lockPaths).toEqual([legacyState])
+    expect(fixture.appPaths.get('userData')).toBe(legacyState)
+    expect(fixture.appPaths.get('sessionData')).toBe(legacyState)
+  } finally { vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }); rmSync(appData, { recursive: true, force: true }) }
+})
+
+it('uses an absolute local Company user-data override without touching the legacy directory', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'next-company-home-'))
+  const appData = mkdtempSync(join(tmpdir(), 'next-company-app-data-'))
+  const isolated = mkdtempSync(join(tmpdir(), 'next-company-isolated-'))
+  const legacyState = join(appData, 'P7 DSH Company Test')
+  vi.stubEnv('DSH_DESKTOP_NEXT_HOME', home)
+  vi.stubEnv('DSH_DESKTOP_NEXT_USER_DATA', isolated)
+  fixture.appPaths.set('appData', appData)
+  try {
+    await import('../src/main.ts')
+    await vi.waitFor(() => expect(fixture.windows).toHaveLength(1))
+    expect(fixture.lockPaths).toEqual([isolated])
+    expect(fixture.appPaths.get('userData')).toBe(isolated)
+    expect(fixture.appPaths.get('sessionData')).toBe(isolated)
+    expect(existsSync(legacyState)).toBe(false)
+  } finally {
+    vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }); rmSync(appData, { recursive: true, force: true }); rmSync(isolated, { recursive: true, force: true })
+  }
+})
+
+it('rejects a relative Company user-data override before accessing legacy data', async () => {
+  const appData = mkdtempSync(join(tmpdir(), 'next-company-app-data-'))
+  const legacyState = join(appData, 'P7 DSH Company Test')
+  vi.stubEnv('DSH_DESKTOP_NEXT_USER_DATA', 'relative-user-data')
+  fixture.appPaths.set('appData', appData)
+  try {
+    await expect(import('../src/main.ts')).rejects.toThrow('DSH_DESKTOP_NEXT_USER_DATA must be an absolute path')
+    expect(existsSync(legacyState)).toBe(false)
+  } finally { vi.unstubAllEnvs(); rmSync(appData, { recursive: true, force: true }) }
+})
+
 it('starts Safe Mode with fresh desktop and Chromium state while preserving normal state and its instance lock', async () => {
   const home = mkdtempSync(join(tmpdir(), 'next-safe-desktop-state-'))
-  const normalState = join(home, 'electron-user-data')
+  const normalState = join(home, 'P7 DSH Company Test')
   const safeState = join(normalState, 'safe-mode')
   mkdirSync(safeState, { recursive: true })
   const preferences = join(home, 'desktop-preferences.json')
@@ -272,7 +383,8 @@ it('starts Safe Mode with fresh desktop and Chromium state while preserving norm
 
 it.each([false, true])('does not create or reset safe desktop state owned by another instance (existing: %s)', async existing => {
   const home = mkdtempSync(join(tmpdir(), 'next-safe-second-instance-'))
-  const safeState = join(home, 'electron-user-data', 'safe-mode')
+  const normalState = join(home, 'P7 DSH Company Test')
+  const safeState = join(normalState, 'safe-mode')
   if (existing) {
     mkdirSync(safeState, { recursive: true })
     writeFileSync(join(safeState, 'running-session'), 'keep running session')
@@ -285,7 +397,7 @@ it.each([false, true])('does not create or reset safe desktop state owned by ano
     await import('../src/main.ts')
     expect(fixture.windows).toHaveLength(0)
     expect(fixture.start).not.toHaveBeenCalled()
-    expect(fixture.appPaths.get('userData')).toBe(join(home, 'electron-user-data'))
+    expect(fixture.appPaths.get('userData')).toBe(normalState)
     expect(existsSync(safeState)).toBe(existing)
     if (existing) expect(readFileSync(join(safeState, 'running-session'), 'utf8')).toBe('keep running session')
   } finally { process.argv.splice(0, process.argv.length, ...argv); vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }) }
@@ -307,7 +419,7 @@ it('preserves safe desktop state and blocks relaunch when final Host shutdown fa
     const { app } = await import('electron')
     await vi.waitFor(() => expect(app.exit).toHaveBeenCalledWith(1))
     expect(app.relaunch).not.toHaveBeenCalled()
-    expect(existsSync(join(home, 'electron-user-data', 'safe-mode'))).toBe(true)
+    expect(existsSync(join(home, 'P7 DSH Company Test', 'safe-mode'))).toBe(true)
   } finally {
     logError.mockRestore()
     process.argv.splice(0, process.argv.length, ...argv); vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true })
@@ -417,6 +529,8 @@ it.each(['normal', '--next-safe-mode'])('stages an explicit update before hiding
     constructor(private options: { install(): Promise<void> }) {}
     snapshot() { return { phase: 'ready', version: '2.0.20-beta.2', installable: true } }
     start() {}
+    applyPendingOnNextLaunch = async () => false
+    confirmPendingAfterHealthyHost() {}
     dispose = async () => {}
     install = () => this.options.install()
   } }))
@@ -455,6 +569,8 @@ it.each(['timeout', 'failure'] as const)('still launches a staged update before 
     constructor(private options: { install(): Promise<void> }) {}
     snapshot() { return { phase: 'ready', version: '2.0.20-beta.2', installable: true } }
     start() {}
+    applyPendingOnNextLaunch = async () => false
+    confirmPendingAfterHealthyHost() {}
     dispose = async () => {}
     install = () => this.options.install()
   } }))
@@ -822,7 +938,7 @@ it.each(['complete', 'official', 'skip'] as const)('shows first-run onboarding w
     fixture.start.mockImplementationOnce(async () => {
       expect(manager.onboardingRequired('desktop')).toBe(false)
       expect(manager.features('desktop')).toEqual(outcome === 'skip'
-        ? { market: false, remoteControl: false }
+        ? { market: true, remoteControl: false }
         : outcome === 'official'
           ? { market: false, officialMarket: true, remoteControl: false }
           : { market: false, dshMarket: true, remoteControl: true })
@@ -847,7 +963,7 @@ it.each(['complete', 'official', 'skip'] as const)('shows first-run onboarding w
       required: false,
       accountPending: outcome !== 'skip',
       input: {
-        market: outcome === 'skip' ? 'disabled' : outcome === 'official' ? 'official-market' : 'dsh-market',
+        market: outcome === 'skip' ? 'community-market' : outcome === 'official' ? 'official-market' : 'dsh-market',
         openBrowser: outcome === 'complete',
         networkExposure: outcome === 'complete' ? 'lan' : 'loopback',
       },

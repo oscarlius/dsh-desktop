@@ -1,0 +1,138 @@
+/** Stable and Beta identities used to locate each edition's private app data. */
+export const DESKTOP_RELEASE_IDENTITIES = Object.freeze({
+  stable: Object.freeze({
+    releaseChannel: 'stable' as const,
+    packageName: 'dsh-plugin-desktop',
+    productName: 'DSH Desktop',
+    appId: 'ai.deepseek.dsh.desktop',
+    homeDirectoryName: '.dsh',
+    updatesEnabled: true,
+    accountOnboardingEnabled: true,
+  }),
+  beta: Object.freeze({
+    releaseChannel: 'beta' as const,
+    packageName: 'dsh-plugin-desktop-beta',
+    productName: 'DSH Desktop Beta',
+    appId: 'ai.deepseek.dsh.desktop.beta',
+    homeDirectoryName: '.dsh-beta',
+    updatesEnabled: true,
+    accountOnboardingEnabled: true,
+  }),
+  companytest: Object.freeze({
+    // Test builds remain Beta-compatible only for existing profile metadata;
+    // their executable, AppUserModelId, user data and DSH home are isolated.
+    releaseChannel: 'beta' as const,
+    // The flavor changes app/data identity, while npm self-references must
+    // retain the actual installed package.json name and exports.
+    packageName: 'dsh-plugin-desktop-beta',
+    productName: 'P7 DSH Company Test',
+    appId: 'ai.deepseek.dsh.desktop.companytest',
+    homeDirectoryName: '.p7-dsh-companytest',
+    // Company releases use the company adapter, never the public updater.
+    updatesEnabled: true,
+    accountOnboardingEnabled: false,
+  }),
+})
+
+export interface DesktopProductIdentity {
+  readonly releaseChannel: 'stable' | 'beta'
+  readonly packageName: string
+  readonly productName: string
+  readonly appId: string
+  readonly homeDirectoryName: string
+  readonly updatesEnabled: boolean
+  readonly accountOnboardingEnabled: boolean
+}
+
+/** Identify the Electron Builder test flavor sealed into the packaged app manifest. */
+export function desktopCompanyTestFlavor(manifestText: string | undefined): boolean {
+  if (manifestText === undefined) return false
+  try {
+    return (JSON.parse(manifestText) as { dshDesktopFlavor?: unknown }).dshDesktopFlavor === 'companytest'
+  } catch {
+    return false
+  }
+}
+
+/** Resolve the product identity from Electron Builder's sealed package metadata. */
+export function desktopProductIdentityForManifest(manifestText: string | undefined): DesktopProductIdentity {
+  if (manifestText === undefined) return DESKTOP_RELEASE_IDENTITIES.beta
+  const manifest: unknown = JSON.parse(manifestText)
+  if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) throw new Error('Invalid Desktop product manifest')
+  const { dshDesktopFlavor: flavor, dshDesktopUpdatesEnabled: updatesEnabled } = manifest as {
+    dshDesktopFlavor?: unknown
+    dshDesktopUpdatesEnabled?: unknown
+  }
+  if (flavor !== undefined && flavor !== 'companytest' && flavor !== 'beta') throw new Error('Unknown Desktop product flavor')
+  if (updatesEnabled !== undefined && typeof updatesEnabled !== 'boolean') throw new Error('Invalid Desktop updates policy')
+  if (updatesEnabled !== undefined && flavor !== 'companytest') throw new Error('Desktop updates policy is only valid for Company builds')
+  if (flavor !== 'companytest' || updatesEnabled !== false) return flavor === 'companytest'
+    ? DESKTOP_RELEASE_IDENTITIES.companytest
+    : DESKTOP_RELEASE_IDENTITIES.beta
+  return Object.freeze({ ...DESKTOP_RELEASE_IDENTITIES.companytest, updatesEnabled: false })
+}
+
+/** Electron also exposes resourcesPath in development and RUN_AS_NODE CLI mode. */
+export function desktopManifestUrl(moduleUrl: string, resourcesUrl?: string): URL {
+  // Next packages the Desktop Host in app.asar/lib. Its sealed package
+  // manifest is adjacent to that module, rather than resources/app.
+  if (/\.asar\//iu.test(moduleUrl)) {
+    return new URL('../package.json', moduleUrl)
+  }
+  if (resourcesUrl && moduleUrl.toLowerCase().startsWith(resourcesUrl.toLowerCase())) {
+    return new URL('app/package.json', resourcesUrl)
+  }
+  return new URL('../package.json', moduleUrl)
+}
+
+function packagedManifestText(): string | undefined {
+  // Keep the Node lookup dynamic so this Host-owned branch stays out of Vite's client globals.
+  const nodeProcess = Reflect.get(globalThis, 'process') as {
+    getBuiltinModule?: (name: string) => unknown
+    resourcesPath?: string
+  } | undefined
+  const fs = nodeProcess?.getBuiltinModule?.('node:fs') as Pick<typeof import('node:fs'), 'readFileSync'> | undefined
+  if (fs === undefined) return undefined // Browser client; product identity is Host-owned.
+  const resourcesPath = nodeProcess?.resourcesPath
+  const urls = nodeProcess?.getBuiltinModule?.('node:url') as Pick<typeof import('node:url'), 'pathToFileURL'> | undefined
+  const resourcesUrl = resourcesPath === undefined ? undefined : urls?.pathToFileURL(`${resourcesPath}/`).href
+  // Installed modules use sealed root metadata and still fail closed on any
+  // read error. Development CLI modules use their own adjacent manifest.
+  return fs.readFileSync(desktopManifestUrl(import.meta.url, resourcesUrl), 'utf8')
+}
+
+/** Beta is the normal identity; the internal test identity is sealed by electron-builder metadata. */
+const SEALED_MANIFEST_TEXT = packagedManifestText()
+export const DESKTOP_PRODUCT_IDENTITY = desktopProductIdentityForManifest(SEALED_MANIFEST_TEXT)
+export const OTHER_DESKTOP_PRODUCT_IDENTITY = DESKTOP_RELEASE_IDENTITIES.stable
+export const DESKTOP_PACKAGE_NAME = DESKTOP_PRODUCT_IDENTITY.packageName
+export const STABLE_DESKTOP_PACKAGE_NAME = OTHER_DESKTOP_PRODUCT_IDENTITY.packageName
+export const DESKTOP_PRODUCT_NAME = DESKTOP_PRODUCT_IDENTITY.productName
+export const DESKTOP_APP_ID = DESKTOP_PRODUCT_IDENTITY.appId
+export const DESKTOP_RELEASE_CHANNEL = DESKTOP_PRODUCT_IDENTITY.releaseChannel
+export const DESKTOP_HOME_DIRECTORY_NAME = DESKTOP_PRODUCT_IDENTITY.homeDirectoryName
+export const DESKTOP_ACCOUNT_ONBOARDING_ENABLED = DESKTOP_PRODUCT_IDENTITY.accountOnboardingEnabled
+export const DESKTOP_COMPANY_SERVICE_ENABLED = DESKTOP_PRODUCT_IDENTITY.appId === DESKTOP_RELEASE_IDENTITIES.companytest.appId
+export const DESKTOP_UPDATES_ENABLED = DESKTOP_PRODUCT_IDENTITY.updatesEnabled
+
+/** Immutable Company transport/build values are sealed in the Beta manifest. */
+export function companyVersionContract(manifestText: string | undefined): { readonly transport: string; readonly build: string } {
+  if (manifestText === undefined) throw new Error('Company product manifest is unavailable')
+  const value = JSON.parse(manifestText) as { version?: unknown; dshCompanyCompatibilityBuild?: unknown }
+  if (typeof value.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[\w.]+)?$/u.test(value.version)
+    || typeof value.dshCompanyCompatibilityBuild !== 'string' || !/^\d{10}$/u.test(value.dshCompanyCompatibilityBuild)) {
+    throw new Error('Invalid sealed Company version contract')
+  }
+  return { transport: value.version, build: value.dshCompanyCompatibilityBuild }
+}
+const COMPANY_VERSION_CONTRACT = DESKTOP_COMPANY_SERVICE_ENABLED
+  ? companyVersionContract(SEALED_MANIFEST_TEXT)
+  : { transport: '', build: '' }
+export const COMPANY_TRANSPORT_VERSION = COMPANY_VERSION_CONTRACT.transport
+export const COMPANY_COMPATIBILITY_BUILD = COMPANY_VERSION_CONTRACT.build
+
+/** Both Desktop package identities are launcher-owned, never Profile plugins. */
+export const DESKTOP_PACKAGE_NAMES: ReadonlySet<string> = new Set([
+  STABLE_DESKTOP_PACKAGE_NAME,
+  DESKTOP_PACKAGE_NAME,
+])

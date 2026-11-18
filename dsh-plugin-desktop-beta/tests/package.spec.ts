@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { expect, it } from 'vitest'
 const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'))
 it('declares every official optional bundle as a discoverable, version-aligned installation dependency', () => {
@@ -16,10 +16,13 @@ it('declares every official optional bundle as a discoverable, version-aligned i
 
 it('archives the application like upstream Desktop while keeping fuses and native inventory aligned with Stable', () => {
   const next = read('../package.json'); const stable = read('../../dsh-plugin-desktop/package.json')
-  expect(next.version).toBe('2.0.20-beta.1')
+  expect(next.version).toBe('2.0.32-beta.16')
   expect(next.desktopName).toBe(`${next.build.linux.executableName}.desktop`)
   expect(next.repository).toEqual({ type: 'git', url: stable.repository.url, directory: 'dsh-plugin-desktop-beta' })
-  expect(next.build.appId).toBe('ai.deepseek.dsh.desktop.beta')
+  expect(next.build.appId).toBe('ai.deepseek.dsh.desktop.companytest')
+  expect(next.build.productName).toBe('P7 DSH Company Test')
+  expect(next.dshCompanyCompatibilityBuild).toBe('2026110401')
+  expect(next.build.nsis.differentialPackage).toBe(true)
   expect(next.build.asar).toBe(true)
   for (const platform of ['mac', 'win', 'linux']) expect(next.build[platform].asar, platform).toBeUndefined()
   // Both CPU builds archive identical bytes, so the universal build keeps one archive. Merging would
@@ -50,6 +53,7 @@ it('archives the application like upstream Desktop while keeping fuses and nativ
   // Stable's rule already keeps the interpreter payloads and the wheels' .dylibs directories, identical across the two
   // CPU builds. Next adds its own per-CPU native packages and pnpm's reflink addons from its bundled dist/node_modules.
   expect(next.build.mac.x64ArchFiles).toBe(stable.build.mac.x64ArchFiles
+    .replace('@dataiku/uv-darwin-*/**', '@dataiku/uv-darwin-*/**,@mnemon-dev/mnemon-darwin-*/**')
     .replace('sherpa-onnx-darwin-*/**}', 'sherpa-onnx-darwin-*/**,@trycua/cua-driver-darwin-*/**,@ubjs/node-darwin-*/**,@reflink/reflink-darwin-*/**}'))
   // Both CPU payloads ride beside the archive as extra resources; electron-builder must not re-sign the pre-signed payloads.
   // macOS also carries the manifest copy the updaters shipped in 2.0.14-beta.1 through 2.0.17-beta.1 read beside the archive.

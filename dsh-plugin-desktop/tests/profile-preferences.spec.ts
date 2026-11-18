@@ -1,3 +1,4 @@
+import { simulateSymbolicFile } from './helpers/symbolic-link-lstat.ts'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
@@ -278,7 +279,12 @@ describe('Desktop Profile preferences', () => {
     const path = desktopProfilePreferencesStatePath(userData, profile)
     mkdirSync(stateDirectory(userData, profile), { recursive: true, mode: 0o700 })
     writeFileSync(outside, 'outside\n', { mode: 0o600 })
-    symlinkSync(outside, path)
+    if (process.platform === 'win32') {
+      writeFileSync(path, 'linked\n', { mode: 0o600 })
+      simulateSymbolicFile(path)
+    } else {
+      symlinkSync(outside, path)
+    }
 
     expect(() => readDesktopProfilePreferences(userData, profile)).toThrow('regular file')
     await expect(writeDesktopProfilePreferences(userData, profile, PREFERENCES, RECORDED_AT))

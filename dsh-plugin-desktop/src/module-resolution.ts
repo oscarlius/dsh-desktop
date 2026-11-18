@@ -4,6 +4,7 @@ import Module, {
   createRequire,
   isBuiltin,
   registerHooks,
+  type LoadHookSync,
   type ModuleHooks,
   type ResolveHookSync,
 } from 'node:module'
@@ -17,6 +18,7 @@ import {
   type PackageOverlayCandidate,
 } from './package-overlay.ts'
 import { retainAsarModuleResolver } from './asar-module-resolver-state.ts'
+import { patchAppearancePluginSource } from './appearance-plugin-compat.ts'
 
 const LOADER_ENTRY_URL = import.meta.resolve('@deepseek-ai/cordis-plugin-loader')
 // Keep installation resolution in Electron's logical ASAR tree. Native
@@ -57,6 +59,7 @@ interface ProcessResolverState {
   readonly overlayResolveFilename: CommonJsModuleResolver['_resolveFilename']
   bypassDepth: number
   nextSequence: number
+  load: LoadHookSync
   resolve: ResolveHookSync
   resolveFilename: CommonJsModuleResolver['_resolveFilename']
 }
@@ -619,6 +622,24 @@ function resolveWithState(
     : resolveForRegistration(state, parentRegistration, specifier, context, nextResolve)
 }
 
+function loadWithState(
+  state: ProcessResolverState,
+  url: string,
+  context: Parameters<LoadHookSync>[1],
+  nextLoad: Parameters<LoadHookSync>[2],
+): ReturnType<LoadHookSync> {
+  const loaded = nextLoad(url, context)
+  const candidate = filePath(url)
+  if (candidate === undefined || loaded.source === undefined) return loaded
+  const registration = newestRegistration(
+    state,
+    entry => isWithin(entry, entry.profileDirectory, candidate),
+  )
+  if (registration === undefined) return loaded
+  const patched = patchAppearancePluginSource(candidate, registration.profileDirectory, loaded.source)
+  return patched === undefined ? loaded : { ...loaded, source: patched }
+}
+
 function migrateResolverState(state: ProcessResolverState): void {
   let latestSequence = Number.isFinite(state.nextSequence) ? state.nextSequence : 0
   for (const registration of state.registrations.values()) {
@@ -653,6 +674,7 @@ function ensureResolverState(): ProcessResolverState {
     existing.resolve = (specifier, context, nextResolve) => (
       resolveWithState(existing, specifier, context, nextResolve)
     )
+    existing.load = (url, context, nextLoad) => loadWithState(existing, url, context, nextLoad)
     existing.resolveFilename = function (this: CommonJsModuleResolver, request, parent, isMain, options) {
       return resolveFilenameWithState(existing, this, request, parent, isMain, options)
     }
@@ -664,10 +686,12 @@ function ensureResolverState(): ProcessResolverState {
     registrations: new Map<string, ProfileResolverRegistration>(),
     bypassDepth: 0,
     nextSequence: 0,
+    load: ((url, context, nextLoad) => nextLoad(url, context)) as LoadHookSync,
     resolve: ((specifier, context, nextResolve) => nextResolve(specifier, context)) as ResolveHookSync,
     resolveFilename: previousResolveFilename,
   } as ProcessResolverState
   const hooks = registerHooks({
+    load: (url, context, nextLoad) => state.load(url, context, nextLoad),
     resolve: (specifier, context, nextResolve) => state.resolve(specifier, context, nextResolve),
   })
   Object.defineProperty(state, 'hooks', { value: hooks, enumerable: true })
@@ -688,6 +712,7 @@ function ensureResolverState(): ProcessResolverState {
   state.resolve = (specifier, context, nextResolve) => (
     resolveWithState(state, specifier, context, nextResolve)
   )
+  state.load = (url, context, nextLoad) => loadWithState(state, url, context, nextLoad)
   state.resolveFilename = function (this: CommonJsModuleResolver, request, parent, isMain, options) {
     return resolveFilenameWithState(state, this, request, parent, isMain, options)
   }

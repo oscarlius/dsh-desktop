@@ -31,6 +31,7 @@ export function updateLabel(state: NextUpdateState, language: string): string {
 }
 
 export function updateAction(state: NextUpdateState): 'check-updates' | 'download-update' | 'install-update' | undefined {
+  if (state.error === 'unsupported') return undefined
   if (state.phase === 'ready') return 'install-update'
   if (state.phase === 'available' || state.phase === 'error' && state.version && state.error !== 'service') return 'download-update'
   if (['idle', 'current', 'error'].includes(state.phase)) return 'check-updates'

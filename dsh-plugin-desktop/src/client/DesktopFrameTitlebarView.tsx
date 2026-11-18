@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { DesktopSettingsApi } from './desktop-settings-api.ts'
 import type { DesktopClientEnvironment, DesktopClientMode } from './environment.ts'
 import { DesktopNativeActions } from './DesktopNativeActions.tsx'
+import { companyBuildVersion } from '../company-build-version.ts'
 import { Button } from '../native-ui/components/ui/button.tsx'
 import type { DesktopSettingsLocaleKey } from './desktop-settings-locales.ts'
 import {
@@ -42,7 +43,8 @@ export function DesktopVersionControl({
       .catch(() => { setFailed(true) })
       .finally(() => { setChecking(false) })
   }
-  const visibleVersion = `v${version}`
+  const build = companyBuildVersion(version)
+  const visibleVersion = `v${build.visible}`
   return (
     <HoverCard>
       <HoverCardTrigger
@@ -56,7 +58,7 @@ export function DesktopVersionControl({
       <HoverCardContent className="dshDesktopVersionPopover">
         <div className="dshDesktopVersionPopoverHeader">
           <span>{t('currentVersion')}</span>
-          <strong>{visibleVersion}</strong>
+          <strong>{visibleVersion}</strong>{build.build !== undefined && <small>{`构建 ${build.build}`}</small>}
         </div>
         <Button
           className="dshDesktopVersionCheckButton"

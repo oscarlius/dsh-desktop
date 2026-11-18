@@ -1,6 +1,12 @@
 ; Check the exact app process before launching the quit handoff. This preserves
 ; the #469 fix: unrelated helpers under $INSTDIR must never block an upgrade.
 Var pid
+Var companyAutoUpdate
+
+!macro customUnInit
+  ; The shared running-process check is also compiled into the uninstaller.
+  StrCpy $companyAutoUpdate "0"
+!macroend
 
 !macro customCheckAppRunning
   ${if} ${isUpdated}
@@ -14,6 +20,13 @@ Var pid
   !insertmacro FIND_PROCESS "${APP_EXECUTABLE_FILENAME}" $R0
   ${if} $R0 != 0
     Goto dsh_installer_app_stopped
+  ${endIf}
+
+  ${if} $companyAutoUpdate == "1"
+    ; Another launch can appear after the original update owner exits. Wait
+    ; for it naturally; automatic maintenance must not ask its Agent to quit.
+    StrCpy $R1 0
+    Goto dsh_installer_wait_for_exit
   ${endIf}
 
   IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0 dsh_installer_scoped_fallback
@@ -38,6 +51,13 @@ Var pid
     ${endIf}
 
   dsh_installer_scoped_fallback:
+  ${if} $companyAutoUpdate == "1"
+    ; A next-launch update must never escalate to a forced close. A surviving
+    ; process means this one attempt is abandoned and the old app remains usable.
+    SetErrorLevel 1
+    Quit
+  ${endIf}
+
     ; The patched builder macros match DSH Desktop.exe, not every executable
     ; below $INSTDIR. They handle pre-handoff releases and stubborn processes.
     MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK dsh_installer_stop_app
@@ -75,8 +95,14 @@ Var pid
 ; the visible extraction progress window.
 !macro customInit
   !ifndef BUILD_UNINSTALLER
+    StrCpy $companyAutoUpdate "0"
+    ${StdUtils.TestParameter} $R0 "company-auto-update"
+    ${if} $R0 == "true"
+      StrCpy $companyAutoUpdate "1"
+    ${endIf}
     ${if} ${isUpdated}
     ${andIf} ${isForceRun}
+    ${andIf} $companyAutoUpdate != "1"
       SetSilent normal
     ${endIf}
   !endif
@@ -98,15 +124,87 @@ Var pid
   !endif
 !macroend
 
+; Node quotes a final /D argument when its value has spaces. GetDParameter
+; returns that closing quote as part of the value, although it is not part of
+; a valid Windows path.
+!macro normalizeInstallDirectory path
+  StrLen $R1 ${path}
+  ${if} $R1 > 0
+    StrCpy $R1 ${path} 1 -1
+    ${if} $R1 == "$\""
+      StrCpy ${path} ${path} -1
+    ${endIf}
+  ${endIf}
+  StrCpy $R1 ${path} 1
+  ${if} $R1 == "$\""
+    StrCpy ${path} ${path} "" 1
+  ${endIf}
+!macroend
+
+; assistedInstaller.nsh sanitizes the directory in instFilesPre. Replace its
+; callback with a wrapper so legacy registered paths are restored after that
+; sanitizer and immediately before extraction.
+!macro customPageAfterChangeDir
+  !ifdef allowToChangeInstallationDirectory
+  !undef MUI_PAGE_CUSTOMFUNCTION_PRE
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE dshLegacyInstallPathPre
+  Function dshLegacyInstallPathPre
+    Call instFilesPre
+    !ifndef BUILD_UNINSTALLER
+    ${if} ${isUpdated}
+      !insertmacro GetDParameter $R0
+      ${if} $R0 != ""
+        !insertmacro normalizeInstallDirectory $R0
+        StrCpy $INSTDIR $R0
+      ${else}
+        ${if} $installMode == "all"
+          ReadRegStr $R0 HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
+        ${else}
+          ReadRegStr $R0 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+        ${endIf}
+        ${if} $R0 != ""
+          StrCpy $INSTDIR $R0
+        ${endIf}
+      ${endIf}
+    ${endIf}
+    !endif
+  FunctionEnd
+  !endif
+!macroend
+
 ; When launched visibly by an in-app update (--updated --force-run), relaunch
 ; the updated application and close the installer as soon as extraction finishes
 ; without stopping on the Finish wizard page.
 !macro customInstall
   ${if} ${isUpdated}
   ${andIf} ${isForceRun}
-  ${andIfNot} ${Silent}
+  ${if} $companyAutoUpdate == "1"
     HideWindow
-    ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "--updated"
+    ; This automatic path is already a current-user installer. Launch directly
+    ; so the restarted application inherits its APPDATA and DSH environment;
+    ; ExecShellAsUser routes through Explorer and drops those variables.
+    ClearErrors
+    Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --updated'
+    IfErrors dsh_installer_auto_restart_failed dsh_installer_auto_restart_succeeded
+  dsh_installer_auto_restart_failed:
+    SetErrorLevel 1
+    Quit
+  dsh_installer_auto_restart_succeeded:
     !insertmacro quitSuccess
+  ${else}
+  ${ifNot} ${Silent}
+    HideWindow
+    ${StdUtils.ExecShellAsUser} $0 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "open" "--updated"
+    DetailPrint "Restarting updated application: $0"
+    ${if} $0 == "ok"
+      !insertmacro quitSuccess
+    ${orIf} $0 == "fallback"
+      !insertmacro quitSuccess
+    ${else}
+      ShowWindow $HWNDPARENT ${SW_SHOWNORMAL}
+      MessageBox MB_ICONEXCLAMATION "The update is installed, but the application could not be reopened. Please open it from its installation folder."
+    ${endIf}
+  ${endIf}
+  ${endIf}
   ${endIf}
 !macroend

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, expect, it, vi } from 'vitest'
-import { NextUpdateSettings } from '../src/client/updates.tsx'
+import { NextUpdateSettings, NextVersionManagement } from '../src/client/updates.tsx'
 import { DEFAULT_PREFERENCES, type DesktopState } from '../src/desktop-contract.ts'
 import { NextUpdates, type NextUpdateOptions } from '../src/updates.ts'
 import { serveMacUpdate } from '../src/mac-update-feed.ts'
@@ -161,4 +161,11 @@ it('renders only the version on Linux while showing update status and controls o
   expect(macHtml).toContain('检查更新')
   expect(macHtml).toContain('应用内安装更新需要使用 macOS 或 Windows 安装版。')
   expect(macHtml).toContain('<button')
+})
+
+it('keeps the version-management tab informative in a browser without using desktop update controls', () => {
+  const html = renderToStaticMarkup(createElement(NextVersionManagement, { language: 'zh-CN' }))
+  expect(html).toContain('版本管理')
+  expect(html).toContain('应用内更新仅可在 DSH Desktop 中使用。')
+  expect(html).not.toContain('<button')
 })

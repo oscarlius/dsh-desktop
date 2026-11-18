@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { expect, it } from 'vitest'
 const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'))
 it('declares every official optional bundle as a discoverable, version-aligned installation dependency', () => {
@@ -50,6 +50,7 @@ it('archives the application like upstream Desktop while keeping fuses and nativ
   // Stable's rule already keeps the interpreter payloads and the wheels' .dylibs directories, identical across the two
   // CPU builds. Next adds its own per-CPU native packages and pnpm's reflink addons from its bundled dist/node_modules.
   expect(next.build.mac.x64ArchFiles).toBe(stable.build.mac.x64ArchFiles
+    .replace('@dataiku/uv-darwin-*/**', '@dataiku/uv-darwin-*/**,@mnemon-dev/mnemon-darwin-*/**')
     .replace('sherpa-onnx-darwin-*/**}', 'sherpa-onnx-darwin-*/**,@trycua/cua-driver-darwin-*/**,@ubjs/node-darwin-*/**,@reflink/reflink-darwin-*/**}'))
   // Both CPU payloads ride beside the archive as extra resources; electron-builder must not re-sign the pre-signed payloads.
   // macOS also carries the manifest copy the updaters shipped in 2.0.14-next through 2.0.17-next read beside the archive.

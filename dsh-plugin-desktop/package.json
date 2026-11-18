@@ -96,7 +96,7 @@
     "build/icons/**"
   ],
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": ">=24.9.0"
   },
   "dsh": {
     "optionalBundles": [
@@ -156,10 +156,11 @@
     "verify:aa": "node ../scripts/prepare-agents-anywhere-runtime.mjs && DSH_VERIFY_AA=1 node scripts/verify-profile-boot.mjs",
     "prepare:electron-native": "node scripts/prepare-fs-ext.ts",
     "prepare:runtime": "node scripts/prepare-runtime.ts",
-    "icons:export": "node ../scripts/export-app-icons.mjs --channel stable"
+    "icons:export": "node ../scripts/export-app-icons.mjs --channel stable",
+    "dist:win:company-update": "node scripts/package-win.ts --company-update"
   },
   "dependencies": {
-    "@agents-anywhere/dsh-bridge-next": "file:../vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.1.0-desktop.cb9f491df9a97.r7504932a.tgz",
+    "@agents-anywhere/dsh-bridge-next": "file:../vendor/agents-anywhere/agents-anywhere-dsh-bridge-next-2.2.0-desktop.c8a0782cd814d.r5dbd817f.tgz",
     "@deepseek-ai/cordis": "4.0.5",
     "@deepseek-ai/cordis-plugin-group": "1.0.5",
     "@deepseek-ai/cordis-plugin-include": "1.0.10",
@@ -339,7 +340,11 @@
     "@deepseek-ai/schemastery": "^3.18.5",
     "adm-zip": "^0.6.0",
     "dsh-community-market": "0.1.0-dev.0",
-    "dshmarket": "1.70.1",
+    "dsh-plugin-p7-company-models": "workspace:*",
+    "dsh-plugin-p7-mcp": "workspace:*",
+    "dsh-plugin-p7-web-search": "workspace:*",
+    "dshmarket": "1.73.12",
+    "electron-updater": "6.8.9",
     "fs-ext": "2.1.1",
     "koffi": "3.1.1",
     "node-addon-require-builtin": "^0.1.9",

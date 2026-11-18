@@ -1,6 +1,6 @@
 /** Reuse the signed universal DMG verifier with Next's application identity. */
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmdirSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { macSmokeArchitecture, macSmokeExecutableSlices, type MacUniversalArch } from '../../dsh-plugin-desktop/scripts/mac-universal.ts'
@@ -9,9 +9,17 @@ import { NEXT_MAC_NATIVE_ENTRIES } from './mac-runtime.ts'
 import { verifyNextMacEntitlements } from './verify-mac-entitlements.ts'
 import { verifyNextMacRuntime } from './verify-mac-runtime.ts'
 
+export function macProductName(): string {
+  const product = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  if (typeof product?.build?.productName !== 'string' || product.build.productName.length === 0) {
+    throw new Error('Package build.productName is required for macOS release verification')
+  }
+  return product.build.productName
+}
+
 export function verifyNextMac(signed: boolean): void {
   const smokeSlices = signed ? undefined : macSmokeExecutableSlices(macSmokeArchitecture(process.env))
-  verifyMacRelease({ distDir: resolve(process.argv[2] ?? `dist/${signed ? 'mac-release' : 'mac-smoke'}`), productName: 'DSH Desktop Beta', nativeEntries: NEXT_MAC_NATIVE_ENTRIES,
+  verifyMacRelease({ distDir: resolve(process.argv[2] ?? `dist/${signed ? 'mac-release' : 'mac-smoke'}`), productName: macProductName(), nativeEntries: NEXT_MAC_NATIVE_ENTRIES,
     // Next archives its application; native files live beside the archive.
     unpackedRoot: appPath => join(appPath, 'Contents', 'Resources', 'app.asar.unpacked'),
     listDmgs: path => readdirSync(path).filter(name => name.endsWith('.dmg')).map(name => join(path, name)).filter(path => statSync(path).isFile()),

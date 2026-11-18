@@ -2,11 +2,14 @@
 import { execFile, spawn } from 'node:child_process'
 import { constants } from 'node:fs'
 import { access, lstat, mkdir, readdir, readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, win32 } from 'node:path'
 import { promisify } from 'node:util'
+import { launchWindowsUpdateHandoff } from './windows-update-handoff.ts'
 
 const execute = promisify(execFile)
 export const NEXT_APP_ID = 'ai.deepseek.dsh.desktop.beta'
+export const COMPANY_APP_ID = 'ai.deepseek.dsh.desktop.companytest'
+export const COMPANY_PRODUCT_NAME = 'P7 DSH Company Test'
 
 const MAC_PROGRESS_UI_SCRIPT = `
 ObjC.import("Cocoa");
@@ -40,8 +43,8 @@ app.run;
 `
 
 export const MAC_UPDATE_SCRIPT = [
-  '/usr/bin/osascript -l JavaScript -e "$DSH_UPDATE_UI_SCRIPT" >/dev/null 2>&1 &',
-  'UI_PID=$!',
+  'UI_PID=',
+  'if [ "${DSH_UPDATE_SILENT:-}" != "1" ]; then /usr/bin/osascript -l JavaScript -e "$DSH_UPDATE_UI_SCRIPT" >/dev/null 2>&1 & UI_PID=$!; fi',
   'cleanup() { kill "$UI_PID" 2>/dev/null || true; }',
   'trap cleanup EXIT',
   'i=0',
@@ -50,12 +53,10 @@ export const MAC_UPDATE_SCRIPT = [
   '  [ "$i" -ge 150 ] && exit 1',
   '  sleep 0.2',
   'done',
-  'BACKUP="${DSH_UPDATE_INSTALLED}.backup-$$"',
+  'BACKUP="${DSH_UPDATE_BACKUP:-${DSH_UPDATE_INSTALLED}.backup-$$}"',
   'rm -rf "$BACKUP"',
   'mv "$DSH_UPDATE_INSTALLED" "$BACKUP" || exit 1',
-  'if mv "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED" 2>/dev/null || /usr/bin/ditto "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED"; then',
-  '  rm -rf "$BACKUP" "$DSH_UPDATE_DIR"',
-  'else',
+  'if ! (mv "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED" 2>/dev/null || /usr/bin/ditto "$DSH_UPDATE_STAGED" "$DSH_UPDATE_INSTALLED"); then',
   '  rm -rf "$DSH_UPDATE_INSTALLED"',
   '  mv "$BACKUP" "$DSH_UPDATE_INSTALLED"',
   '  cleanup',
@@ -64,26 +65,84 @@ export const MAC_UPDATE_SCRIPT = [
   'fi',
   '/usr/bin/xattr -dr com.apple.quarantine "$DSH_UPDATE_INSTALLED" 2>/dev/null || true',
   'sleep 0.8',
+  'if ! /usr/bin/open "$DSH_UPDATE_INSTALLED" --args --updated; then',
+  '  rm -rf "$DSH_UPDATE_INSTALLED"',
+  '  mv "$BACKUP" "$DSH_UPDATE_INSTALLED"',
+  '  cleanup',
+  '  /usr/bin/open "$DSH_UPDATE_INSTALLED"',
+  '  exit 1',
+  'fi',
+  'if [ "${DSH_UPDATE_KEEP_BACKUP:-}" != "1" ]; then rm -rf "$BACKUP" "$DSH_UPDATE_DIR"; fi',
   'cleanup',
-  '/usr/bin/open "$DSH_UPDATE_INSTALLED" --args --updated',
 ].join('\n')
 
 /** Check both bundle identity and embedded SemVer before validating the signature. */
-export function assertNextMacBundle(identifier: string, manifest: unknown, version: string): void {
-  if (identifier.trim() !== NEXT_APP_ID || !manifest || typeof manifest !== 'object'
-    || (manifest as { name?: unknown }).name !== 'dsh-plugin-desktop-beta' || (manifest as { version?: unknown }).version !== version) {
+export function assertNextMacBundle(identifier: string, manifest: unknown, version: string, productName?: string): void {
+  const company = productName === COMPANY_PRODUCT_NAME
+  const distribution = (manifest !== null && typeof manifest === 'object')
+    ? (manifest as { dshDesktopFlavor?: unknown }).dshDesktopFlavor
+    : undefined
+  const personalLoginDistribution = (manifest !== null && typeof manifest === 'object')
+    ? (manifest as { dshDesktopPersonalLoginDistribution?: unknown }).dshDesktopPersonalLoginDistribution
+    : undefined
+  if (identifier.trim() !== (company ? COMPANY_APP_ID : NEXT_APP_ID) || !manifest || typeof manifest !== 'object'
+    || (manifest as { name?: unknown }).name !== 'dsh-plugin-desktop-beta' || (manifest as { version?: unknown }).version !== version
+    || (company ? distribution !== 'companytest' || personalLoginDistribution !== true : distribution === 'companytest')) {
     throw new Error('The downloaded application does not match this Next release')
   }
 }
 
-export function assertNextWindowsInstaller(info: { ProductName?: unknown; ProductVersion?: unknown }, version: string): void {
-  if (info.ProductName !== 'DSH Desktop Beta' || info.ProductVersion !== version) throw new Error('The installer does not match this Next release')
+/** A personal-login company build is ad-hoc signed, so bind it to the sealed bundle identifier instead of a Team ID. */
+export function assertCompanyAdHocMacSignature(details: string, identifier: string): void {
+  const lines = new Set(details.split(/\r?\n/u))
+  if (!lines.has(`Identifier=${identifier}`) || !lines.has('Signature=adhoc')
+    || [...lines].some(line => /^TeamIdentifier=(?!not set$)[A-Z0-9]+$/u.test(line))) {
+    throw new Error('Company update is not an ad-hoc signed application with the expected bundle identity')
+  }
+}
+
+function signingTeam(details: string): string | undefined {
+  return /^TeamIdentifier=([A-Z0-9]+)$/mu.exec(details)?.[1]
+}
+
+function assertCompanyMacSignatureIdentity(details: string, identifier: string): void {
+  if (!details.split(/\r?\n/u).includes(`Identifier=${identifier}`)) {
+    throw new Error('Company update signing identity does not match the application bundle')
+  }
+}
+
+/** Keep future Developer ID company updates pinned to the installed team; only personal-login builds may be ad-hoc. */
+export function assertCompanyMacUpdateSignature(installedDetails: string, candidateDetails: string, identifier: string, personalLoginDistribution: boolean): void {
+  assertCompanyMacSignatureIdentity(installedDetails, identifier)
+  assertCompanyMacSignatureIdentity(candidateDetails, identifier)
+  const team = signingTeam(installedDetails)
+  if (team !== undefined) {
+    if (!candidateDetails.split(/\r?\n/u).includes(`TeamIdentifier=${team}`)) throw new Error('Company update signing team does not match the installed application')
+    return
+  }
+  if (!personalLoginDistribution) throw new Error('Company ad-hoc updates require a personal-login distribution')
+  assertCompanyAdHocMacSignature(installedDetails, identifier)
+  assertCompanyAdHocMacSignature(candidateDetails, identifier)
+}
+
+export function assertNextWindowsInstaller(info: { ProductName?: unknown; ProductVersion?: unknown }, version: string, productName = 'DSH Desktop Beta'): void {
+  if (info.ProductName !== productName || info.ProductVersion !== version) throw new Error('The installer does not match this release')
+}
+
+/** Keep the company NSIS update in the directory of the running company executable. */
+export function nextWindowsInstallerArguments(productName: string | undefined, executable: string, automatic = false): readonly string[] {
+  return [
+    ...(automatic ? ['/S', '/currentuser', '--company-auto-update'] : []),
+    '--updated',
+    '--force-run',
+    ...(productName === COMPANY_PRODUCT_NAME ? [`/D=${win32.dirname(executable)}`] : []),
+  ]
 }
 
 export class NextUpdateInstaller {
   private prepared?: { path: string; version: string; directory?: string; bundle?: string; installed?: string }
   private nativeReady = false
-  constructor(private readonly options: { platform: string; executable: string; language?: () => string; log(error: unknown): void }) {}
+  constructor(private readonly options: { platform: string; executable: string; language?: () => string; log(error: unknown): void; productName?: string }) {}
   async prepare(path: string, version: string, directory: string, signal: AbortSignal): Promise<void> {
     this.prepared = undefined; this.nativeReady = false
     if (this.options.platform === 'win32') {
@@ -91,7 +150,7 @@ export class NextUpdateInstaller {
       const info = await execute(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
         ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
         { signal, timeout: 30_000, windowsHide: true, env: { ...process.env, DSH_UPDATE_INSTALLER: path }, maxBuffer: 16_384 })
-      assertNextWindowsInstaller(JSON.parse(info.stdout.replace(/^\uFEFF/, '')), version)
+      assertNextWindowsInstaller(JSON.parse(info.stdout.replace(/^\uFEFF/, '')), version, this.options.productName)
       this.prepared = { path, version }; return
     }
     if (this.options.platform !== 'darwin') throw new Error('Unsupported update platform')
@@ -114,12 +173,16 @@ export class NextUpdateInstaller {
       const manifestPath = join(bundle, 'Contents', 'Resources', 'app', 'package.json')
       const meta = await lstat(manifestPath)
       if (!meta.isFile() || meta.isSymbolicLink() || meta.size > 128 * 1024) throw new Error('Invalid Next application manifest')
-      assertNextMacBundle(info.stdout, JSON.parse(await readFile(manifestPath, 'utf8')), version)
+      assertNextMacBundle(info.stdout, JSON.parse(await readFile(manifestPath, 'utf8')), version, this.options.productName)
       await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle])
       const installedSignature = await run('/usr/bin/codesign', ['-dv', '--verbose=4', installed])
       const candidateSignature = await run('/usr/bin/codesign', ['-dv', '--verbose=4', bundle])
-      const team = /^TeamIdentifier=([A-Z0-9]+)$/m.exec(installedSignature.stderr)?.[1]
-      if (!team || !candidateSignature.stderr.split('\n').includes(`TeamIdentifier=${team}`)) throw new Error('Next update signing team does not match the installed application')
+      if (this.options.productName === COMPANY_PRODUCT_NAME) {
+        assertCompanyMacUpdateSignature(installedSignature.stderr, candidateSignature.stderr, COMPANY_APP_ID, true)
+      } else {
+        const team = /^TeamIdentifier=([A-Z0-9]+)$/m.exec(installedSignature.stderr)?.[1]
+        if (!team || !candidateSignature.stderr.split('\n').includes(`TeamIdentifier=${team}`)) throw new Error('Next update signing team does not match the installed application')
+      }
       const staged = join(directory, apps[0]!.name)
       await run('/usr/bin/ditto', [bundle, staged])
       this.prepared = { path, version, directory, bundle: staged, installed }
@@ -145,12 +208,13 @@ export class NextUpdateInstaller {
     this.nativeReady = true
   }
   /** Called after the Host and windows have finished shutting down. */
-  async launch(): Promise<void> {
+  async launch(automatic = false): Promise<void> {
     if (this.options.platform === 'darwin') {
       const prepared = this.prepared
       if (!this.nativeReady || !prepared?.bundle || !prepared.installed || !prepared.directory) throw new Error('No prepared update installer')
       const zh = (this.options.language?.() ?? 'en').toLowerCase().startsWith('zh')
-      const message = zh ? `正在更新 DSH Desktop Beta 至 ${prepared.version}，请稍候…` : `Updating DSH Desktop Beta to ${prepared.version}, please wait…`
+      const productName = this.options.productName ?? 'DSH Desktop Beta'
+      const message = zh ? `正在更新 ${productName} 至 ${prepared.version}，请稍候…` : `Updating ${productName} to ${prepared.version}, please wait…`
       await new Promise<void>((resolve, reject) => {
         const child = spawn('/bin/sh', ['-c', MAC_UPDATE_SCRIPT], {
           detached: true, stdio: 'ignore', shell: false, cwd: '/',
@@ -160,9 +224,11 @@ export class NextUpdateInstaller {
             DSH_UPDATE_STAGED: prepared.bundle!,
             DSH_UPDATE_INSTALLED: prepared.installed!,
             DSH_UPDATE_DIR: prepared.directory!,
-            DSH_UPDATE_TITLE: 'DSH Desktop Beta',
+            ...(automatic ? { DSH_UPDATE_BACKUP: `${prepared.installed!}.p7-pending-backup`, DSH_UPDATE_KEEP_BACKUP: '1' } : {}),
+            DSH_UPDATE_TITLE: productName,
             DSH_UPDATE_MESSAGE: message,
             DSH_UPDATE_UI_SCRIPT: MAC_PROGRESS_UI_SCRIPT,
+            ...(automatic ? { DSH_UPDATE_SILENT: '1' } : {}),
           },
         })
         child.once('error', reject)
@@ -171,8 +237,16 @@ export class NextUpdateInstaller {
       return
     }
     if (this.options.platform !== 'win32' || !this.prepared) throw new Error('No prepared update installer')
+    if (automatic) {
+      // The cache directory survives the old process, retaining a bounded sidecar
+      // outcome beside the already-authenticated installer for recovery diagnosis.
+      await launchWindowsUpdateHandoff({ executable: this.options.executable, installer: this.prepared.path, statusDirectory: dirname(this.prepared.path) })
+      return
+    }
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(this.prepared!.path, ['--updated', '--force-run'], { detached: true, stdio: 'ignore', shell: false, windowsHide: false })
+      const child = spawn(this.prepared!.path, nextWindowsInstallerArguments(this.options.productName, this.options.executable, automatic), {
+        detached: true, stdio: 'ignore', shell: false, windowsHide: automatic,
+      })
       child.once('error', reject)
       child.once('spawn', () => { child.off('error', reject); child.on('error', this.options.log); child.unref(); resolve() })
     })

@@ -1,6 +1,6 @@
 /** Alpha.2 shared Web profile runner, hosted by an Electron Node-mode child. */
 import { auditHostPlugins, configureHostLogging, hostLog, hostOperation } from './logging.ts'
-import { basename, delimiter, join, resolve } from 'node:path'
+import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { inspect } from 'node:util'
 import { loadLayeredEnv } from '@deepseek-ai/dsh-app-boot'
@@ -21,9 +21,11 @@ import { watchPlatformLogin, type PlatformLoginAccount } from './platform-login.
 import { installAgentPresetResolution } from './agent-preset.ts'
 import { installCuaDriverResolution } from './cua-driver.ts'
 import { installOfficeEngineResolution } from './office-engine.ts'
+import { installSharpWasmResolution } from './sharp-wasm.ts'
 import { installSkillBadgeResolution } from './skill-badge.ts'
 import * as desktopOffice from './office.ts'
 import { resolveOfficeConfig } from './office.ts'
+import { installDesktopSkillManagement } from './skill-management.ts'
 
 export async function main(): Promise<void> {
   // The Host lists and reads user workspaces; see asar-archive-policy.ts.
@@ -41,6 +43,8 @@ export async function main(): Promise<void> {
   installCuaDriverResolution(runtimeDir)
   // The badge skill tells the model to take its PNG from the directory it announces, which shells and the Host's filesystem service cannot read inside the archive.
   installSkillBadgeResolution(runtimeDir)
+  // Linux sharp must not load its native backends beside the GLib Electron links; it runs its WebAssembly build instead.
+  installSharpWasmResolution(runtimeDir)
   const preferences = parsePreferences(JSON.parse(process.env.DSH_NEXT_PREFERENCES ?? '{}'))
   configureHostLogging(preferences)
   hostLog({ source: 'host', event: 'process.start', fields: { profile: basename(projectDir), node: process.version } })
@@ -52,22 +56,28 @@ export async function main(): Promise<void> {
   delete process.env.DSH_NEXT_PREFERENCES
   delete process.env.DSH_NEXT_TRUSTED_HOSTS
   delete process.env[SYSTEM_PROXY_ENV]
-  const profile = loadNextProfile(projectDir, home)
   const runtimePatch = join(projectDir, 'desktop-next.runtime.patch.json')
   atomicJson(runtimePatch, [
     { id: 'desktop-next-webserver', config: { host: '127.0.0.1', port: preferences.port } },
     { id: 'connection', config: { trustedHosts } },
   ])
+  const profileOverlays = [join(runtimeDir, 'host.cordis.patch.yml'), join(projectDir, 'desktop-next.cordis.patch.json'), runtimePatch]
+  const profile = loadNextProfile(projectDir, home)
+  profile.patches = readNextProfilePatches(projectDir, home, profileOverlays, profile.patches)
   // runProfile installs the outbound proxy policy from this environment before any plugin mounts.
   const { environment, resolution: proxy } = withSystemProxy(loadLayeredEnv('dsh-desktop-next'), systemProxy, trustedHosts as string[])
   // One line on every start, direct included: a connectivity report cannot be answered without it.
   for (const line of [proxy.summary, ...proxy.diagnostics]) process.stderr.write(`dsh-desktop-next: ${maskSecrets(line)}\n`)
   const application = runProfile({
     environment, profile: basename(projectDir),
-    resolvedProfile: { profile, installAnchor: NEXT_PACKAGE,
-      readPatches: profilePatches => readNextProfilePatches(projectDir, home,
-        [join(runtimeDir, 'host.cordis.patch.yml'), join(projectDir, 'desktop-next.cordis.patch.json'), runtimePatch], profilePatches) },
-    patchFiles: [join(runtimeDir, 'host.cordis.patch.yml'), join(projectDir, 'desktop-next.cordis.patch.json'), runtimePatch], args: ['--no-open', '--port', String(preferences.port)],
+    resolvedProfile: {
+      profile,
+      installAnchor: NEXT_PACKAGE,
+      // Settings saves and HMR provide only the pending user document; rebuild
+      // the complete ordered composition without duplicating Host overlays.
+      readPatches: profilePatches => readNextProfilePatches(projectDir, home, profileOverlays, profilePatches),
+    },
+    patchFiles: [join(dirname(NEXT_PACKAGE), 'cordis.patch.yml'), join(runtimeDir, 'host.cordis.patch.yml'), join(projectDir, 'desktop-next.cordis.patch.json'), runtimePatch], args: ['--no-open', '--port', String(preferences.port)],
     packageManager: {
       command: process.execPath, args: ['--expose-internals', bundledPnpmEntry(NEXT_PACKAGE), ...withDesktopPnpmPolicy([])],
       env: {
@@ -90,7 +100,14 @@ export async function main(): Promise<void> {
     const running = await application.catch(() => undefined)
     try { await running?.shutdown.shutdown(0); end() } catch (error) { end(error); throw error }
     await send({ type: 'shutdown-complete' })
-    if (process.connected) process.disconnect()
+    if (process.connected) {
+      await new Promise<void>(resolveDisconnect => {
+        process.once('disconnect', resolveDisconnect)
+        process.disconnect()
+      })
+    }
+    // The acknowledgement callback above has flushed before this explicit
+    // exit.  Some optional plugins keep handles alive after public disposal.
     process.exit(0)
   })()
   process.on('message', (value: unknown) => {
@@ -110,7 +127,7 @@ export async function main(): Promise<void> {
       if (!Number.isSafeInteger(query.requestId)) return
       void application.then(async ({ ctx }) => {
         if (stopping) throw new Error('Next Host is stopping')
-        await send({ type: 'injections', requestId: query.requestId, injections: ctx.webServer.collectIndexInjections() })
+        await send({ type: 'injections', requestId: query.requestId, injections: ctx.webServer.collectIndexInjections(ctx.connection.browserPeer) })
       }).catch(async () => { await send({ type: 'injections', requestId: query.requestId, error: 'Could not collect Web boot injections' }) }).catch(fatal)
       return
     }
@@ -133,9 +150,11 @@ export async function main(): Promise<void> {
     const mounted = hostOperation('host', 'office.mount', { source: office.source })
     try { await ctx.plugin(desktopOffice, office); mounted() } catch (error) { mounted(error); throw error }
   }
+  try { await installDesktopSkillManagement(ctx, { home, projectDir }) }
+  catch (error) { hostLog({ source: 'host', event: 'skills.unavailable', level: 'warn', fields: { message: maskSecrets(error instanceof Error ? error.message : String(error)) } }) }
   hostLog({ source: 'host', event: 'process.ready' })
   await send({ type: 'ready', url: ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`),
-    injections: ctx.webServer.collectIndexInjections() })
+    injections: ctx.webServer.collectIndexInjections(ctx.connection.browserPeer) })
   auditHostPlugins(ctx)
   const account = ctx.get('deepseekAccount') as PlatformLoginAccount | undefined
   if (account !== undefined && !stopping) {

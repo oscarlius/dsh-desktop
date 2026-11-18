@@ -15,20 +15,21 @@ export async function verifyDesktopOnboardingBrowser({ url, cookie, headers }) {
   const browser = await chromium.launch({ headless: true, ...(process.env.DSH_NEXT_TEST_BROWSER_CHANNEL ? { channel: process.env.DSH_NEXT_TEST_BROWSER_CHANNEL } : {}) })
   let page
   const errors = []
+  let accountOnboardingEnabled = true
   let required = true, accountPending = false, restartPending = false, rejectSave = true, restartRequests = 0
   const submissions = []
   const input = {
     profileName: 'desktop', appVersion: '2.0.14', platform: 'darwin',
     mode: 'compatibility', macosMaterial: 'off', windowsMaterial: 'off',
     openBrowser: false, networkExposure: 'loopback', market: 'community-market', aaEnabled: false,
-    notifications: { enabled: true, notifyOnTurnCompletion: true, notifyOnTurnFailure: true, notifyOnJobCompletion: false, notifyOnJobFailure: false },
+    notifications: { enabled: true, notifyOnTurnCompletion: true, notifyOnTurnFailure: true, notifyOnJobCompletion: false, notifyOnJobFailure: false, notifyOnScheduleCompletion: false, notifyOnScheduleFailure: false },
   }
   try {
     const context = await browser.newContext({ viewport: { width: 1040, height: 720 }, locale: 'zh-CN', colorScheme: 'dark', extraHTTPHeaders: headers })
     const target = new URL(url)
     const separator = cookie.indexOf('=')
     await context.addCookies([{ url: target.origin, name: cookie.slice(0, separator), value: cookie.slice(separator + 1) }])
-    await context.exposeFunction('__readSetup', () => ({ required, accountPending, restartPending, edition: 'desktop', profile: 'desktop', input }))
+    await context.exposeFunction('__readSetup', () => ({ required, accountPending, accountOnboardingEnabled, restartPending, edition: 'desktop', profile: 'desktop', input }))
     await context.exposeFunction('__finishSetup', (profile, selection) => {
       if (rejectSave) { rejectSave = false; throw new Error('Fixture: save failed') }
       submissions.push({ profile, selection }); required = false; accountPending = selection !== undefined
@@ -72,11 +73,11 @@ export async function verifyDesktopOnboardingBrowser({ url, cookie, headers }) {
     await next()
     await surface.getByText('开启手机连接', { exact: true }).click()
     await click('上一步')
-    assert.equal(await surface.getByRole('radio', { name: /dsh-market/ }).isChecked(), true)
+    assert.equal(await surface.getByRole('radio', { name: /^dsh-market\b/ }).isChecked(), true)
     await next()
     assert.equal(await surface.getByRole('radio', { name: /开启手机连接/ }).isChecked(), true)
     await next()
-    assert.equal(await surface.getByRole('switch').count(), 5)
+    assert.equal(await surface.getByRole('switch').count(), 7)
     assert.equal(await surface.getByRole('switch').first().evaluate(node => getComputedStyle(node).cursor), 'pointer')
     await surface.getByRole('switch').first().click()
     assert.equal(await surface.getByRole('switch').nth(1).isDisabled(), true)
@@ -154,7 +155,22 @@ export async function verifyDesktopOnboardingBrowser({ url, cookie, headers }) {
     assert.equal(submissions.at(-1).selection, undefined)
     assert.equal(restartRequests, 1)
     assert.equal(await page.locator('#root').evaluate(element => element.inert), false)
+    accountOnboardingEnabled = false
+    accountPending = true // Existing beta.2 continuation markers must not reappear.
+    required = false
+    restartPending = false
+    await page.reload()
+    await page.getByRole('button', { name: /^(插件|Plugins)$/ }).waitFor()
+    assert.equal(await surface.count(), 0)
+    assert.equal(await page.getByRole('button', { name: '登录 DeepSeek', exact: true }).count(), 0)
+    assert.equal(await page.getByRole('dialog', { name: '开始使用', exact: true }).count(), 0)
+    assert.equal(await page.locator('[data-desktop-onboarding]').count(), 0)
+    assert.equal(await page.locator('#root').evaluate(element => element.inert), false)
+    await page.reload()
+    await page.getByRole('button', { name: /^(插件|Plugins)$/ }).waitFor()
+    assert.equal(await surface.count(), 0)
     assert.deepEqual(errors, [])
+    console.log('Company onboarding bypass passed: no DeepSeek sign-in, official account flow, or recurring beta.2 marker.')
     console.log('Original Desktop wizard passed: eight pages, retained choices, original browser/LAN/skip confirmations, save retry, completion, and no repeat.')
   } catch (error) {
     console.error(errors)

@@ -9,6 +9,9 @@ import { APP_BOOT_SCRIPT, serveWebDocument } from '../lib/web-document.js'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const require = createRequire(import.meta.url)
+const desktopClient = readFileSync(join(root, 'lib/client.js'), 'utf8')
+assert.ok(!/\brequire\(["']@deepseek-ai\/dsh-util-workspace-path["']\)/u.test(desktopClient),
+  'Workspace path helpers must be bundled; the browser module table does not provide this package')
 const webRoot = dirname(require.resolve('@deepseek-ai/dsh-web-frontend/dist/index.html'))
 const official = readFileSync(join(webRoot, 'index.html'), 'utf8')
 const local = await serveWebDocument(new Request('dsh-app://app/'), webRoot)
@@ -151,4 +154,4 @@ for (const platform of ['darwin', 'win32', 'linux']) {
   await permissions.openSettings('screen')
   assert.deepEqual([...invocations.at(-1)], ['dsh-next:permission-settings', 'screen'])
 }
-console.log('Next frontend check passed: official 0.2.1-rc.3 entry and independent sandboxed preloads for macOS, Windows and Linux.')
+console.log(`Next frontend check passed: official ${JSON.parse(readFileSync(require.resolve('@deepseek-ai/dsh/package.json'), 'utf8')).version} entry and independent sandboxed preloads for macOS, Windows and Linux.`)

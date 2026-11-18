@@ -4,6 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import * as NativeExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import * as Provider from '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native'
 import type { DesktopPermission, DesktopPermissions } from '../src/permissions.ts'
@@ -27,6 +28,7 @@ beforeEach(async () => {
   await ctx.plugin(ComputerUseRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeExecutor)
 })
 afterEach(async () => { await ctx.fiber.dispose() })
 const state = (permission: DesktopPermission) => ({ permission, status: 'denied' as const, canRequest: false, canOpenSettings: true })
@@ -42,8 +44,12 @@ async function mount() {
   expect(native.create).toHaveBeenCalledOnce() // Never run calls if the native mock was bypassed.
   return fiber
 }
-function execute(name = 'check_permissions', args: Record<string, unknown> = { prompt: false }) {
-  return ctx.tools.execute({ name: `cua_driver_native__${name}`, callId: ToolCallId('desktop-cua-test'), arguments: args, signal: new AbortController().signal })
+async function execute(name = 'check_permissions', args: Record<string, unknown> = { prompt: false }) {
+  const batch = await ctx.tools.execute({
+    calls: [{ type: 'tool-call', id: ToolCallId('desktop-cua-test'), name: `cua_driver_native__${name}`, arguments: JSON.stringify(args) }],
+    signal: new AbortController().signal,
+  })
+  return batch.results[0]!.result
 }
 
 it('queries Desktop without prompting and preserves the driver permission result', async () => {

@@ -6,6 +6,11 @@
 !.yarn/sdks
 !.yarn/versions
 node_modules/
+dsh-plugin-p7-company-models/lib/
+dsh-plugin-p7-web-search/lib/
+dsh-plugin-p7-mcp/lib/
+dsh-web-host/lib/
+dsh-web-host/.boot-home/
 *.tsbuildinfo
 .build/
 
@@ -21,3 +26,5 @@ dsh-desktop-next/.desktop-build/
 dsh-plugin-desktop/.desktop-build/
 dsh-plugin-desktop-beta/.desktop-next/
 dsh-plugin-desktop-beta/.desktop-build/
+dsh-plugin-desktop-beta/dist-company/
+.task-artifacts/

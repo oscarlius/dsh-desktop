@@ -1,0 +1,53 @@
+diff --git a/Source/exehead/Main.c b/Source/exehead/Main.c
+index de6bd7b..b5f2265 100644
+--- a/Source/exehead/Main.c
++++ b/Source/exehead/Main.c
+@@ -84,6 +84,30 @@ TCHAR *ValidateTempDir()
+   return my_GetTempFileName(state_language, state_temp_dir);
+ }
+ 
++/*
++ * The executable header must create its temporary payload before it can load
++ * the installer headers or execute .onInit. When policy makes the inherited
++ * temp directory unavailable, use a directory in the current user's
++ * LocalAppData before falling back to the original system and Low-IL paths.
++ * This is process-local: the parent user's environment and ACLs are never
++ * changed.
++ */
++BOOL TryCompanyLocalAppDataTempDir()
++{
++  if (SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE, NULL,
++                      SHGFP_TYPE_CURRENT, state_temp_dir) != S_OK)
++    return FALSE;
++
++  mystrcat(state_temp_dir, _T("\\DSH-NEXT-InstallerTemp"));
++  if (!ValidateTempDir())
++    return FALSE;
++
++  /* ValidateTempDir adds the trailing slash, which is also the child value. */
++  SetEnvironmentVariable(_T("TEMP"), state_temp_dir);
++  SetEnvironmentVariable(_T("TMP"), state_temp_dir);
++  return TRUE;
++}
++
+ 
+ NSIS_ENTRYPOINT_GUINOCRT
+ EXTERN_C void NSISWinMainNOCRT()
+@@ -290,6 +314,9 @@ EXTERN_C void NSISWinMainNOCRT()
+   GetTempPath(NSIS_MAX_STRLEN, state_temp_dir);
+   if (!ValidateTempDir())
+   {
++    if (TryCompanyLocalAppDataTempDir())
++      goto tempdir_ready;
++
+     GetWindowsDirectory(state_temp_dir, NSIS_MAX_STRLEN - 5); // leave space for \Temp
+     mystrcat(state_temp_dir, _T("\\Temp"));
+     if (!ValidateTempDir())
+@@ -320,6 +347,7 @@ EXTERN_C void NSISWinMainNOCRT()
+       }
+     }
+   }
++tempdir_ready:
+   DeleteFile(state_language);
+ 
+   m_Err = loadHeaders(cl_flags);

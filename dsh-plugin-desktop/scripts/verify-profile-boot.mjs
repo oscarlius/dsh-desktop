@@ -2,7 +2,8 @@
 
 import { createRequire, syncBuiltinESMExports } from 'node:module'
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cp } from 'node:fs/promises'
 import os, { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -67,8 +68,14 @@ const home = mkdtempSync(join(tmpdir(), 'dsh-desktop-profile-'))
 // isolated smoke directory so `verify:aa` never touches the operator's real
 // `~/.agents-anywhere/` or collides with a running Desktop instance.
 const realUserInfo = os.userInfo.bind(os)
+const originalHomeEnvironment = new Map(['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'].map(name => [name, process.env[name]]))
 os.userInfo = options => ({ ...realUserInfo(options), homedir: home })
 os.homedir = () => home
+// The Node bridge uses userInfo(), while its bundled Python connector resolves
+// Path.home() from the Windows home environment. Keep both views inside this
+// disposable fixture so the smoke never creates or reads an operator endpoint.
+process.env.HOME = home
+process.env.USERPROFILE = home
 syncBuiltinESMExports()
 let ctx
 let releasePackageResolver
@@ -117,7 +124,7 @@ try {
     staleManifest.version = '0.1.0-dev.0.desktop.ca022d9286dd0.rc4b2a1d2'
     staleManifest.peerDependencies['@deepseek-ai/dsh-session'] = '0.1.5-rc.2'
     writeFileSync(join(stalePackage, 'package.json'), JSON.stringify(staleManifest))
-    cpSync(new URL('./cordis.patch.yml', pathToFileURL(installedManifest)), join(stalePackage, 'cordis.patch.yml'))
+    await cp(new URL('./cordis.patch.yml', pathToFileURL(installedManifest)), join(stalePackage, 'cordis.patch.yml'))
     mkdirSync(join(stalePackage, 'lib', 'bundled-connector'), { recursive: true })
     writeFileSync(join(stalePackage, 'lib', 'bundled-connector', 'pyproject.toml'), '')
     mkdirSync(join(home, 'aa-smoke-state'))
@@ -140,7 +147,7 @@ try {
     HOST_SERVICE_PLUGIN_NAME,
   )
   mkdirSync(join(prepared.profile.dir, 'node_modules'), { recursive: true })
-  cpSync(
+  await cp(
     fileURLToPath(new URL('../tests/fixtures/desktop-host-services-smoke-plugin/', import.meta.url)),
     hostServicePluginDir,
     { recursive: true, force: false, errorOnExist: true },
@@ -453,6 +460,12 @@ try {
     if (runtimeStatus.state !== 'ready') {
       throw new Error(`AA local runtime is ${String(runtimeStatus.state)}: ${String(runtimeStatus.message)}`)
     }
+    // connector.json is published by the Connector-side BridgeHost only after
+    // a Connector starts. This smoke deliberately has no account or Connector;
+    // requiring that file would either consult an operator endpoint or fabricate
+    // an authenticated Connector. The real capability here is the DSH-side
+    // bridge: it mounted, served the authenticated profile, and resolved its
+    // configured bundled runtime without inheriting an account.
     if (!existsSync(managerLock)) throw new Error('AA did not publish its per-user bridge manager lock')
     if (JSON.parse(readFileSync(managerLock, 'utf8')).pid !== process.pid) {
       throw new Error('AA bridge manager lock belongs to another process; quit any running Desktop with AA enabled')
@@ -498,4 +511,8 @@ try {
   releasePackageResolver?.()
   pnpmRuntime?.dispose()
   rmSync(home, { recursive: true, force: true })
+  for (const [name, value] of originalHomeEnvironment) {
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+  }
 }

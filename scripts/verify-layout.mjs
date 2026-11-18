@@ -19,6 +19,9 @@ const nextDesktop = readJson('dsh-desktop-next/package.json')
 const nextReference = readJson('dsh-desktop-next/upstream-reference.json')
 const fabric = readJson('dsh-community-fabric/package.json')
 const market = readJson('dsh-community-market/package.json')
+const p7Models = readJson('dsh-plugin-p7-company-models/package.json')
+const p7WebSearch = readJson('dsh-plugin-p7-web-search/package.json')
+const p7Mcp = readJson('dsh-plugin-p7-mcp/package.json')
 const upstreamPackage = readJson('deepseek-harness/package.json')
 
 if (stablePlugin.name !== 'dsh-plugin-desktop') fail('the stable Desktop workspace must retain dsh-plugin-desktop')
@@ -26,20 +29,32 @@ if (betaPlugin.name !== 'dsh-plugin-desktop-beta') fail('the Beta Desktop worksp
 if (!['stable', 'beta'].includes(upstream.activeChannel)) fail('the pinned upstream checkout must follow a declared release channel')
 const activeUpstream = upstream.channels?.[upstream.activeChannel]
 if (activeUpstream === undefined) fail('the active upstream channel is missing')
+// npm prereleases can precede the corresponding public Git tag. Keep the
+// read-only desktop source checkout pinned separately from the runtime bytes.
+const checkoutUpstream = activeUpstream.releaseSource?.kind === 'npm'
+  ? upstream.channels?.[upstream.sourceCheckoutChannel]
+  : activeUpstream
+if (!checkoutUpstream || !/^[a-f0-9]{40}$/.test(checkoutUpstream.commit)) fail('the source checkout must name a recorded Git commit')
 
 if (workspace.packageManager !== 'yarn@4.18.0') {
   fail('the product workspace must pin yarn@4.18.0')
 }
 if (JSON.stringify(workspace.workspaces) !== JSON.stringify([
+  'dsh-plugin-p7-company-models',
+  'dsh-plugin-p7-web-search',
+  'dsh-plugin-p7-mcp',
   'dsh-plugin-desktop',
   'dsh-plugin-desktop-beta',
   'dsh-desktop-next',
   'dsh-community-fabric',
   'dsh-community-market',
 ])) {
-  fail('the root Yarn workspace must contain the desktop, community-fabric, and community-market packages')
+  fail('the root Yarn workspace must contain the company model plugin, desktop, community-fabric, and community-market packages')
 }
 for (const [name, manifest] of [
+  ['dsh-plugin-p7-company-models', p7Models],
+  ['dsh-plugin-p7-web-search', p7WebSearch],
+  ['dsh-plugin-p7-mcp', p7Mcp],
   ['dsh-plugin-desktop', stablePlugin],
   ['dsh-plugin-desktop-beta', betaPlugin],
   ['dsh-desktop-next', nextDesktop],
@@ -50,6 +65,9 @@ for (const [name, manifest] of [
 }
 if (fabric.name !== 'dsh-community-fabric') fail('the Fabric workspace must own dsh-community-fabric')
 if (market.name !== 'dsh-community-market') fail('the market workspace must own dsh-community-market')
+if (p7Models.name !== 'dsh-plugin-p7-company-models') fail('the company model workspace must own dsh-plugin-p7-company-models')
+if (p7WebSearch.name !== 'dsh-plugin-p7-web-search') fail('the company search workspace must own dsh-plugin-p7-web-search')
+if (p7Mcp.name !== 'dsh-plugin-p7-mcp') fail('the managed MCP workspace must own dsh-plugin-p7-mcp')
 const claudePath = resolve(root, 'CLAUDE.md')
 const claudeStat = lstatSync(claudePath)
 // Windows checkouts materialize the symlink as a regular file holding the
@@ -63,6 +81,8 @@ if (claudeTarget !== 'AGENTS.md') {
 for (const legacyFile of [
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
+  'dsh-plugin-p7-company-models/pnpm-lock.yaml',
+  'dsh-plugin-p7-company-models/pnpm-workspace.yaml',
   'dsh-plugin-desktop/pnpm-lock.yaml',
   'dsh-plugin-desktop/pnpm-workspace.yaml',
   'dsh-plugin-desktop-beta/pnpm-lock.yaml',
@@ -88,6 +108,9 @@ if (typeof upstreamPackage.packageManager !== 'string' || !upstreamPackage.packa
 
 for (const [owner, manifest] of [
   ['root', workspace],
+  ['company models', p7Models],
+  ['p7 web search', p7WebSearch],
+  ['p7 mcp', p7Mcp],
   ['stable desktop', stablePlugin],
   ['beta desktop', betaPlugin],
   ['next desktop', nextDesktop],
@@ -97,6 +120,9 @@ for (const [owner, manifest] of [
   for (const field of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies', 'resolutions']) {
     for (const [name, range] of Object.entries(manifest[field] ?? {})) {
       if (typeof range !== 'string') continue
+      // These private plugins are owned by Desktop, outside the pinned upstream.
+      if (['dsh-plugin-p7-company-models', 'dsh-plugin-p7-web-search', 'dsh-plugin-p7-mcp'].includes(name) && field === 'dependencies'
+        && ['stable desktop', 'beta desktop', 'p7 mcp', 'p7 web search'].includes(owner) && range === 'workspace:*') continue
       if (/^(?:workspace|portal|link):/u.test(range)
         || (range.startsWith('file:') && range.includes('deepseek-harness'))) {
         fail(`${owner} ${field}.${name} bypasses the published DSH package boundary`)
@@ -107,10 +133,10 @@ for (const [owner, manifest] of [
 
 const [mode, object] = run('git', ['ls-files', '--stage', '--', 'deepseek-harness']).split(/\s+/u)
 if (mode !== '160000') fail('deepseek-harness must be tracked as a Git submodule')
-if (object !== activeUpstream.commit) fail(`submodule index is ${object}, expected ${activeUpstream.commit}`)
+if (object !== checkoutUpstream.commit) fail(`submodule index is ${object}, expected ${checkoutUpstream.commit}`)
 
 const upstreamDir = resolve(root, 'deepseek-harness')
-if (run('git', ['rev-parse', 'HEAD'], upstreamDir) !== activeUpstream.commit) {
+if (run('git', ['rev-parse', 'HEAD'], upstreamDir) !== checkoutUpstream.commit) {
   fail('checked-out upstream commit differs from upstream.json')
 }
 if (run('git', ['status', '--porcelain'], upstreamDir) !== '') {
@@ -119,7 +145,7 @@ if (run('git', ['status', '--porcelain'], upstreamDir) !== '') {
 if (run('git', ['remote', 'get-url', 'origin'], upstreamDir) !== upstream.repository) {
   fail('deepseek-harness origin differs from upstream.json')
 }
-if (upstreamPackage.version !== activeUpstream.sourceVersion) {
+if (upstreamPackage.version !== checkoutUpstream.sourceVersion) {
   fail('deepseek-harness package version differs from upstream.json')
 }
 for (const [channel, plugin] of [['stable', stablePlugin], ['beta', betaPlugin]]) {
@@ -133,8 +159,9 @@ for (const [channel, plugin] of [['stable', stablePlugin], ['beta', betaPlugin]]
 }
 
 if (nextDesktop.name !== 'dsh-desktop-next' || nextDesktop.private !== true) fail('Next must remain a private experimental package')
+if (nextReference.commit !== checkoutUpstream.commit || nextReference.version !== checkoutUpstream.sourceVersion) fail('Next desktop source reference must match the retained source checkout')
 for (const [name, version] of Object.entries(nextDesktop.dependencies)) {
-  if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && version !== nextReference.version) fail(`Next ${name} must match the pinned upstream family`)
+  if ((name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-')) && version !== upstream.channels.beta.runtimePackageVersion) fail(`Next ${name} must match the pinned Beta runtime family`)
 }
 
 process.stdout.write(`verify-layout: Desktop workspaces including Next and upstream ${activeUpstream.commit.slice(0, 10)} are consistent\n`)

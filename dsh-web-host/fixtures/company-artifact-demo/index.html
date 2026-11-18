@@ -1,0 +1,81 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DSH 评测看板 · 合成数据</title></head><body>
+<style>
+.bench { color:#142633; background:#edf3f1; padding:clamp(1rem,4vw,3rem); border-radius:16px; font-family:system-ui,sans-serif }
+.bench h1 {font-size:clamp(1.75rem,4vw,2.8rem); margin:.2em 0 .4em; letter-spacing:-.04em}
+.bench h2 {font-size:1.1rem;margin:0 0 1rem}
+.bench p {line-height:1.5;margin:.5em 0 1.2em}
+.bench .tools {display:flex; flex-wrap:wrap; gap:.7rem 1rem; margin:1.4rem 0 1rem}
+.bench select {background:#fff;color:#142633;border:1px solid #9bb5b1;border-radius:6px;padding:.42rem;margin-left:.35rem}
+.bench .paper {background:#fff;padding:1.25rem;border:1px solid #d2e1de;border-radius:10px;margin:1rem 0}
+.bench .barrow {display:grid;grid-template-columns:minmax(90px,1.2fr) minmax(40px,4fr) auto;gap:.55rem;align-items:center;margin:.6rem 0;font-size:.9rem}
+.bench .track {background:#edf2f3;border-radius:5px;overflow:hidden;height:.65rem}
+.bench .fill {height:100%;background:#14665e;border-radius:5px}
+.bench .fill.alt {background:#526bac}
+.bench .scroll {overflow-x:auto}
+.bench table {width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.bench th,.bench td {text-align:left;padding:.65rem .35rem;border-bottom:1px solid #dbe4e4;white-space:nowrap}
+.bench .sub {color:#3e5b5d}
+</style>
+<main class="bench">
+ <h1>DSH 评测看板</h1>
+ <p class="sub">合成数据 · 用于验证本地交互与公司发布流程</p>
+ <div class="tools">
+  <label>评测场景<select id="scene" data-draw="choices" data-source="runs"></select></label>
+  <label>对比指标<select id="metric"><option value="success">成功率</option><option value="latency">中位延迟</option></select></label>
+ </div>
+ <section class="paper"><h2>方案对比</h2><div data-draw="bars" data-source="runs">—</div></section>
+ <section class="paper"><h2>样本明细</h2><div class="scroll"><table data-source="runs"><thead><tr><th scope="col">场景</th><th scope="col">方案</th><th scope="col">成功 / 总计</th><th scope="col">中位延迟</th></tr></thead><tbody data-draw="rows"></tbody></table></div></section>
+</main>
+<script>const rows=[{"scenario":"文档检索","variant":"方案 A","success":"44","total":"50","latency_ms":"1260"},{"scenario":"文档检索","variant":"方案 B","success":"47","total":"50","latency_ms":"980"},{"scenario":"结构提取","variant":"方案 A","success":"42","total":"50","latency_ms":"1670"},{"scenario":"结构提取","variant":"方案 B","success":"45","total":"50","latency_ms":"1410"},{"scenario":"多步分析","variant":"方案 A","success":"38","total":"50","latency_ms":"2450"},{"scenario":"多步分析","variant":"方案 B","success":"43","total":"50","latency_ms":"2190"}];
+const draw=new Map();
+const dash={
+  data:()=>({status:'ok',data:rows}),
+  draw(name,callback){
+    if(callback)draw.set(name,callback);
+    for(const el of document.querySelectorAll('[data-draw="'+name+'"]'))draw.get(name)?.(el);
+  }
+};
+const scene = document.querySelector('#scene');
+const metric = document.querySelector('#metric');
+const node = (tag, value, name) => {const el = document.createElement(tag); if (value != null) el.textContent = value; if (name) el.className = name; return el;};
+const num = new Intl.NumberFormat('zh-CN');
+function currentRows() {
+ const source = dash.data('runs');
+ if (source.status !== 'ok') return [];
+ return source.data.filter(row => !scene?.value || scene.value === row.scenario);
+}
+function redraw() { dash.draw('bars'); dash.draw('rows'); }
+metric?.addEventListener('change', redraw);
+dash.draw('choices', el => {
+ const data = dash.data('runs');
+ if (data.status !== 'ok') return;
+ const before = el.value;
+ el.replaceChildren(new Option('全部场景',''), ...[...new Set(data.data.map(row => row.scenario))].map(value => new Option(value)));
+ el.value = [...el.options].some(option => option.value === before) ? before : '';
+ el.onchange = redraw;
+});
+dash.draw('bars', el => {
+ const rows = currentRows();
+ const latency = metric?.value === 'latency';
+ const max = latency ? Math.max(1, ...rows.map(row => Number(row.latency_ms))) : 100;
+ el.replaceChildren(...rows.map(row => {
+   const value = latency ? Number(row.latency_ms) : 100 * Number(row.success) / Number(row.total);
+   const line = node('div', null, 'barrow');
+   const track = node('div', null, 'track');
+   const fill = node('div', null, row.variant.endsWith('B') ? 'fill alt' : 'fill');
+   fill.style.width = (100 * value / max) + '%';
+   track.setAttribute('aria-hidden', 'true');
+   track.append(fill);
+   line.append(node('span', row.scenario + ' · ' + row.variant), track, node('strong', num.format(value) + (latency ? ' ms' : '%')));
+   return line;
+ }));
+});
+dash.draw('rows', el => {
+ el.replaceChildren(...currentRows().map(row => {
+   const tr = node('tr');
+   for (const value of [row.scenario, row.variant, row.success + ' / ' + row.total, num.format(Number(row.latency_ms)) + ' ms']) tr.append(node('td', value));
+   return tr;
+ }));
+});
+</script>
+</body></html>

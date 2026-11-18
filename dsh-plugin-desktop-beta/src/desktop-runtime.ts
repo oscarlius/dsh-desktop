@@ -17,6 +17,8 @@ import { DesktopLanHttpsRuntime } from './lan-https-runtime.ts'
 import type { DesktopLanHttpsCertificate } from './lan-https-certificate.ts'
 import type { DesktopPermission, DesktopPermissionAction, DesktopPermissionSnapshot } from './permissions.ts'
 import { SYSTEM_PROXY_ENV, type DesktopSystemProxyProbe } from './system-proxy.ts'
+import type { P7SessionVaultRequest, P7SessionVaultResult } from './p7-session-vault.ts'
+import { COMPANY_TRANSPORT_VERSION } from './product-identity.ts'
 
 interface RuntimeOptions {
   home: string
@@ -39,6 +41,9 @@ interface RuntimeOptions {
   onNotification(notification: DesktopNotification): void
   onPermission?(action: DesktopPermissionAction, permission: DesktopPermission): Promise<DesktopPermissionSnapshot>
   onPlatformLogin?(request: DesktopPlatformLoginRequest): void
+  p7SessionVault?(profileDir: string, request: P7SessionVaultRequest): Promise<P7SessionVaultResult>
+  onP7AccountBrowser?(url: string): void
+  companyMode?: boolean
 }
 
 export class NextDesktopRuntime {
@@ -283,10 +288,13 @@ export class NextDesktopRuntime {
       { ...process.env, DSH_HOME: actualHome, DSH_NEXT_NATIVE_TOKEN: token,
         DSH_NEXT_PREFERENCES: JSON.stringify(effective), DSH_NEXT_TRUSTED_HOSTS: JSON.stringify(addresses),
         [SYSTEM_PROXY_ENV]: JSON.stringify(options.systemProxy?.() ?? {}),
+        ...(options.companyMode ? { DSH_COMPANY_MODE: '1', DSH_COMPANY_TRANSPORT_VERSION: COMPANY_TRANSPORT_VERSION } : {}),
         ...(this.safeMode ? { DSH_TELEMETRY_DISABLED: '1' } : {}) },
       onFailure, options.primaryRuntime, undefined, join(options.root, 'lib', 'host.js'), options.onRestart, options.onNotification,
       (chunk, stream, pid) => this.diagnostics.hostChunk(chunk, stream, pid), options.onTerminal, options.onPermission, undefined, options.onPlatformLogin,
-      input => { if (input.event === 'exit') this.diagnostics.hostClosed(input.pid); this.diagnostics.record(input) })
+      input => { if (input.event === 'exit') this.diagnostics.hostClosed(input.pid); this.diagnostics.record(input) },
+      request => options.p7SessionVault?.(new NextProfiles(actualHome).directory(profile), request) ?? Promise.reject(new Error('P7 encrypted storage is unavailable')),
+      options.onP7AccountBrowser)
     this.hostProcess = host
     return {
       start: async (): Promise<void> => {

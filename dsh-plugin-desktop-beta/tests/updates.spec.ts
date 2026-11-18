@@ -4,11 +4,12 @@ import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, expect, it, vi } from 'vitest'
-import { NextUpdateSettings } from '../src/client/updates.tsx'
+import { NextUpdateSettings, NextVersionManagement } from '../src/client/updates.tsx'
 import { DEFAULT_PREFERENCES, type DesktopState } from '../src/desktop-contract.ts'
 import { NextUpdates, type NextUpdateOptions } from '../src/updates.ts'
 import { serveMacUpdate } from '../src/mac-update-feed.ts'
 import { updateAction, updateLabel } from '../src/update-state.ts'
+import { markPendingCompanyUpdate, readPendingCompanyUpdate } from '../src/pending-update.ts'
 import type { UpdateRequest } from '../../dsh-plugin-desktop/src/update-checker.ts'
 import type { UpdateArtifactRequest } from '../../dsh-plugin-desktop/src/update-download.ts'
 
@@ -65,6 +66,18 @@ it('does not start background update polling on Linux', async () => {
   await vi.advanceTimersByTimeAsync(60_000)
   expect(request).not.toHaveBeenCalled()
 })
+it('keeps unsupported company platforms away from both company and upstream feeds', async () => {
+  vi.useFakeTimers()
+  const check = vi.fn()
+  const { updates, request, options } = await fixture({ platform: 'linux', company: { check } as never })
+  updates.start()
+  await vi.advanceTimersByTimeAsync(60_000)
+  await updates.check(); await updates.download(); await updates.install()
+  expect(updates.snapshot()).toMatchObject({ phase: 'error', error: 'unsupported', installable: false })
+  expect(updateAction(updates.snapshot())).toBeUndefined()
+  expect(check).not.toHaveBeenCalled(); expect(request).not.toHaveBeenCalled()
+  expect(options.prepare).not.toHaveBeenCalled(); expect(options.install).not.toHaveBeenCalled()
+})
 it('rechecks the selected version before downloading, and preserves preparation failures for retry', async () => {
   const { updates, options } = await fixture({ prepare: async () => { throw new Error('Signature mismatch') } })
   await updates.download()
@@ -79,6 +92,112 @@ it('stops polling and aborts an active request on shutdown', async () => {
   await vi.waitFor(() => expect(request).toHaveBeenCalledOnce())
   await updates.dispose(); await check
   expect(request.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+})
+it('persists a company download, applies it once after a fresh matching check, then clears only after health', async () => {
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe',
+    sha256: 'a'.repeat(64), sha512: Buffer.alloc(64, 1).toString('base64'), size: 9 }
+  const check = vi.fn(async () => release)
+  const download = vi.fn(async (_release: typeof release, directory: string) => { const path = join(directory, 'update.exe'); await writeFile(path, 'installer'); return path })
+  const verify = vi.fn(async () => {})
+  const company = { identity: { cacheName: 'company-cache' }, check, download, verify }
+  const stage = vi.fn(async () => {}); const launchAutomatic = vi.fn(async () => {})
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', stage, launchAutomatic, canAutomaticApply: vi.fn(async () => true),
+    prepare: vi.fn(async () => {}) })
+  await updates.check(true)
+  expect(download).toHaveBeenCalledOnce()
+  await updates.dispose()
+  const cache = join(options.userData, 'company-cache')
+  expect(readPendingCompanyUpdate(cache)).toMatchObject({ status: 'pending', version: release.version })
+  const restarted = new NextUpdates({ ...options, version: '2.0.19-beta.1', company: company as never, stage, launchAutomatic }); owners.push(restarted)
+  await expect(restarted.applyPendingOnNextLaunch()).resolves.toBe(true)
+  expect(stage).toHaveBeenCalledOnce(); expect(launchAutomatic).toHaveBeenCalledOnce()
+  const healthy = new NextUpdates({ ...options, version: release.version, company: company as never }); owners.push(healthy)
+  healthy.confirmPendingAfterHealthyHost(release.version, true)
+  expect(readPendingCompanyUpdate(cache)).toBeUndefined()
+})
+it.each(['offline', 'withdrawn', 'tampered-root', 'wrong-architecture'] as const)('does not consume a pending update when fresh eligibility is %s', async mode => {
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 9 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: async (_r: typeof release, directory: string) => { const path = join(directory, 'update.exe'); await writeFile(path, 'installer'); return path }, verify: vi.fn(async () => {}) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download(); await updates.dispose()
+  const cache = join(options.userData, 'company-cache')
+  if (mode === 'offline') company.check.mockRejectedValueOnce(new Error('offline'))
+  else if (mode === 'withdrawn') company.check.mockResolvedValueOnce({ status: 'not-published' } as never)
+  else if (mode === 'wrong-architecture') company.check.mockResolvedValueOnce({ ...release, architecture: 'universal' } as never)
+  const restarted = new NextUpdates({ ...options, company: company as never, ...(mode === 'tampered-root' ? { executable: 'C:\\Other\\P7.exe' } : {}), stage: vi.fn(async () => {}), launchAutomatic: vi.fn(async () => {}) }); owners.push(restarted)
+  await expect(restarted.applyPendingOnNextLaunch()).resolves.toBe(false)
+  expect(readPendingCompanyUpdate(cache)).toMatchObject({ status: 'pending', attempts: 0 })
+})
+it('keeps the pending transaction untouched when Windows current-user preflight denies automatic apply', async () => {
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 9 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: async (_r: typeof release, directory: string) => { const path = join(directory, 'update.exe'); await writeFile(path, 'installer'); return path }, verify: vi.fn(async () => {}) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download(); await updates.dispose()
+  const stage = vi.fn(async () => {}); const launchAutomatic = vi.fn(async () => {})
+  const restarted = new NextUpdates({ ...options, company: company as never, stage, launchAutomatic, canAutomaticApply: vi.fn(async () => false) }); owners.push(restarted)
+  await expect(restarted.applyPendingOnNextLaunch()).resolves.toBe(false)
+  expect(readPendingCompanyUpdate(join(options.userData, 'company-cache'))).toMatchObject({ status: 'pending', attempts: 0 })
+  expect(stage).not.toHaveBeenCalled(); expect(launchAutomatic).not.toHaveBeenCalled()
+})
+
+it('owns a verified copy of the electron-updater cache while retaining its differential base', async () => {
+  const globalCache = await mkdtemp(join(tmpdir(), 'company-electron-delta-cache-')); roots.push(globalCache)
+  const cached = join(globalCache, 'update.exe'); await writeFile(cached, 'verified delta installer')
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 24 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: vi.fn(async () => cached), verify: vi.fn(async (path: string) => { expect(await readFile(path, 'utf8')).toBe('verified delta installer') }) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download()
+  expect(updates.snapshot()).toMatchObject({ phase: 'ready' })
+  const pending = readPendingCompanyUpdate(join(options.userData, 'company-cache'))!
+  expect(pending.installerPath).not.toBe(cached)
+  expect(pending.installerPath).toBe(join(pending.installerDirectory, 'P7-DSH-Company-Test-2.0.20-beta.2-x64-Setup.exe'))
+  expect(await readFile(cached, 'utf8')).toBe('verified delta installer')
+  expect(company.verify).toHaveBeenCalledWith(pending.installerPath, release, expect.any(AbortSignal))
+})
+it('marks a launched pending update failed and never launches it a second time', async () => {
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 9 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: async (_r: typeof release, directory: string) => { const path = join(directory, 'update.exe'); await writeFile(path, 'installer'); return path }, verify: vi.fn(async () => {}) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download(); await updates.dispose()
+  const launchAutomatic = vi.fn(async () => { throw new Error('launch failed') })
+  const restarted = new NextUpdates({ ...options, company: company as never, stage: vi.fn(async () => {}), launchAutomatic, canAutomaticApply: vi.fn(async () => true) }); owners.push(restarted)
+  expect(await restarted.applyPendingOnNextLaunch()).toBe(false)
+  const cache = join(options.userData, 'company-cache')
+  expect(readPendingCompanyUpdate(cache)).toMatchObject({ status: 'failed', attempts: 1 })
+  expect(await restarted.applyPendingOnNextLaunch()).toBe(false)
+  expect(launchAutomatic).toHaveBeenCalledOnce()
+})
+it('keeps the old Beta process out of Host startup while a verified Windows handoff is active', async () => {
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 9 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: async (_r: typeof release, directory: string) => { const path = join(directory, 'update.exe'); await writeFile(path, 'installer'); return path }, verify: vi.fn(async () => {}) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download(); await updates.dispose()
+  const cache = join(options.userData, 'company-cache'); const pending = readPendingCompanyUpdate(cache)!
+  markPendingCompanyUpdate(cache, pending, 'applying')
+  const stage = vi.fn(async () => {}); const launchAutomatic = vi.fn(async () => {})
+  const restarted = new NextUpdates({ ...options, version: '2.0.19-beta.1', company: company as never, stage, launchAutomatic, automaticInProgress: vi.fn(async () => true) }); owners.push(restarted)
+  await expect(restarted.applyPendingOnNextLaunch()).resolves.toBe(true)
+  expect(stage).not.toHaveBeenCalled(); expect(launchAutomatic).not.toHaveBeenCalled()
+  expect(readPendingCompanyUpdate(cache)).toMatchObject({ status: 'applying', attempts: 1 })
+})
+
+it('marks a dead Windows handoff failed without re-running automatic installation', async () => {
+  const release = { status: 'update-available' as const, version: '2.0.20-beta.2', releaseNotes: '', downloadUrl: 'https://p7.example/update.exe', sha256: 'a'.repeat(64), size: 9 }
+  const company = { identity: { cacheName: 'company-cache' }, check: vi.fn(async () => release),
+    download: async (_r: typeof release, directory: string) => { const path = join(directory, 'update.exe'); await writeFile(path, 'installer'); return path }, verify: vi.fn(async () => {}) }
+  const { updates, options } = await fixture({ platform: 'win32', company: company as never, executable: 'C:\\P7\\P7.exe', prepare: vi.fn(async () => {}) })
+  await updates.download(); await updates.dispose()
+  const cache = join(options.userData, 'company-cache'); markPendingCompanyUpdate(cache, readPendingCompanyUpdate(cache)!, 'applying')
+  const stage = vi.fn(async () => {}); const launchAutomatic = vi.fn(async () => {})
+  const restarted = new NextUpdates({ ...options, version: '2.0.19-beta.1', company: company as never, stage, launchAutomatic, automaticInProgress: vi.fn(async () => false) }); owners.push(restarted)
+  await expect(restarted.applyPendingOnNextLaunch()).resolves.toBe(false)
+  expect(readPendingCompanyUpdate(cache)).toMatchObject({ status: 'failed', attempts: 1 })
+  expect(stage).not.toHaveBeenCalled(); expect(launchAutomatic).not.toHaveBeenCalled()
 })
 it('shows progress and an actionable downloaded state in both languages', () => {
   expect(updateLabel({ phase: 'downloading', installable: true, received: 25, total: 100 }, 'zh-CN')).toContain('25%')
@@ -161,4 +280,17 @@ it('renders only the version on Linux while showing update status and controls o
   expect(macHtml).toContain('检查更新')
   expect(macHtml).toContain('应用内安装更新需要使用 macOS 或 Windows 安装版。')
   expect(macHtml).toContain('<button')
+
+  const companyHtml = renderToStaticMarkup(createElement(NextUpdateSettings, { state: {
+    ...baseState, displayVersion: '2.0.18-beta.15', build: '2026102601',
+  }, language: 'en', run: vi.fn() }))
+  expect(companyHtml).toContain('DSH Desktop Beta · 2.0.18-beta.15 · build 2026102601')
+  expect(companyHtml).not.toContain('2.0.20-beta.1')
+})
+
+it('keeps the version-management tab informative in a browser without using desktop update controls', () => {
+  const html = renderToStaticMarkup(createElement(NextVersionManagement, { language: 'zh-CN' }))
+  expect(html).toContain('版本管理')
+  expect(html).toContain('应用内更新仅可在 DSH Desktop 中使用。')
+  expect(html).not.toContain('<button')
 })

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { homedir } from 'node:os'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, net, Notification, protocol, safeStorage, session, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron'
 import { appRequestHeaders, forwardWebRequest, serveWebDocument } from './web-document.ts'
 import { installAppDownloads } from './app-downloads.ts'
@@ -30,38 +31,55 @@ import { applyDesktopPackageAgePolicy } from './pnpm-policy.ts'
 import { auxiliaryWindowChromeOptions, auxiliaryWindowHasCustomFrame } from '../../dsh-plugin-desktop/src/auxiliary-window-options.ts'
 import { cleanupDisposableTree } from '../../dsh-plugin-desktop/src/disposable-tree.ts'
 import { installEditingContextMenu } from '../../dsh-plugin-desktop/src/context-menu.ts'
-import { atomicJson, privateDirectory } from './private-files.ts'
+import { atomicJson, privateDirectory, readPrivateFile } from './private-files.ts'
 import { windowMaterial } from './window-material.ts'
 import { ONBOARDING_ARGUMENT, RECOVERY_ARGUMENT, SAFE_ARGUMENT, relaunchApp, relaunchArguments } from './relaunch.ts'
 import { DESKTOP_RUNTIME_FILE, readInstalledPackageVersion, verifyPackagedRuntimeIdentity } from './runtime-tree.ts'
 import { unpackedPath } from './asar-archive-policy.ts'
 import { createNativePermissions, installMediaPermissions } from './electron-permissions.ts'
-import { defaultDataDirectory, readDataDirectory, validateDataDirectory } from './data-directory.ts'
+import { defaultDataDirectory, readDataDirectory, resolveDesktopUserDataDirectory, validateDataDirectory } from './data-directory.ts'
 import { maskSecrets } from './mask-secrets.ts'
 import { DesktopBrowserGuests } from './browser-guests.ts'
 import { PlatformLoginWindow } from './platform-login-window.ts'
 import { NextUpdates } from './updates.ts'
+import { createCompanyUpdateAdapter } from './company-updates.ts'
+import { companyBuildVersion } from './company-build-version.ts'
 import { createArtifactRequest } from './update-transport.ts'
 import { NextUpdateInstaller } from './update-installer.ts'
+import { canAutomaticWindowsApply, isWindowsUpdateHandoffActive } from './windows-update-handoff.ts'
 import { updateLabel } from './update-state.ts'
 import { DESKTOP_SHUTDOWN_TIMEOUT_MS } from '../../dsh-plugin-desktop/src/shutdown.ts'
 import { isDesktopRendererStatus, NextRendererRecovery } from './renderer-recovery.ts'
+import { COMPANY_COMPATIBILITY_BUILD, COMPANY_TRANSPORT_VERSION, DESKTOP_APP_ID, DESKTOP_COMPANY_SERVICE_ENABLED, DESKTOP_HOME_DIRECTORY_NAME, DESKTOP_PRODUCT_NAME, DESKTOP_UPDATES_ENABLED } from './product-identity.ts'
+import { createP7SessionVault } from './p7-session-vault.ts'
 
 // Inherit the package policy across the Host and every runtime child process.
 applyDesktopPackageAgePolicy(process.env)
 
 const root = dirname(NEXT_PACKAGE)
-const defaultHome = resolve(process.env.DSH_DESKTOP_NEXT_HOME ?? defaultDataDirectory())
+// The sealed Company edition keeps the pre-Next data root.  A supplied Next
+// home remains explicit, but must never silently relocate an existing user.
+const defaultHome = resolve(process.env.DSH_DESKTOP_NEXT_HOME
+  ?? (DESKTOP_COMPANY_SERVICE_ENABLED ? join(homedir(), DESKTOP_HOME_DIRECTORY_NAME) : defaultDataDirectory()))
+// A supplied user-data root is an explicit local isolation boundary for
+// Chromium, the P7 vault, and profile selection. It must be absolute so a
+// malformed override never falls back to the active install's data.
+const companyUserData = resolveDesktopUserDataDirectory(join(app.getPath('appData'), DESKTOP_PRODUCT_NAME))
 // The location preference stays at its former Next-owned anchor so previously
 // chosen custom directories survive a change to the default home.
 const locationRoot = process.env.DSH_DESKTOP_NEXT_HOME ? defaultHome
-  : app.isPackaged ? join(app.getPath('appData'), 'DSH Desktop Beta', 'home') : join(root, '.desktop-next', 'home')
+  : app.isPackaged ? join(companyUserData, 'home') : join(root, '.desktop-next', 'home')
 const locationFile = join(locationRoot, 'desktop-next-location.json')
-const dataLocation = readDataDirectory(defaultHome, locationRoot)
+const nextDataLocation = readDataDirectory(defaultHome, locationRoot)
+const dataLocation = DESKTOP_COMPANY_SERVICE_ENABLED ? readCompanyDataLocation(companyUserData, nextDataLocation) : nextDataLocation
 const home = dataLocation.home
-const normalElectronData = join(home, 'electron-user-data')
+// Existing Company installs own Chromium storage in the product user-data
+// location, not under DSH_HOME.  Keep that exact directory: moving it would
+// lose browser state and make a same-identity upgrade look like a new app.
+const normalElectronData = DESKTOP_COMPANY_SERVICE_ENABLED ? companyUserData : join(home, 'electron-user-data')
 privateDirectory(normalElectronData)
-app.setName('DSH Desktop Beta')
+app.setName(DESKTOP_PRODUCT_NAME)
+if (process.platform === 'win32') app.setAppUserModelId(DESKTOP_APP_ID)
 // Keep one application owner across normal and safe launches, before switching
 // Chromium storage to the disposable environment.
 app.setPath('userData', normalElectronData)
@@ -110,15 +128,52 @@ let hostEnvironmentReady: Promise<void> | undefined
 let windowsLanguage = 'en'
 const require = createRequire(NEXT_PACKAGE)
 const webRoot = dirname(require.resolve('@deepseek-ai/dsh-web-frontend/dist/index.html'))
-const version = (JSON.parse(readFileSync(NEXT_PACKAGE, 'utf8')) as { version: string }).version
+const upstreamVersion = (JSON.parse(readFileSync(NEXT_PACKAGE, 'utf8')) as { version: string }).version
+// Package metadata stays the source for public Beta builds.  The company
+// transport version is sealed separately so update comparison never reuses the
+// display string or an upstream Beta version.
+const version = DESKTOP_COMPANY_SERVICE_ENABLED ? COMPANY_TRANSPORT_VERSION : upstreamVersion
+const displayVersion = companyBuildVersion(version, DESKTOP_COMPANY_SERVICE_ENABLED ? COMPANY_COMPATIBILITY_BUILD : undefined).visible
+if (DESKTOP_COMPANY_SERVICE_ENABLED && readPrivateFile(join(home, 'desktop-next.json')) === undefined) {
+  // This is a metadata-only projection. Profiles remain at their original
+  // absolute paths, preserving the P7 vault's path binding.
+  try {
+    const legacy = JSON.parse(readPrivateFile(join(normalElectronData, 'profile-selection', 'state.json')) ?? 'null') as { active?: unknown }
+    if (typeof legacy.active === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u.test(legacy.active)) {
+      atomicJson(join(home, 'desktop-next.json'), { version: 1, active: legacy.active })
+    }
+  } catch { /* The Host falls back to the default Profile and exposes recovery. */ }
+}
+
+/** Read only the old active-home record; no profile or encrypted vault bytes move. */
+function readCompanyDataLocation(userData: string, fallback: { home: string; error?: string }): { home: string; error?: string } {
+  try {
+    const value = JSON.parse(readPrivateFile(join(userData, 'data-directory', 'state.json')) ?? 'null') as { version?: unknown; activeHome?: unknown }
+    if (value?.version !== 1 || typeof value.activeHome !== 'string' || !isAbsolute(value.activeHome) || value.activeHome.includes('\0')) return fallback
+    return { home: resolve(value.activeHome) }
+  } catch (error) { return { ...fallback, error: `Legacy company data directory: ${String(error)}` } }
+}
 /** The dsh runtime beside this shell; a development tree may hoist it elsewhere, and the packaged check then reports it. */
 let dshVersion: string | undefined
 try { dshVersion = readInstalledPackageVersion(root, '@deepseek-ai/dsh') } catch { /* Not installed beside the shell; only diagnostics lose the field. */ }
 const t = (zh: string, en: string): string => windowsLanguage.toLowerCase().startsWith('zh') ? zh : en
 /** The bundled interpreter payload of this CPU: beside the archive when packaged, prepared by `prepare:runtime` in development. */
 const primaryRuntime = join(app.isPackaged ? join(process.resourcesPath, 'runtime') : join(root, '.desktop-build', 'runtime'), process.arch, 'primary-runtime')
+const p7Vaults = new Map<string, ReturnType<typeof createP7SessionVault>>()
+function companyP7Vault(profileDir: string, request: import('./p7-session-vault.ts').P7SessionVaultRequest) {
+  let vault = p7Vaults.get(profileDir)
+  if (!vault) {
+    vault = createP7SessionVault(profileDir, {
+      available: () => safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
+      seal: bytes => safeStorage.encryptString(Buffer.from(bytes).toString('utf8')),
+      open: bytes => Buffer.from(safeStorage.decryptString(Buffer.from(bytes)), 'utf8'),
+    })
+    p7Vaults.set(profileDir, vault)
+  }
+  return vault(request)
+}
 const runtime = new NextDesktopRuntime({
-  home, root, primaryRuntime, executable: process.execPath, addresses: () => [...desktopLanAddresses()], systemProxy: () => systemProxy,
+  home, root, primaryRuntime, executable: process.execPath, companyMode: DESKTOP_COMPANY_SERVICE_ENABLED, addresses: () => [...desktopLanAddresses()], systemProxy: () => systemProxy,
   prepareEnvironment: () => prepareHostEnvironment(),
   ...(safeModeRequested ? { stateHome: electronData } : {}),
   certificate: async addresses => {
@@ -156,6 +211,10 @@ const runtime = new NextDesktopRuntime({
       void shell.openExternal(url).catch(error => runtime.diagnostics.append(String(error), 'warn'))
     } else platformLogin.open(url)
   },
+  ...(DESKTOP_COMPANY_SERVICE_ENABLED ? {
+    p7SessionVault: companyP7Vault,
+    onP7AccountBrowser: (url: string) => { void shell.openExternal(url).catch(error => runtime.diagnostics.append(String(error), 'warn')) },
+  } : {}),
   onPermission: async (action, permission) => {
     if (quitting) throw new Error('Desktop is shutting down')
     const snapshot = permissions.query(permission)
@@ -176,22 +235,40 @@ const platformLogin = new PlatformLoginWindow({
 const native = new NativeDesktop({ root, language: () => windowsLanguage, state, window: () => mainWindow,
   show: openMain, run, warn: error => runtime.diagnostics.append(String(error), 'warn') })
 const permissions = createNativePermissions()
+let pendingUpdateRuntimeHealthy = !app.isPackaged
+let pendingUpdateHostHealthy = false
+let pendingUpdateClientHealthy = false
+function confirmHealthyPendingUpdate(): void {
+  if (DESKTOP_UPDATES_ENABLED && pendingUpdateHostHealthy && pendingUpdateClientHealthy) updates.confirmPendingAfterHealthyHost(app.getVersion(), pendingUpdateRuntimeHealthy)
+}
 const updateInstaller = new NextUpdateInstaller({ platform: process.platform, executable: process.execPath,
   language: () => windowsLanguage,
+  productName: DESKTOP_PRODUCT_NAME,
   log: error => runtime.diagnostics.append(String(error), 'warn') })
-const updates = new NextUpdates({ version, platform: process.platform, packaged: app.isPackaged, userData: electronData,
+const updates = new NextUpdates({ version, platform: process.platform, packaged: app.isPackaged && DESKTOP_UPDATES_ENABLED, userData: electronData,
+  executable: process.execPath,
   request: (url, init) => net.fetch(url, { ...init, credentials: 'omit' }),
   artifactRequest: createArtifactRequest(),
+  ...(DESKTOP_COMPANY_SERVICE_ENABLED ? { company: createCompanyUpdateAdapter({
+    platform: process.platform,
+    request: (url, init) => net.fetch(url, { ...init, credentials: 'omit' }),
+    artifactRequest: createArtifactRequest(),
+    log: error => runtime.diagnostics.append(String(error), 'warn'),
+  }) } : {}),
   changed: () => { if (app.isReady() && !quitting) native.refresh() },
-  available: nextVersion => {
+  ...(DESKTOP_UPDATES_ENABLED ? { available: (nextVersion: string) => {
     if (app.isReady() && !quitting) {
       native.notifyUpdate(nextVersion, () => {
         void promptAvailableUpdate().catch(error => runtime.diagnostics.append(String(error), 'warn'))
       })
     }
-  },
+  } } : {}),
   log: error => runtime.diagnostics.append(String(error), 'warn'),
   prepare: (path, nextVersion, directory, signal) => updateInstaller.prepare(path, nextVersion, directory, signal),
+  stage: () => updateInstaller.stage(),
+  launchAutomatic: () => updateInstaller.launch(true),
+  canAutomaticApply: () => canAutomaticWindowsApply(process.execPath, DESKTOP_PRODUCT_NAME),
+  ...(DESKTOP_COMPANY_SERVICE_ENABLED && process.platform === 'win32' ? { automaticInProgress: isWindowsUpdateHandoffActive } : {}),
   install: async () => {
     runtime.busy = true; native.refresh()
     try {
@@ -212,6 +289,7 @@ function state(): DesktopState {
       usingDefaultDirectory: home === defaultHome, error: String(error), diagnosticsFile, notice: recoveryNotice }
   }
   return { ...runtime.state(), recovery, onboarding, ...(onboarding ? { onboardingComputerUse } : {}), platform: process.platform, version,
+    ...(DESKTOP_COMPANY_SERVICE_ENABLED ? { displayVersion, build: COMPANY_COMPATIBILITY_BUILD } : {}),
     ...(['darwin', 'win32'].includes(process.platform) ? { updates: updates.snapshot() } : {}),
     trayAvailable: native.available, notificationsAvailable: Notification.isSupported() }
 }
@@ -253,7 +331,7 @@ const WINDOWS_CAPTION_FILL = '#00000000'
 
 function createWindow(preload: string, primary = false): BrowserWindow {
   const window = new BrowserWindow({ width: 1280, height: 840, minWidth: 800, minHeight: 580,
-    show: false, title: 'DSH Desktop Beta',
+    show: false, title: DESKTOP_PRODUCT_NAME,
     ...(process.platform !== 'darwin' ? { icon: unpackedPath(join(root, 'build', process.platform === 'win32' ? 'app-icon.ico' : 'app-icon.png')) } : {}),
     ...(!primary ? auxiliaryWindowChromeOptions() : {}),
     ...(process.platform === 'win32' && primary ? {
@@ -539,7 +617,7 @@ async function performCommand(input: Record<string, unknown>, type: string, sour
   if (type === 'close-controls') { shellWindow?.close(); return }
   if (type === 'quit') { app.quit(); return }
   if (['check-updates', 'download-update', 'install-update'].includes(type)) {
-    if (!['darwin', 'win32'].includes(process.platform) || quitting || runtime.busy) return
+    if (!DESKTOP_UPDATES_ENABLED || !['darwin', 'win32'].includes(process.platform) || quitting || runtime.busy) return
     if (type === 'check-updates') {
       void updates.check().then(async () => {
         if (source !== 'native' || quitting) return
@@ -924,6 +1002,8 @@ async function main(): Promise<void> {
     if (!isDesktopRendererStatus(status)) throw new Error('Invalid renderer status')
     if (documentId !== rendererDocumentId || !documentId) return
     rendererRecovery?.report(status)
+    pendingUpdateClientHealthy = true
+    confirmHealthyPendingUpdate()
   })
   ipcMain.handle(IPC.failed, (event, message: unknown, documentId: unknown) => {
     assertSender(event, mainWindow, APP_URL)
@@ -1054,12 +1134,19 @@ async function main(): Promise<void> {
   })
   runtime.safeMode = safeModeRequested
   runtime.recoveryMode = process.argv.includes(RECOVERY_ARGUMENT)
+  // This boundary intentionally precedes profile/Host initialization: pending
+  // installers are re-authorized against the current P7 release, then hand
+  // off without ever interrupting an already-running agent task.
+  if (DESKTOP_UPDATES_ENABLED && await updates.applyPendingOnNextLaunch()) { app.exit(0); return }
   runtime.initialize()
   void prepareHostEnvironment()
   if (dataLocation.error && !runtime.safeMode) { runtime.recoveryMode = true; runtime.report(dataLocation.error) }
   if (app.isPackaged) {
     // Packaging sealed the payload with the shell, dsh, platform and architectures it was released for.
-    try { verifyPackagedRuntimeIdentity(join(root, DESKTOP_RUNTIME_FILE), { version, dshVersion: readInstalledPackageVersion(root, '@deepseek-ai/dsh'), platform: process.platform, arch: process.arch }) }
+    try {
+      verifyPackagedRuntimeIdentity(join(root, DESKTOP_RUNTIME_FILE), { version, dshVersion: readInstalledPackageVersion(root, '@deepseek-ai/dsh'), platform: process.platform, arch: process.arch })
+      pendingUpdateRuntimeHealthy = true
+    }
     catch (error) { runtime.recoveryMode = true; runtime.report(error) }
   }
   if (!runtime.safeMode && !runtime.recoveryMode) {
@@ -1074,7 +1161,7 @@ async function main(): Promise<void> {
     }
   }
   native.createTray()
-  updates.start()
+  if (DESKTOP_UPDATES_ENABLED) updates.start()
   Menu.setApplicationMenu(process.platform === 'win32' ? null : Menu.buildFromTemplate([
     { label: 'DSH Desktop Beta', submenu: native.items() }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
   ]))
@@ -1111,7 +1198,10 @@ async function main(): Promise<void> {
   }
   if (runtime.recoveryMode) openControls('recovery')
   else if (onboarding) openControls('onboarding')
-  else { void runtime.start().catch(() => {}); openMain() }
+  else {
+    void runtime.start().then(() => { pendingUpdateHostHealthy = true; confirmHealthyPendingUpdate() }).catch(() => {})
+    openMain()
+  }
   app.on('activate', openMain)
   app.on('window-all-closed', () => { if (process.platform !== 'darwin' && !native.available && !replacingWindow) app.quit() })
 }
